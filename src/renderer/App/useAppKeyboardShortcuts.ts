@@ -7,6 +7,7 @@ import type { TabId } from './constants';
 interface UseAppKeyboardShortcutsOptions {
   activeWorktreePath: string | undefined;
   onTabSwitch: (tab: TabId) => void;
+  onToggleSessionCanvas: () => void;
   onActionPanelToggle: () => void;
   onToggleWorktree: () => void;
   onToggleRepository: () => void;
@@ -35,6 +36,7 @@ function shouldSkipShortcut(e: KeyboardEvent): boolean {
 export function useAppKeyboardShortcuts({
   activeWorktreePath: _activeWorktreePath,
   onTabSwitch,
+  onToggleSessionCanvas,
   onActionPanelToggle,
   onToggleWorktree,
   onToggleRepository,
@@ -68,9 +70,14 @@ export function useAppKeyboardShortcuts({
 
       // Check main tab shortcuts using matchesKeybinding for each configured binding
       // This allows tab switching to work even when xterm has focus
+      if (matchesKeybinding(e, bindings.switchToCanvas)) {
+        e.preventDefault();
+        onToggleSessionCanvas();
+        return;
+      }
+
       const tabBindings: { binding: typeof bindings.switchToAgent; tab: TabId }[] = [
         { binding: bindings.switchToAgent, tab: 'chat' },
-        { binding: bindings.switchToCanvas, tab: 'canvas' },
         { binding: bindings.switchToFile, tab: 'file' },
         { binding: bindings.switchToTerminal, tab: 'terminal' },
         { binding: bindings.switchToSourceControl, tab: 'source-control' },
@@ -87,7 +94,7 @@ export function useAppKeyboardShortcuts({
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [onTabSwitch]);
+  }, [onTabSwitch, onToggleSessionCanvas]);
 
   // Listen for workspace panel toggle shortcuts
   useEffect(() => {

@@ -49,7 +49,13 @@ export const getStoredTabMap = (): Record<string, TabId> => {
   const saved = localStorage.getItem(STORAGE_KEYS.WORKTREE_TABS);
   if (saved) {
     try {
-      return JSON.parse(saved) as Record<string, TabId>;
+      const parsed = JSON.parse(saved) as Record<string, string>;
+      const migrated: Record<string, TabId> = {};
+      for (const [path, tab] of Object.entries(parsed)) {
+        migrated[path] =
+          tab === 'canvas' || !VALID_TAB_IDS.has(tab as TabId) ? 'chat' : (tab as TabId);
+      }
+      return migrated;
     } catch {
       return {};
     }

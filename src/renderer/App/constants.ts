@@ -4,7 +4,6 @@ export const panelTransition = { type: 'spring' as const, stiffness: 400, dampin
 // Tab types
 export type TabId =
   | 'chat'
-  | 'canvas'
   | 'file'
   | 'terminal'
   | 'source-control'
@@ -21,7 +20,6 @@ export interface TabConfig {
 // Default tab order
 export const DEFAULT_TAB_ORDER: TabId[] = [
   'chat',
-  'canvas',
   'file',
   'terminal',
   'source-control',

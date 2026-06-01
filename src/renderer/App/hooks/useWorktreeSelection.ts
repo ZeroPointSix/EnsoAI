@@ -139,7 +139,9 @@ export function useWorktreeSelection(
       setActiveWorktree(worktree);
 
       // Restore the new worktree's tab state
-      const savedTab = worktreeTabMap[worktree.path] || 'chat';
+      const savedTabValue = worktreeTabMap[worktree.path];
+      const savedTab: TabId =
+        !savedTabValue || (savedTabValue as string) === 'canvas' ? 'chat' : savedTabValue;
       setActiveTab(savedTab);
 
       // Refresh git data for the new worktree

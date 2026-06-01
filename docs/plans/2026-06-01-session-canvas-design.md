@@ -1,14 +1,14 @@
 # 会话画板（Session Canvas）设计文档
 
 **日期**: 2026-06-01  
-**状态**: 已实现（方案 A MVP，2026-06-01）  
+**状态**: 已实现（方案 A MVP）；2026-06-01 晚改为**全局覆盖层**入口（非主 Tab）  
 **关联**: `RunningProjectsPopover`、`AgentPanel`、`TerminalPanel`
 
 ---
 
 ## 概述
 
-在主界面新增 **「画板」Tab**，以网格卡片形式 **总览当前所有已打开的 Agent 会话与 Shell 终端**，减少在 chat / terminal / 各 worktree 之间的来回切换。
+通过 **左侧边栏全局工具栏**（与「运行中项目」相邻的网格图标）打开 **会话画板覆盖层**，以网格卡片形式 **总览当前所有已打开的 Agent 会话与 Shell 终端**，减少在 chat / terminal / 各 worktree 之间的来回切换。画板 **不再** 占用主内容区 Tab 栏。
 
 本功能采用 **方案 A（轻量会话画板）**：画板内展示元数据 + 输出状态 + 文本预览，**不在画板内挂载可交互的 xterm**；用户单击卡片后跳转到对应 worktree 与 Agent/Terminal 面板进行操作。
 
@@ -24,7 +24,7 @@
 |------|------|
 | 画板内多路 live xterm 同屏输入 | 每个 `AgentTerminal`/`ShellTerminal` 会 `terminal.create` 新 PTY，不能对同一 session 重复挂载 |
 | 拖拽自由布局 / 持久化坐标 | 留作方案 B+，首版用响应式 CSS Grid |
-| 替代 `RunningProjectsPopover` | 弹窗保留快捷键场景；画板是常驻主 Tab |
+| 替代 `RunningProjectsPopover` | 弹窗保留列表/搜索场景；画板是全局覆盖层总览 |
 
 ---
 
@@ -55,9 +55,10 @@
 
 ### 功能需求
 
-1. **主 Tab「画板」**
-   - 与 Agent / File / Terminal 等并列，可参与 Tab 顺序配置（`DEFAULT_TAB_ORDER` / localStorage）
-   - 建议默认顺序：`chat` → `canvas` → `file` → `terminal` → …
+1. **全局入口「会话画板」**
+   - 左侧边栏顶栏工具区：`LayoutGrid` 按钮（`SessionCanvasToolbarButton`），与仓库列表/刷新/运行中项目/折叠并列
+   - 快捷键：`Ctrl+5`（`switchToCanvas`）切换覆盖层开关
+   - 覆盖主内容区（不含侧栏），`Esc` 或关闭按钮退出
 
 2. **卡片内容（每张对应一个 Agent 或 Shell 终端）**
    - 类型标识：Agent / Terminal 图标
@@ -86,40 +87,42 @@
 
 ## 架构设计
 
-### 组件结构
+### 组件结构（当前实现）
 
 ```
-MainContent
-├── … 现有 Tab 内容 …
-└── SessionCanvasPanel          # activeTab === 'canvas'
-    ├── SessionCanvasToolbar    # 统计、搜索（可选）
-    └── SessionCanvasGrid
-        └── SessionCanvasCard[] # Agent | Terminal
+App.tsx
+├── TreeSidebar / RepositorySidebar 顶栏
+│   └── SessionCanvasToolbarButton     # LayoutGrid，全局入口
+└── 主内容区（relative 容器）
+    ├── MainContent                    # Agent / File / Terminal 等 Tab（无 canvas）
+    └── SessionCanvasOverlay           # open 时 absolute inset-0 覆盖主内容
+        └── SessionCanvasPanel
+            └── SessionCanvasCard[]
 ```
 
-### 新增文件（计划）
+### 已实现文件
 
 | 文件 | 职责 |
 |------|------|
-| `src/renderer/components/canvas/SessionCanvasPanel.tsx` | 画板主面板 |
-| `src/renderer/components/canvas/SessionCanvasCard.tsx` | 单张卡片 |
-| `src/renderer/components/canvas/index.ts` | 导出 |
-| `src/renderer/lib/terminalPreview.ts` | 追加/截断预览文本（去 ANSI，保留末 N 行） |
+| `components/canvas/SessionCanvasPanel.tsx` | 画板主面板（搜索、网格、聚焦） |
+| `components/canvas/SessionCanvasCard.tsx` | 单张卡片 |
+| `components/canvas/SessionCanvasPreview.tsx` | 只读终端风格预览 |
+| `components/canvas/SessionCanvasOverlay.tsx` | 主内容区覆盖层 + Esc 关闭 |
+| `components/canvas/SessionCanvasToolbarButton.tsx` | 侧栏顶栏切换按钮（含会话数角标） |
+| `lib/terminalPreview.ts` | 预览文本截断（去 ANSI） |
 
-### 修改文件（计划）
+### 关键修改点
 
 | 文件 | 变更 |
 |------|------|
-| `src/renderer/App/constants.ts` | `TabId` 增加 `'canvas'`；`DEFAULT_TAB_ORDER` 插入画板 |
-| `src/renderer/App/storage.ts` | `VALID_TAB_IDS` 含 `canvas` |
-| `src/renderer/components/layout/MainContent.tsx` | Tab 配置 + 画板内容区（`absolute inset-0`，与其他 Tab 一样保持挂载策略可选） |
-| `src/renderer/stores/agentSessions.ts` | `SessionRuntimeState.previewText` + `appendSessionPreview` |
-| `src/renderer/components/chat/AgentTerminal.tsx` | `onData` 时调用 `appendSessionPreview` |
-| `src/renderer/stores/terminal.ts` | 可选：`previewText` 字段 + `appendTerminalPreview` |
-| `src/renderer/components/terminal/ShellTerminal.tsx` | 传入 `terminalId`，`onData` 更新 store |
-| `src/renderer/components/terminal/TerminalPanel.tsx` | 向 `ShellTerminal` 传递 tab `id` |
-| `src/shared/i18n.ts` | 文案：画板、聚焦、空状态等 |
-| `src/renderer/stores/settings/defaults.ts` | 可选：`switchToCanvas` 快捷键（如 Ctrl+5） |
+| `App.tsx` | `isSessionCanvasOpen` 状态；包裹 MainContent + Overlay |
+| `TreeSidebar.tsx` / `RepositorySidebar.tsx` | 顶栏画板按钮 |
+| `App/constants.ts` | **已移除** `TabId` 中的 `'canvas'` |
+| `App/useAppKeyboardShortcuts.ts` | `Ctrl+5` → `onToggleSessionCanvas`（非切 Tab） |
+| `App/storage.ts` | 旧 `canvas` Tab 持久化迁移为 `chat` |
+| `stores/agentSessions.ts` + `AgentTerminal.tsx` | Agent 预览管线 |
+| `stores/terminal.ts` + `ShellTerminal.tsx` | Shell 预览管线 |
+| `shared/i18n.ts` | `Session Canvas`、`Toggle session canvas` 等 |
 
 ### 数据流
 
@@ -158,12 +161,12 @@ flowchart TB
 
 ### 与 RunningProjectsPopover 的关系
 
-| 能力 | Running Projects 弹窗 | 会话画板 Tab |
-|------|----------------------|--------------|
-| 入口 | 快捷键 / 侧栏按钮 | 主 Tab 常驻 |
-| 布局 | 列表 + 搜索 | 网格卡片 + 预览 |
-| 聚焦逻辑 | `handleSelectItem` | **复用同一套** props 回调 |
-| 关闭全部 Agent/Terminal | 支持 | 首版可不做了，或后续加工具栏按钮 |
+| 能力 | Running Projects 弹窗 | 会话画板（全局覆盖层） |
+|------|----------------------|------------------------|
+| 入口 | 侧栏波形图标弹窗 | 侧栏网格图标 / `Ctrl+5` |
+| 布局 | 列表 + 搜索 | 网格卡片 + 文本预览 |
+| 聚焦逻辑 | `handleSelectItem` | 同：`onSelectWorktreeByPath` + 切 `chat`/`terminal` |
+| 关闭全部 Agent/Terminal | 支持 | 首版未做 |
 
 ---
 
@@ -188,10 +191,12 @@ flowchart TB
 └─────────────────────────────────┘
 ```
 
-### Tab 栏
+### 全局入口（侧栏顶栏）
 
-- 图标建议：`LayoutGrid`（lucide-react）
-- 文案：**Enso**（i18n，主 Tab 与面板标题）
+- 图标：`LayoutGrid`（`SessionCanvasToolbarButton`）
+- 位置：树形/分栏布局左侧边栏顶栏，在「运行中项目」与「折叠」之间
+- 文案：**会话画板**（`Session Canvas`）
+- 角标：当前 Agent + Shell 会话总数
 
 ---
 
@@ -199,17 +204,18 @@ flowchart TB
 
 ### Phase 1（MVP — 方案 A）
 
-- [x] Tab + `SessionCanvasPanel` + 卡片网格
-- [x] Agent/Terminal 列表与点击聚焦
+- [x] `SessionCanvasPanel` + 卡片网格
+- [x] Agent/Terminal 列表与点击聚焦（聚焦后自动关闭覆盖层）
 - [x] Agent + Shell 预览文本管线
-- [x] 基础 i18n + Ctrl+5 快捷键
+- [x] 基础 i18n + `Ctrl+5` 切换覆盖层
+- [x] **全局入口**：侧栏顶栏按钮 + `SessionCanvasOverlay`（非主 Tab）
 
 ### Phase 2（体验增强，仍属方案 A 范围）
 
-- [ ] Shell 终端预览文本
-- [ ] 顶部搜索/筛选
+- [x] Shell 终端预览文本
+- [x] 顶部搜索/筛选
 - [ ] 按 worktree 分组标题
-- [ ] `switchToCanvas` 快捷键与设置项
+- [x] `switchToCanvas` 快捷键与设置项（切换覆盖层）
 
 ### Phase 3（方案 B，待产品确认）
 
@@ -238,8 +244,10 @@ flowchart TB
 | 运行中项目弹窗（聚焦逻辑参考） | `src/renderer/components/layout/RunningProjectsPopover.tsx` |
 | Agent 会话 store | `src/renderer/stores/agentSessions.ts` |
 | 终端 store | `src/renderer/stores/terminal.ts` |
-| 主 Tab 定义 | `src/renderer/App/constants.ts` |
-| 主内容 Tab 切换 | `src/renderer/components/layout/MainContent.tsx` |
+| 画板覆盖层 | `src/renderer/components/canvas/SessionCanvasOverlay.tsx` |
+| 侧栏入口按钮 | `src/renderer/components/canvas/SessionCanvasToolbarButton.tsx` |
+| App 状态与布局 | `src/renderer/App.tsx` |
+| 侧栏顶栏 | `src/renderer/components/layout/TreeSidebar.tsx` |
 | 设计规范 | `docs/design-system.md` |
 
 ---
@@ -249,3 +257,4 @@ flowchart TB
 | 日期 | 说明 |
 |------|------|
 | 2026-06-01 | 初稿：确认采用方案 A，记录范围、架构与实现清单 |
+| 2026-06-01 | 画板从主 Tab 拆出，改为侧栏全局入口 + 主内容覆盖层（v0.2.47） |

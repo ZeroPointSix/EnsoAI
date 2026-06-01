@@ -86,6 +86,7 @@ import { heightVariants, springFast, springStandard } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
+import { SessionCanvasToolbarButton } from '@/components/canvas';
 import { RunningProjectsPopover } from './RunningProjectsPopover';
 
 interface TreeSidebarProps {
@@ -136,6 +137,8 @@ interface TreeSidebarProps {
   toggleSelectedRepoExpandedRef?: React.MutableRefObject<(() => void) | null>;
   /** Whether a file is being dragged over the sidebar (from App.tsx global handler) */
   isFileDragOver?: boolean;
+  isSessionCanvasOpen?: boolean;
+  onToggleSessionCanvas?: () => void;
 }
 
 export function TreeSidebar({
@@ -181,6 +184,8 @@ export function TreeSidebar({
   onRequestTempDelete,
   toggleSelectedRepoExpandedRef,
   isFileDragOver,
+  isSessionCanvasOpen = false,
+  onToggleSessionCanvas,
 }: TreeSidebarProps) {
   const { t, tNode } = useI18n();
   const _settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
@@ -978,6 +983,12 @@ export function TreeSidebar({
             onSelectWorktreeByPath={onSwitchWorktreeByPath || (() => {})}
             onSwitchTab={onSwitchTab}
           />
+          {onToggleSessionCanvas && (
+            <SessionCanvasToolbarButton
+              isOpen={isSessionCanvasOpen}
+              onToggle={onToggleSessionCanvas}
+            />
+          )}
           {onCollapse && (
             <button
               type="button"

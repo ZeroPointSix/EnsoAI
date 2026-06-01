@@ -53,6 +53,7 @@ import { AddRepositoryDialog } from './components/git';
 import { CloneProgressFloat } from './components/git/CloneProgressFloat';
 import { ActionPanel } from './components/layout/ActionPanel';
 import { BackgroundLayer } from './components/layout/BackgroundLayer';
+import { SessionCanvasOverlay } from './components/canvas';
 import { MainContent } from './components/layout/MainContent';
 import { RepositorySidebar } from './components/layout/RepositorySidebar';
 import { TemporaryWorkspacePanel } from './components/layout/TemporaryWorkspacePanel';
@@ -175,6 +176,12 @@ export default function App() {
 
   // Agent Tasks Panel state (synced via IPC with independent BrowserWindow)
   const [isAgentTasksPanelOpen, setIsAgentTasksPanelOpen] = useState(false);
+
+  // Global session canvas overlay (not a main content tab)
+  const [isSessionCanvasOpen, setIsSessionCanvasOpen] = useState(false);
+  const toggleSessionCanvas = useCallback(() => {
+    setIsSessionCanvasOpen((prev) => !prev);
+  }, []);
 
   // Listen for agent task panel visibility changes from main process
   useEffect(() => {
@@ -312,6 +319,7 @@ export default function App() {
   useAppKeyboardShortcuts({
     activeWorktreePath: activeWorktree?.path,
     onTabSwitch: handleTabChange,
+    onToggleSessionCanvas: toggleSessionCanvas,
     onActionPanelToggle: useCallback(
       () => setActionPanelOpen((prev) => !prev),
       [setActionPanelOpen]
@@ -1120,6 +1128,8 @@ export default function App() {
                   isSettingsActive={activeTab === 'settings'}
                   onToggleSettings={toggleSettings}
                   isFileDragOver={isFileDragOver}
+                  isSessionCanvasOpen={isSessionCanvasOpen}
+                  onToggleSessionCanvas={toggleSessionCanvas}
                 />
                 {/* Resize handle */}
                 <div
@@ -1168,6 +1178,8 @@ export default function App() {
                     isFileDragOver={isFileDragOver}
                     temporaryWorkspaceEnabled={temporaryWorkspaceEnabled}
                     tempBasePath={tempBasePathDisplay}
+                    isSessionCanvasOpen={isSessionCanvasOpen}
+                    onToggleSessionCanvas={toggleSessionCanvas}
                   />
                   {/* Resize handle */}
                   <div
@@ -1238,55 +1250,67 @@ export default function App() {
         )}
 
         {/* Main Content */}
-        {fileTreeDisplayMode === 'current' && hasActiveWorktree && (
-          <FileSidebar
-            rootPath={activeWorktree?.path}
-            isActive={activeTab === 'file'}
-            width={fileSidebarWidth}
-            collapsed={fileSidebarCollapsed}
-            onCollapse={() => setFileSidebarCollapsed(true)}
-            onResizeStart={handleResizeStart('fileSidebar')}
-            onSwitchTab={() => handleTabChange('file')}
-          />
-        )}
+        <div className="relative flex min-w-0 flex-1 overflow-hidden">
+          {fileTreeDisplayMode === 'current' && hasActiveWorktree && (
+            <FileSidebar
+              rootPath={activeWorktree?.path}
+              isActive={activeTab === 'file'}
+              width={fileSidebarWidth}
+              collapsed={fileSidebarCollapsed}
+              onCollapse={() => setFileSidebarCollapsed(true)}
+              onResizeStart={handleResizeStart('fileSidebar')}
+              onSwitchTab={() => handleTabChange('file')}
+            />
+          )}
 
-        <MainContent
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          tabOrder={tabOrder}
-          onTabReorder={handleReorderTabs}
-          repoPath={selectedRepo || undefined}
-          worktreePath={activeWorktree?.path}
-          repositoryCollapsed={repositoryCollapsed}
-          worktreeCollapsed={layoutMode === 'tree' ? repositoryCollapsed : worktreeCollapsed}
-          fileSidebarCollapsed={
-            fileTreeDisplayMode === 'current' && hasActiveWorktree ? fileSidebarCollapsed : false
-          }
-          layoutMode={layoutMode}
-          onExpandRepository={() => setRepositoryCollapsed(false)}
-          onExpandWorktree={
-            layoutMode === 'tree'
-              ? () => setRepositoryCollapsed(false)
-              : () => setWorktreeCollapsed(false)
-          }
-          onExpandFileSidebar={
-            fileTreeDisplayMode === 'current' && hasActiveWorktree
-              ? () => setFileSidebarCollapsed(false)
-              : undefined
-          }
-          onSwitchWorktree={handleSwitchWorktreePath}
-          onSwitchTab={handleTabChange}
-          isSettingsActive={
-            (settingsDisplayMode === 'tab' && activeTab === 'settings') ||
-            (settingsDisplayMode === 'draggable-modal' && settingsDialogOpen)
-          }
-          settingsCategory={settingsCategory}
-          onCategoryChange={handleSettingsCategoryChange}
-          scrollToProvider={scrollToProvider}
-          onToggleSettings={toggleSettings}
-          onOpenAgentTasks={() => window.electronAPI.agentTaskPanel.toggle()}
-          isAgentTasksPanelOpen={isAgentTasksPanelOpen}
-        />
+          <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+            <MainContent
+              activeTab={activeTab}
+              onTabChange={handleTabChange}
+              tabOrder={tabOrder}
+              onTabReorder={handleReorderTabs}
+              repoPath={selectedRepo || undefined}
+              worktreePath={activeWorktree?.path}
+              repositoryCollapsed={repositoryCollapsed}
+              worktreeCollapsed={layoutMode === 'tree' ? repositoryCollapsed : worktreeCollapsed}
+              fileSidebarCollapsed={
+                fileTreeDisplayMode === 'current' && hasActiveWorktree
+                  ? fileSidebarCollapsed
+                  : false
+              }
+              layoutMode={layoutMode}
+              onExpandRepository={() => setRepositoryCollapsed(false)}
+              onExpandWorktree={
+                layoutMode === 'tree'
+                  ? () => setRepositoryCollapsed(false)
+                  : () => setWorktreeCollapsed(false)
+              }
+              onExpandFileSidebar={
+                fileTreeDisplayMode === 'current' && hasActiveWorktree
+                  ? () => setFileSidebarCollapsed(false)
+                  : undefined
+              }
+              onSwitchWorktree={handleSwitchWorktreePath}
+              onSwitchTab={handleTabChange}
+              isSettingsActive={
+                (settingsDisplayMode === 'tab' && activeTab === 'settings') ||
+                (settingsDisplayMode === 'draggable-modal' && settingsDialogOpen)
+              }
+              settingsCategory={settingsCategory}
+              onCategoryChange={handleSettingsCategoryChange}
+              scrollToProvider={scrollToProvider}
+              onToggleSettings={toggleSettings}
+              onOpenAgentTasks={() => window.electronAPI.agentTaskPanel.toggle()}
+              isAgentTasksPanelOpen={isAgentTasksPanelOpen}
+            />
+            <SessionCanvasOverlay
+              open={isSessionCanvasOpen}
+              onClose={() => setIsSessionCanvasOpen(false)}
+              onSelectWorktreeByPath={handleSwitchWorktreePath}
+              onSwitchTab={handleTabChange}
+            />
+          </div>
+        </div>
 
         <TempWorkspaceDialogs
           onConfirmDelete={handleRemoveTempWorkspace}

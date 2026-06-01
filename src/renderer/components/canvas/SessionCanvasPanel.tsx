@@ -1,5 +1,5 @@
 import { getPathBasename } from '@shared/utils/path';
-import { LayoutGrid, Search } from 'lucide-react';
+import { LayoutGrid, Search, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import type { TabId } from '@/App/constants';
 import type { Session } from '@/components/chat/SessionBar';
@@ -19,6 +19,7 @@ import { type CanvasCardItem, SessionCanvasCard } from './SessionCanvasCard';
 
 interface SessionCanvasPanelProps {
   isActive?: boolean;
+  onClose?: () => void;
   onSelectWorktreeByPath: (worktreePath: string) => Promise<void> | void;
   onSwitchTab?: (tab: TabId) => void;
 }
@@ -46,6 +47,7 @@ function buildCardItems(
 
 export function SessionCanvasPanel({
   isActive = false,
+  onClose,
   onSelectWorktreeByPath,
   onSwitchTab,
 }: SessionCanvasPanelProps) {
@@ -102,10 +104,12 @@ export function SessionCanvasPanel({
         setTerminalActive(item.session.id);
         onSwitchTab?.('terminal');
       }
+      onClose?.();
     },
     [
       onSelectWorktreeByPath,
       onSwitchTab,
+      onClose,
       setAgentActiveId,
       setTerminalActive,
       markSessionActive,
@@ -117,7 +121,7 @@ export function SessionCanvasPanel({
       <div className="flex shrink-0 flex-col gap-3 border-b px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-medium">{t('EnsoAIPlus')}</h2>
+            <h2 className="text-sm font-medium">{t('Session Canvas')}</h2>
             <p className="text-xs text-muted-foreground">
               {t('{{agents}} agents · {{terminals}} terminals', {
                 agents: agentCount,
@@ -125,6 +129,17 @@ export function SessionCanvasPanel({
               })}
             </p>
           </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+              title={t('Close')}
+              aria-label={t('Close')}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

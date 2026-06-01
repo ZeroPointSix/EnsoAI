@@ -55,6 +55,7 @@ import { heightVariants, springFast, springStandard } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
+import { SessionCanvasToolbarButton } from '@/components/canvas';
 import { RunningProjectsPopover } from './RunningProjectsPopover';
 
 interface Repository {
@@ -88,6 +89,8 @@ interface RepositorySidebarProps {
   isFileDragOver?: boolean;
   temporaryWorkspaceEnabled?: boolean;
   tempBasePath?: string;
+  isSessionCanvasOpen?: boolean;
+  onToggleSessionCanvas?: () => void;
 }
 
 export function RepositorySidebar({
@@ -114,6 +117,8 @@ export function RepositorySidebar({
   isFileDragOver,
   temporaryWorkspaceEnabled = false,
   tempBasePath = '',
+  isSessionCanvasOpen = false,
+  onToggleSessionCanvas,
 }: RepositorySidebarProps) {
   const { t, tNode } = useI18n();
   const _settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
@@ -465,6 +470,12 @@ export function RepositorySidebar({
           <RunningProjectsPopover
             onSelectWorktreeByPath={onSwitchWorktreeByPath}
             onSwitchTab={onSwitchTab}
+          />
+        )}
+        {onToggleSessionCanvas && (
+          <SessionCanvasToolbarButton
+            isOpen={isSessionCanvasOpen}
+            onToggle={onToggleSessionCanvas}
           />
         )}
         {onCollapse && (

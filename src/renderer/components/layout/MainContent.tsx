@@ -4,7 +4,6 @@ import {
   FolderOpen,
   GitBranch,
   KanbanSquare,
-  LayoutGrid,
   ListTodo,
   MessageSquare,
   PanelLeft,
@@ -17,7 +16,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_TAB_ORDER, type TabId } from '@/App/constants';
 import { normalizePath } from '@/App/storage';
 import { OpenInMenu } from '@/components/app/OpenInMenu';
-import { SessionCanvasPanel } from '@/components/canvas';
 import { AgentPanel } from '@/components/chat/AgentPanel';
 import { CurrentFilePanel, FilePanel } from '@/components/files';
 import { RunningProjectsPopover } from '@/components/layout/RunningProjectsPopover';
@@ -131,7 +129,6 @@ export function MainContent({
     { icon: React.ElementType; label: string }
   > = {
     chat: { icon: Sparkles, label: t('Agent') },
-    canvas: { icon: LayoutGrid, label: t('EnsoAIPlus') },
     file: { icon: FileCode, label: t('File') },
     terminal: { icon: Terminal, label: t('Terminal') },
     'source-control': { icon: GitBranch, label: t('Version Control') },
@@ -513,22 +510,6 @@ export function MainContent({
               </Empty>
             </div>
           )}
-        </div>
-        {/* Session canvas tab */}
-        <div
-          className={cn(
-            'absolute inset-0',
-            innerBg,
-            activeTab === 'canvas' ? 'z-10' : 'invisible pointer-events-none z-0'
-          )}
-        >
-          <SessionCanvasPanel
-            isActive={activeTab === 'canvas'}
-            onSelectWorktreeByPath={async (path) => {
-              await onSwitchWorktree?.(path);
-            }}
-            onSwitchTab={onTabChange}
-          />
         </div>
         {/* Terminal tab - keep mounted to preserve shell sessions */}
         <div
