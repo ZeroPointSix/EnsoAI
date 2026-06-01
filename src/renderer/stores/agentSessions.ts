@@ -4,6 +4,7 @@ import { normalizePath, pathsEqual } from '@/App/storage';
 import type { Session } from '@/components/chat/SessionBar';
 import type { AgentGroupState } from '@/components/chat/types';
 import { createInitialGroupState } from '@/components/chat/types';
+import { appendTerminalPreview } from '@/lib/terminalPreview';
 import { useAgentStatusStore } from './agentStatus';
 
 // Global storage key for all sessions across all repos
@@ -16,6 +17,8 @@ export interface SessionRuntimeState {
   outputState: OutputState;
   lastActivityAt: number;
   wasActiveWhenOutputting: boolean; // Track if user was viewing this session during output
+  /** Last lines of terminal output for session canvas preview (not persisted) */
+  previewText?: string;
 }
 
 // Enhanced input state for each session (not persisted)
@@ -85,6 +88,7 @@ interface AgentSessionsState {
   getOutputState: (sessionId: string) => OutputState;
   getRuntimeState: (sessionId: string) => SessionRuntimeState | undefined;
   clearRuntimeState: (sessionId: string) => void;
+  appendSessionPreview: (sessionId: string, data: string) => void;
 
   // Enhanced input state actions
   getEnhancedInputState: (sessionId: string) => EnhancedInputState;
@@ -355,6 +359,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
             runtimeStates: {
               ...prev.runtimeStates,
               [sessionId]: {
+                ...currentState,
                 outputState: 'outputting',
                 lastActivityAt: Date.now(),
                 wasActiveWhenOutputting: isActive,
@@ -380,6 +385,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
             runtimeStates: {
               ...prev.runtimeStates,
               [sessionId]: {
+                ...currentState,
                 outputState: shouldMarkUnread ? 'unread' : 'idle',
                 lastActivityAt: Date.now(),
                 wasActiveWhenOutputting: false,
@@ -396,6 +402,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
           runtimeStates: {
             ...prev.runtimeStates,
             [sessionId]: {
+              ...currentState,
               outputState,
               lastActivityAt: Date.now(),
               wasActiveWhenOutputting: false,
@@ -467,6 +474,26 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
         const newStates = { ...prev.runtimeStates };
         delete newStates[sessionId];
         return { runtimeStates: newStates };
+      }),
+
+    appendSessionPreview: (sessionId, data) =>
+      set((prev) => {
+        const current = prev.runtimeStates[sessionId];
+        const previewText = appendTerminalPreview(current?.previewText, data);
+        if (!previewText || previewText === current?.previewText) {
+          return prev;
+        }
+        return {
+          runtimeStates: {
+            ...prev.runtimeStates,
+            [sessionId]: {
+              outputState: current?.outputState ?? 'idle',
+              lastActivityAt: current?.lastActivityAt ?? Date.now(),
+              wasActiveWhenOutputting: current?.wasActiveWhenOutputting ?? false,
+              previewText,
+            },
+          },
+        };
       }),
 
     // Aggregated state selectors

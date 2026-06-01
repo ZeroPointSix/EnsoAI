@@ -938,6 +938,7 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
                   >
                     <ShellTerminal
                       cwd={info.tab.cwd}
+                      terminalSessionId={tabId}
                       isActive={isTerminalActive}
                       canMerge={state.groups.length > 1}
                       initialCommand={info.tab.initialCommand}

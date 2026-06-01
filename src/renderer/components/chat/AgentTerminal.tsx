@@ -143,6 +143,7 @@ export function AgentTerminal({
   const setOutputState = useAgentSessionsStore((s) => s.setOutputState);
   const markSessionActive = useAgentSessionsStore((s) => s.markSessionActive);
   const clearRuntimeState = useAgentSessionsStore((s) => s.clearRuntimeState);
+  const appendSessionPreview = useAgentSessionsStore((s) => s.appendSessionPreview);
 
   const terminalSessionId = id ?? sessionId;
   const resumeSessionId = sessionId ?? id;
@@ -495,6 +496,10 @@ export function AgentTerminal({
         outputBufferRef.current = outputBufferRef.current.slice(-500);
       }
 
+      if (terminalSessionId) {
+        appendSessionPreview(terminalSessionId, data);
+      }
+
       // Track output volume since last Enter
       dataSinceEnterRef.current += data.length;
 
@@ -563,6 +568,7 @@ export function AgentTerminal({
       terminalSessionId,
       t,
       updateOutputState,
+      appendSessionPreview,
     ]
   );
 

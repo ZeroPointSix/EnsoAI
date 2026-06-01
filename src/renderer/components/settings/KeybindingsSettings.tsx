@@ -200,6 +200,23 @@ export function KeybindingsSettings() {
             />
           </div>
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+            <span className="text-sm">{t('Switch to Enso')}</span>
+            <KeybindingInput
+              value={
+                mainTabKeybindings.switchToCanvas ?? {
+                  key: '5',
+                  ctrl: true,
+                }
+              }
+              onChange={(binding) => {
+                setMainTabKeybindings({
+                  ...mainTabKeybindings,
+                  switchToCanvas: binding,
+                });
+              }}
+            />
+          </div>
+          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
             <span className="text-sm">{t('Switch to File')}</span>
             <KeybindingInput
               value={mainTabKeybindings.switchToFile}

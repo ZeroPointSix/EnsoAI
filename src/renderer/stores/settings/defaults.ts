@@ -312,6 +312,7 @@ export const defaultXtermKeybindings: XtermKeybindings = {
 
 export const defaultMainTabKeybindings: MainTabKeybindings = {
   switchToAgent: { key: '1', ctrl: true },
+  switchToCanvas: { key: '5', ctrl: true },
   switchToFile: { key: '2', ctrl: true },
   switchToTerminal: { key: '3', ctrl: true },
   switchToSourceControl: { key: '4', ctrl: true },

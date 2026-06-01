@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { matchesKeybinding } from '../lib/keybinding';
+import { defaultMainTabKeybindings } from '../stores/settings/defaults';
 import { useSettingsStore } from '../stores/settings';
 import type { TabId } from './constants';
 
@@ -60,12 +61,16 @@ export function useAppKeyboardShortcuts({
       const target = e.target as HTMLElement | null;
       if (target?.hasAttribute('data-keybinding-recording')) return;
 
-      const bindings = useSettingsStore.getState().mainTabKeybindings;
+      const bindings = {
+        ...defaultMainTabKeybindings,
+        ...useSettingsStore.getState().mainTabKeybindings,
+      };
 
       // Check main tab shortcuts using matchesKeybinding for each configured binding
       // This allows tab switching to work even when xterm has focus
       const tabBindings: { binding: typeof bindings.switchToAgent; tab: TabId }[] = [
         { binding: bindings.switchToAgent, tab: 'chat' },
+        { binding: bindings.switchToCanvas, tab: 'canvas' },
         { binding: bindings.switchToFile, tab: 'file' },
         { binding: bindings.switchToTerminal, tab: 'terminal' },
         { binding: bindings.switchToSourceControl, tab: 'source-control' },

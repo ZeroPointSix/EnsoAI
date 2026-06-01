@@ -4,10 +4,13 @@ import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
 import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
+import { useTerminalStore } from '@/stores/terminal';
 import { TerminalSearchBar, type TerminalSearchBarRef } from './TerminalSearchBar';
 
 interface ShellTerminalProps {
   cwd?: string;
+  /** Tab id used for session canvas preview updates */
+  terminalSessionId?: string;
   isActive?: boolean;
   canMerge?: boolean;
   initialCommand?: string;
@@ -20,6 +23,7 @@ interface ShellTerminalProps {
 
 export function ShellTerminal({
   cwd,
+  terminalSessionId,
   isActive = false,
   canMerge = false,
   initialCommand,
@@ -30,6 +34,16 @@ export function ShellTerminal({
   onMerge,
 }: ShellTerminalProps) {
   const { t } = useI18n();
+  const appendTerminalPreview = useTerminalStore((s) => s.appendTerminalPreview);
+
+  const handleData = useCallback(
+    (data: string) => {
+      if (terminalSessionId) {
+        appendTerminalPreview(terminalSessionId, data);
+      }
+    },
+    [terminalSessionId, appendTerminalPreview]
+  );
 
   // Handle Shift+Enter for newline (send LF character)
   const handleCustomKey = useCallback((event: KeyboardEvent, ptyId: string) => {
@@ -57,6 +71,7 @@ export function ShellTerminal({
     isActive,
     initialCommand,
     onExit,
+    onData: handleData,
     onTitleChange,
     onInit,
     onSplit,

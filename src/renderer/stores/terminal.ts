@@ -1,8 +1,13 @@
 import type { TerminalSession } from '@shared/types';
 import { create } from 'zustand';
+import { appendTerminalPreview } from '@/lib/terminalPreview';
+
+export type TerminalSessionEntry = TerminalSession & {
+  previewText?: string;
+};
 
 interface TerminalState {
-  sessions: TerminalSession[];
+  sessions: TerminalSessionEntry[];
   activeSessionId: string | null;
   quickTerminalSessions: Record<string, string>; // worktreePath -> sessionId
 
@@ -11,6 +16,7 @@ interface TerminalState {
   setActiveSession: (id: string | null) => void;
   updateSession: (id: string, updates: Partial<TerminalSession>) => void;
   syncSessions: (sessions: TerminalSession[]) => void;
+  appendTerminalPreview: (id: string, data: string) => void;
 
   // Quick Terminal session management
   setQuickTerminalSession: (worktreePath: string, sessionId: string) => void;
@@ -42,7 +48,29 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, ...updates } : s)),
     })),
-  syncSessions: (sessions) => set({ sessions }),
+  syncSessions: (sessions) =>
+    set((state) => {
+      const previewById = new Map(state.sessions.map((s) => [s.id, s.previewText]));
+      return {
+        sessions: sessions.map((s) => ({
+          ...s,
+          previewText: previewById.get(s.id),
+        })),
+      };
+    }),
+
+  appendTerminalPreview: (id, data) =>
+    set((state) => {
+      const session = state.sessions.find((s) => s.id === id);
+      if (!session) return state;
+      const previewText = appendTerminalPreview(session.previewText, data);
+      if (!previewText || previewText === session.previewText) {
+        return state;
+      }
+      return {
+        sessions: state.sessions.map((s) => (s.id === id ? { ...s, previewText } : s)),
+      };
+    }),
 
   setQuickTerminalSession: (worktreePath, sessionId) =>
     set((state) => ({

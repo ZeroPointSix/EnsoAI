@@ -72,6 +72,7 @@ export interface TerminalKeybinding {
 
 export interface MainTabKeybindings {
   switchToAgent: TerminalKeybinding;
+  switchToCanvas: TerminalKeybinding;
   switchToFile: TerminalKeybinding;
   switchToTerminal: TerminalKeybinding;
   switchToSourceControl: TerminalKeybinding;
