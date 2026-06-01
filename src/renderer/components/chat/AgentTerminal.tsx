@@ -142,7 +142,6 @@ export function AgentTerminal({
   const lastCommandWasSlashCommand = useRef(false); // Track if last command was a slash command
   const setOutputState = useAgentSessionsStore((s) => s.setOutputState);
   const markSessionActive = useAgentSessionsStore((s) => s.markSessionActive);
-  const clearRuntimeState = useAgentSessionsStore((s) => s.clearRuntimeState);
   const appendSessionPreview = useAgentSessionsStore((s) => s.appendSessionPreview);
 
   const terminalSessionId = id ?? sessionId;
@@ -266,15 +265,12 @@ export function AgentTerminal({
     }
   }, []);
 
-  // Cleanup runtime state on unmount
+  // Stop activity polling on unmount (keep canvas preview text in store)
   useEffect(() => {
     return () => {
-      if (terminalSessionId) {
-        clearRuntimeState(terminalSessionId);
-      }
       stopActivityPolling();
     };
-  }, [terminalSessionId, clearRuntimeState, stopActivityPolling]);
+  }, [stopActivityPolling]);
 
   // Cleanup tmux session on unmount
   useEffect(() => {
@@ -753,6 +749,7 @@ export function AgentTerminal({
     onSplit,
     onMerge,
     canMerge,
+    previewReaderSessionId: terminalSessionId,
   });
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchBarRef = useRef<TerminalSearchBarRef>(null);

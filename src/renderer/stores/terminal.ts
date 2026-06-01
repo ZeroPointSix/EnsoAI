@@ -1,6 +1,7 @@
 import type { TerminalSession } from '@shared/types';
 import { create } from 'zustand';
 import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
+import { snapshotTerminalPreview } from '@/stores/terminalPreviewRegistry';
 
 export type TerminalSessionEntry = TerminalSession & {
   previewText?: string;
@@ -18,6 +19,8 @@ interface TerminalState {
   updateSession: (id: string, updates: Partial<TerminalSession>) => void;
   syncSessions: (sessions: TerminalSession[]) => void;
   appendTerminalPreview: (id: string, data: string) => void;
+  setSessionPreview: (id: string, previewText: string) => void;
+  refreshCanvasPreviewsFromTerminals: () => void;
 
   // Quick Terminal session management
   setQuickTerminalSession: (worktreePath: string, sessionId: string) => void;
@@ -86,6 +89,25 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
           s.id === id ? { ...s, previewText, previewEscapePending: escapePending } : s
         ),
       };
+    }),
+
+  setSessionPreview: (id, previewText) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === id ? { ...s, previewText, previewEscapePending: '' } : s
+      ),
+    })),
+
+  refreshCanvasPreviewsFromTerminals: () =>
+    set((state) => {
+      let changed = false;
+      const sessions = state.sessions.map((session) => {
+        const snapshot = snapshotTerminalPreview(session.id);
+        if (!snapshot || snapshot === session.previewText) return session;
+        changed = true;
+        return { ...session, previewText: snapshot, previewEscapePending: '' };
+      });
+      return changed ? { sessions } : state;
     }),
 
   setQuickTerminalSession: (worktreePath, sessionId) =>

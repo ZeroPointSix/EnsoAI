@@ -409,6 +409,7 @@ export const zhTranslations: Record<string, string> = {
   'Switch to Agent': '切换到 Agent',
   'Session Canvas': '会话画板',
   'Session Canvas (Ctrl+5)': '会话画板 (Ctrl+5)',
+  Resize: '调整大小',
   'Toggle session canvas': '打开/关闭会话画板',
   EnsoAIPlus: 'EnsoAIPlus',
   'Search sessions...': '搜索会话…',

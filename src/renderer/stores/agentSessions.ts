@@ -5,6 +5,7 @@ import type { Session } from '@/components/chat/SessionBar';
 import type { AgentGroupState } from '@/components/chat/types';
 import { createInitialGroupState } from '@/components/chat/types';
 import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
+import { snapshotTerminalPreview } from '@/stores/terminalPreviewRegistry';
 import { useAgentStatusStore } from './agentStatus';
 
 // Global storage key for all sessions across all repos
@@ -91,6 +92,8 @@ interface AgentSessionsState {
   getRuntimeState: (sessionId: string) => SessionRuntimeState | undefined;
   clearRuntimeState: (sessionId: string) => void;
   appendSessionPreview: (sessionId: string, data: string) => void;
+  setSessionPreview: (sessionId: string, previewText: string) => void;
+  refreshCanvasPreviewsFromTerminals: () => void;
 
   // Enhanced input state actions
   getEnhancedInputState: (sessionId: string) => EnhancedInputState;
@@ -473,9 +476,58 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
 
     clearRuntimeState: (sessionId) =>
       set((prev) => {
-        const newStates = { ...prev.runtimeStates };
-        delete newStates[sessionId];
-        return { runtimeStates: newStates };
+        const current = prev.runtimeStates[sessionId];
+        if (!current) return prev;
+        return {
+          runtimeStates: {
+            ...prev.runtimeStates,
+            [sessionId]: {
+              outputState: 'idle',
+              lastActivityAt: Date.now(),
+              wasActiveWhenOutputting: false,
+              previewText: current.previewText,
+              previewEscapePending: current.previewEscapePending,
+            },
+          },
+        };
+      }),
+
+    setSessionPreview: (sessionId, previewText) =>
+      set((prev) => {
+        const current = prev.runtimeStates[sessionId];
+        return {
+          runtimeStates: {
+            ...prev.runtimeStates,
+            [sessionId]: {
+              outputState: current?.outputState ?? 'idle',
+              lastActivityAt: current?.lastActivityAt ?? Date.now(),
+              wasActiveWhenOutputting: current?.wasActiveWhenOutputting ?? false,
+              previewText,
+              previewEscapePending: '',
+            },
+          },
+        };
+      }),
+
+    refreshCanvasPreviewsFromTerminals: () =>
+      set((prev) => {
+        const nextStates = { ...prev.runtimeStates };
+        let changed = false;
+        for (const session of prev.sessions) {
+          const snapshot = snapshotTerminalPreview(session.id);
+          if (!snapshot) continue;
+          const current = nextStates[session.id];
+          if (current?.previewText === snapshot && !current.previewEscapePending) continue;
+          changed = true;
+          nextStates[session.id] = {
+            outputState: current?.outputState ?? 'idle',
+            lastActivityAt: current?.lastActivityAt ?? Date.now(),
+            wasActiveWhenOutputting: current?.wasActiveWhenOutputting ?? false,
+            previewText: snapshot,
+            previewEscapePending: '',
+          };
+        }
+        return changed ? { runtimeStates: nextStates } : prev;
       }),
 
     appendSessionPreview: (sessionId, data) =>

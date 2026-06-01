@@ -18,6 +18,7 @@ const FILE_PATH_REGEX =
   /(?:^|[\s'"({[@])((?:\.{1,2}\/|\/)?(?:[\w.-]+\/)*[\w.-]+\.(?:tsx|ts|jsx|json|mjs|cjs|js|scss|css|less|html|vue|svelte|md|yaml|yml|toml|py|go|rs|java|cpp|hpp|c|h|rb|php|bash|zsh|sh))(?::(\d+))?(?::(\d+))?/g;
 
 import { stripTerminalOutput } from '@/lib/terminalPreview';
+import { registerXtermPreviewReader } from '@/stores/terminalPreviewRegistry';
 
 // Maximum length for session name derived from terminal current line
 const SESSION_NAME_MAX_LENGTH = 36;
@@ -47,6 +48,8 @@ export interface UseXtermOptions {
   onSplit?: () => void;
   onMerge?: () => void;
   canMerge?: boolean;
+  /** Register xterm buffer reader for session canvas preview sync */
+  previewReaderSessionId?: string;
 }
 
 export interface UseXtermResult {
@@ -125,6 +128,7 @@ export function useXterm({
   onSplit,
   onMerge,
   canMerge = false,
+  previewReaderSessionId,
 }: UseXtermOptions): UseXtermResult {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -744,6 +748,11 @@ export function useXterm({
       terminalRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!previewReaderSessionId) return;
+    return registerXtermPreviewReader(previewReaderSessionId, () => terminalRef.current);
+  }, [previewReaderSessionId, isLoading]);
 
   // Update settings dynamically
   useEffect(() => {

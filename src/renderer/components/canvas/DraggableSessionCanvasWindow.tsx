@@ -19,8 +19,10 @@ interface DraggableSessionCanvasWindowProps {
   onSwitchTab?: (tab: TabId) => void;
 }
 
-const WINDOW_WIDTH = 920;
-const WINDOW_HEIGHT = 680;
+const DEFAULT_WIDTH = 920;
+const DEFAULT_HEIGHT = 680;
+const MIN_WIDTH = 560;
+const MIN_HEIGHT = 400;
 
 export function DraggableSessionCanvasWindow({
   open,
@@ -29,49 +31,79 @@ export function DraggableSessionCanvasWindow({
   onSwitchTab,
 }: DraggableSessionCanvasWindowProps) {
   const { t } = useI18n();
-  const savedPosition = useSettingsStore((s) => s.sessionCanvasModalPosition);
-  const setSessionCanvasModalPosition = useSettingsStore((s) => s.setSessionCanvasModalPosition);
+  const savedBounds = useSettingsStore((s) => s.sessionCanvasModalBounds);
+  const legacyPosition = useSettingsStore((s) => s.sessionCanvasModalPosition);
+  const setSessionCanvasModalBounds = useSettingsStore((s) => s.setSessionCanvasModalBounds);
 
   const agentCount = useAgentSessionsStore((s) => s.sessions.length);
   const terminalCount = useTerminalStore((s) => s.sessions.length);
 
   const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState(savedPosition || { x: 0, y: 0 });
+  const [isResizing, setIsResizing] = useState(false);
+  const [bounds, setBounds] = useState({
+    x: 0,
+    y: 0,
+    width: DEFAULT_WIDTH,
+    height: DEFAULT_HEIGHT,
+  });
   const dragStartPos = useRef<{ x: number; y: number; lastX?: number; lastY?: number }>({
     x: 0,
     y: 0,
   });
+  const resizeStartPos = useRef<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    lastWidth?: number;
+    lastHeight?: number;
+  }>({ x: 0, y: 0, width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
   const windowRef = useRef<HTMLDivElement>(null);
 
   const isMac = window.electronAPI.env.platform === 'darwin';
   const MAC_SAFE_MARGIN_Y = 50;
+
+  const persistBounds = useCallback(
+    (next: typeof bounds) => {
+      setSessionCanvasModalBounds(next);
+    },
+    [setSessionCanvasModalBounds]
+  );
 
   useEffect(() => {
     if (!open) return;
 
     const minX = 0;
     const minY = isMac ? MAC_SAFE_MARGIN_Y : 0;
-    const height = Math.min(WINDOW_HEIGHT, window.innerHeight - minY - 24);
-    const centerX = Math.max(minX, (window.innerWidth - WINDOW_WIDTH) / 2);
+    const maxWidth = Math.min(DEFAULT_WIDTH + 400, window.innerWidth - 24);
+    const maxHeight = Math.min(DEFAULT_HEIGHT + 200, window.innerHeight - minY - 24);
+
+    const width = Math.min(
+      maxWidth,
+      Math.max(MIN_WIDTH, savedBounds?.width ?? DEFAULT_WIDTH)
+    );
+    const height = Math.min(
+      maxHeight,
+      Math.max(MIN_HEIGHT, savedBounds?.height ?? DEFAULT_HEIGHT)
+    );
+    const centerX = Math.max(minX, (window.innerWidth - width) / 2);
     const centerY = Math.max(minY, (window.innerHeight - height) / 2);
 
-    if (!savedPosition) {
-      setPosition({ x: centerX, y: centerY });
-    } else {
-      const isOutOfBounds =
-        savedPosition.x < minX ||
-        savedPosition.y < minY ||
-        savedPosition.x + WINDOW_WIDTH > window.innerWidth ||
-        savedPosition.y + height > window.innerHeight;
+    const x = savedBounds?.x ?? legacyPosition?.x ?? centerX;
+    const y = savedBounds?.y ?? legacyPosition?.y ?? centerY;
 
-      if (isOutOfBounds) {
-        setPosition({ x: centerX, y: centerY });
-        setSessionCanvasModalPosition({ x: centerX, y: centerY });
-      } else {
-        setPosition(savedPosition);
-      }
+    const clamped = {
+      x: Math.max(minX, Math.min(x, window.innerWidth - width)),
+      y: Math.max(minY, Math.min(y, window.innerHeight - height)),
+      width,
+      height,
+    };
+
+    setBounds(clamped);
+    if (!savedBounds) {
+      persistBounds(clamped);
     }
-  }, [open, savedPosition, setSessionCanvasModalPosition, isMac]);
+  }, [open, savedBounds, legacyPosition, persistBounds, isMac]);
 
   useEffect(() => {
     if (!open) return;
@@ -89,39 +121,85 @@ export function DraggableSessionCanvasWindow({
       if ((e.target as HTMLElement).closest('.no-drag')) return;
       setIsDragging(true);
       dragStartPos.current = {
-        x: e.clientX - position.x,
-        y: e.clientY - position.y,
+        x: e.clientX - bounds.x,
+        y: e.clientY - bounds.y,
       };
     },
-    [position]
+    [bounds.x, bounds.y]
+  );
+
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsResizing(true);
+      resizeStartPos.current = {
+        x: e.clientX,
+        y: e.clientY,
+        width: bounds.width,
+        height: bounds.height,
+      };
+    },
+    [bounds.width, bounds.height]
   );
 
   useEffect(() => {
-    if (!isDragging) return;
+    if (!isDragging && !isResizing) return;
 
     const minY = isMac ? MAC_SAFE_MARGIN_Y : 0;
-    const height = Math.min(WINDOW_HEIGHT, window.innerHeight - minY - 24);
 
     const handleMouseMove = (e: MouseEvent) => {
-      let newX = e.clientX - dragStartPos.current.x;
-      let newY = e.clientY - dragStartPos.current.y;
-      newX = Math.max(0, Math.min(newX, window.innerWidth - WINDOW_WIDTH));
-      newY = Math.max(minY, Math.min(newY, window.innerHeight - height));
+      if (isDragging) {
+        let newX = e.clientX - dragStartPos.current.x;
+        let newY = e.clientY - dragStartPos.current.y;
+        newX = Math.max(0, Math.min(newX, window.innerWidth - bounds.width));
+        newY = Math.max(minY, Math.min(newY, window.innerHeight - bounds.height));
 
-      if (windowRef.current) {
-        windowRef.current.style.left = `${newX}px`;
-        windowRef.current.style.top = `${newY}px`;
+        if (windowRef.current) {
+          windowRef.current.style.left = `${newX}px`;
+          windowRef.current.style.top = `${newY}px`;
+        }
+        dragStartPos.current.lastX = newX;
+        dragStartPos.current.lastY = newY;
       }
-      dragStartPos.current.lastX = newX;
-      dragStartPos.current.lastY = newY;
+
+      if (isResizing) {
+        const deltaX = e.clientX - resizeStartPos.current.x;
+        const deltaY = e.clientY - resizeStartPos.current.y;
+        const maxW = window.innerWidth - bounds.x - 8;
+        const maxH = window.innerHeight - bounds.y - 8;
+        const newWidth = Math.min(maxW, Math.max(MIN_WIDTH, resizeStartPos.current.width + deltaX));
+        const newHeight = Math.min(
+          maxH,
+          Math.max(MIN_HEIGHT, resizeStartPos.current.height + deltaY)
+        );
+
+        if (windowRef.current) {
+          windowRef.current.style.width = `${newWidth}px`;
+          windowRef.current.style.height = `${newHeight}px`;
+        }
+        resizeStartPos.current.lastWidth = newWidth;
+        resizeStartPos.current.lastHeight = newHeight;
+      }
     };
 
     const handleMouseUp = () => {
-      setIsDragging(false);
-      const finalX = dragStartPos.current.lastX ?? position.x;
-      const finalY = dragStartPos.current.lastY ?? position.y;
-      setPosition({ x: finalX, y: finalY });
-      setSessionCanvasModalPosition({ x: finalX, y: finalY });
+      if (isDragging) {
+        setIsDragging(false);
+        const finalX = dragStartPos.current.lastX ?? bounds.x;
+        const finalY = dragStartPos.current.lastY ?? bounds.y;
+        const next = { ...bounds, x: finalX, y: finalY };
+        setBounds(next);
+        persistBounds(next);
+      }
+      if (isResizing) {
+        setIsResizing(false);
+        const finalWidth = resizeStartPos.current.lastWidth ?? bounds.width;
+        const finalHeight = resizeStartPos.current.lastHeight ?? bounds.height;
+        const next = { ...bounds, width: finalWidth, height: finalHeight };
+        setBounds(next);
+        persistBounds(next);
+      }
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -130,11 +208,9 @@ export function DraggableSessionCanvasWindow({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, isMac, position.x, position.y, setSessionCanvasModalPosition]);
+  }, [isDragging, isResizing, isMac, bounds, persistBounds]);
 
   if (!open) return null;
-
-  const panelHeight = Math.min(WINDOW_HEIGHT, window.innerHeight - (isMac ? MAC_SAFE_MARGIN_Y : 0) - 24);
 
   return createPortal(
     <AnimatePresence>
@@ -145,14 +221,14 @@ export function DraggableSessionCanvasWindow({
           initial="initial"
           animate="animate"
           exit="exit"
-          transition={isDragging ? { duration: 0 } : springFast}
+          transition={isDragging || isResizing ? { duration: 0 } : springFast}
           className="fixed flex flex-col rounded-2xl border bg-popover shadow-lg"
           style={
             {
-              left: `${position.x}px`,
-              top: `${position.y}px`,
-              width: `${WINDOW_WIDTH}px`,
-              height: `${panelHeight}px`,
+              left: `${bounds.x}px`,
+              top: `${bounds.y}px`,
+              width: `${bounds.width}px`,
+              height: `${bounds.height}px`,
               zIndex: Z_INDEX.SESSION_CANVAS_WINDOW,
               WebkitAppRegion: 'no-drag',
             } as React.CSSProperties
@@ -194,10 +270,20 @@ export function DraggableSessionCanvasWindow({
             <SessionCanvasPanel
               variant="floating"
               isActive
+              syncPreviews
               onSelectWorktreeByPath={onSelectWorktreeByPath}
               onSwitchTab={onSwitchTab}
             />
           </div>
+
+          <button
+            type="button"
+            aria-label={t('Resize')}
+            className="no-drag absolute bottom-0 right-0 z-10 h-4 w-4 cursor-se-resize rounded-br-2xl"
+            onMouseDown={handleResizeMouseDown}
+          >
+            <span className="absolute bottom-1 right-1 block h-2 w-2 border-r-2 border-b-2 border-muted-foreground/60" />
+          </button>
         </motion.div>
       )}
     </AnimatePresence>,

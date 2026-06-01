@@ -1,6 +1,6 @@
 import { getPathBasename } from '@shared/utils/path';
 import { LayoutGrid, Search, X } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TabId } from '@/App/constants';
 import type { Session } from '@/components/chat/SessionBar';
 import {
@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/i18n';
+import { getDisplayPreviewText } from '@/lib/terminalPreview';
+import { refreshAllCanvasPreviews } from '@/lib/refreshCanvasPreviews';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { useTerminalStore } from '@/stores/terminal';
@@ -20,6 +22,8 @@ import { type CanvasCardItem, SessionCanvasCard } from './SessionCanvasCard';
 interface SessionCanvasPanelProps {
   variant?: 'embedded' | 'floating';
   isActive?: boolean;
+  /** When true, sync preview text from live xterm buffers (e.g. canvas opened). */
+  syncPreviews?: boolean;
   onClose?: () => void;
   onSelectWorktreeByPath: (worktreePath: string) => Promise<void> | void;
   onSwitchTab?: (tab: TabId) => void;
@@ -30,17 +34,20 @@ function buildCardItems(
   runtimeStates: ReturnType<typeof useAgentSessionsStore.getState>['runtimeStates'],
   terminalSessions: ReturnType<typeof useTerminalStore.getState>['sessions']
 ): CanvasCardItem[] {
-  const agents: CanvasCardItem[] = agentSessions.map((session) => ({
-    kind: 'agent',
-    session,
-    previewText: runtimeStates[session.id]?.previewText,
-    outputState: runtimeStates[session.id]?.outputState ?? 'idle',
-  }));
+  const agents: CanvasCardItem[] = agentSessions.map((session) => {
+    const runtime = runtimeStates[session.id];
+    return {
+      kind: 'agent',
+      session,
+      previewText: getDisplayPreviewText(runtime?.previewText, runtime?.previewEscapePending),
+      outputState: runtime?.outputState ?? 'idle',
+    };
+  });
 
   const terminals: CanvasCardItem[] = terminalSessions.map((session) => ({
     kind: 'terminal',
     session,
-    previewText: session.previewText,
+    previewText: getDisplayPreviewText(session.previewText, session.previewEscapePending),
   }));
 
   return [...agents, ...terminals];
@@ -49,6 +56,7 @@ function buildCardItems(
 export function SessionCanvasPanel({
   variant = 'embedded',
   isActive = false,
+  syncPreviews = false,
   onClose,
   onSelectWorktreeByPath,
   onSwitchTab,
@@ -62,6 +70,11 @@ export function SessionCanvasPanel({
   const setAgentActiveId = useAgentSessionsStore((s) => s.setActiveId);
   const markSessionActive = useAgentSessionsStore((s) => s.markSessionActive);
   const setTerminalActive = useTerminalStore((s) => s.setActiveSession);
+
+  useEffect(() => {
+    if (!syncPreviews) return;
+    refreshAllCanvasPreviews();
+  }, [syncPreviews]);
 
   const allItems = useMemo(
     () => buildCardItems(agentSessions, runtimeStates, terminalSessions),

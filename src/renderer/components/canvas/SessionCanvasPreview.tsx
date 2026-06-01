@@ -50,15 +50,12 @@ export function SessionCanvasPreview({
   return (
     <div
       className={cn(
-        'relative min-h-[148px] flex-1 overflow-hidden rounded-md border border-border/60',
+        'relative flex min-h-[140px] max-h-[min(480px,45vh)] flex-1 resize-y flex-col overflow-hidden rounded-md border border-border/60',
         className
       )}
       style={{ backgroundColor: colors.background }}
     >
-      <div
-        ref={scrollRef}
-        className="h-full max-h-[220px] overflow-y-auto overflow-x-hidden px-2.5 py-2"
-      >
+      <div ref={scrollRef} className="h-full min-h-0 flex-1 overflow-auto px-2.5 py-2">
         {hasText ? (
           <pre
             className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[1.45] select-text"

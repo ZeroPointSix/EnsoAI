@@ -14,8 +14,8 @@ const C0_EXCEPT_NEWLINE_REGEX = /[\u0000-\u0008\u000b\u000c\u000e-\u001a\u007f]/
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ESC starter at end of chunk
 const ESC_TAIL_REGEX = /(?:\u001b|\u009b)[\s\S]*$/;
 
-const PREVIEW_MAX_CHARS = 6000;
-const PREVIEW_MAX_LINES = 18;
+const PREVIEW_MAX_CHARS = 32_000;
+const PREVIEW_MAX_LINES = 80;
 
 /** Strip ANSI/OSC and normalize PTY output for plain-text preview. */
 export function stripTerminalOutput(text: string): string {
@@ -102,6 +102,17 @@ export function appendTerminalPreviewChunk(
     previewText: appendStrippedText(previewText, body),
     escapePending: pending,
   };
+}
+
+/** Merge stored preview with any pending escape bytes for display. */
+export function getDisplayPreviewText(
+  previewText?: string,
+  escapePending?: string
+): string | undefined {
+  if (!previewText && !escapePending) return undefined;
+  const merged = appendTerminalPreviewChunk(previewText, escapePending, '').previewText;
+  const trimmed = merged.trim();
+  return trimmed || undefined;
 }
 
 /** @deprecated Use appendTerminalPreviewChunk for streaming PTY data. */

@@ -78,6 +78,7 @@ export function ShellTerminal({
     onMerge,
     canMerge,
     onCustomKey: handleCustomKey,
+    previewReaderSessionId: terminalSessionId,
   });
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
