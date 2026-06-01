@@ -188,6 +188,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            dist/*.exe
+            dist/latest.yml
+          retention-days: 14
+
   build-linux:
     needs: build-app
     runs-on: ubuntu-latest
@@ -237,6 +246,15 @@ jobs:
         run: npx electron-builder --linux --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+          retention-days: 14
 
   generate-release-notes:
     needs: [build-mac, build-windows, build-linux]
