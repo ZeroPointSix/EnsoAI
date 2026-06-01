@@ -391,6 +391,8 @@ export interface SettingsState {
     width: number;
     height: number;
   } | null;
+  /** Per-card width/height on session canvas (key: `agent|terminal-{sessionId}`). */
+  sessionCanvasCardSizes: Record<string, { width: number; height: number }>;
 
   // Terminal theme favorites
   favoriteTerminalThemes: string[];
@@ -539,6 +541,10 @@ export interface SettingsState {
   setSettingsDisplayMode: (mode: SettingsDisplayMode) => void;
   setSettingsModalPosition: (position: { x: number; y: number } | null) => void;
   setSessionCanvasModalPosition: (position: { x: number; y: number } | null) => void;
+  setSessionCanvasCardSize: (
+    cardKey: string,
+    size: { width: number; height: number }
+  ) => void;
   setSessionCanvasModalBounds: (
     bounds: { x: number; y: number; width: number; height: number } | null
   ) => void;

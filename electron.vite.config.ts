@@ -46,6 +46,7 @@ export default defineConfig({
         input: {
           index: path.resolve(__dirname, 'src/renderer/index.html'),
           'agent-task-panel': path.resolve(__dirname, 'src/renderer/agent-task-panel.html'),
+          'session-canvas': path.resolve(__dirname, 'src/renderer/session-canvas.html'),
         },
       },
     },

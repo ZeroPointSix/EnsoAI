@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import type { OutputState } from '@/stores/agentSessions';
 import type { TerminalSessionEntry } from '@/stores/terminal';
 import { SessionCanvasPreview } from './SessionCanvasPreview';
+import { getSessionCanvasCardKey, useSessionCanvasCardResize } from './useSessionCanvasCardResize';
 
 export type CanvasCardItem =
   | {
@@ -65,6 +66,8 @@ function StatusBadge({ outputState }: { outputState: OutputState }) {
 
 export function SessionCanvasCard({ item, isActive = true, onFocus }: SessionCanvasCardProps) {
   const { t } = useI18n();
+  const cardKey = getSessionCanvasCardKey(item);
+  const { width, height, handleResizePointerDown } = useSessionCanvasCardResize(cardKey);
 
   const isAgent = item.kind === 'agent';
   const title = isAgent
@@ -76,7 +79,7 @@ export function SessionCanvasCard({ item, isActive = true, onFocus }: SessionCan
   const Icon = isAgent ? Sparkles : Terminal;
 
   const body = (
-    <div className="flex h-full min-h-[240px] flex-col gap-2 p-3 text-left">
+    <div className="flex h-full min-h-0 flex-col gap-2 p-3 text-left">
       <div className="flex min-w-0 items-start gap-2">
         <div
           className={cn(
@@ -120,32 +123,45 @@ export function SessionCanvasCard({ item, isActive = true, onFocus }: SessionCan
     </div>
   );
 
+  const shellClass = cn(
+    'relative flex h-full w-full flex-col rounded-lg border border-border/50 bg-card/80 text-left shadow-sm',
+    'transition-shadow hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  );
+
+  const resizeHandle = (
+    <button
+      type="button"
+      aria-label={t('Resize')}
+      className="absolute bottom-1 right-1 z-10 flex h-4 w-4 cursor-se-resize items-end justify-end rounded-sm p-0.5 text-muted-foreground/70 hover:text-foreground"
+      onPointerDown={handleResizePointerDown}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="block h-2 w-2 border-r-2 border-b-2 border-current" />
+    </button>
+  );
+
   if (isAgent && item.outputState !== 'idle') {
     return (
-      <GlowCard
-        as="button"
-        state={outputStateToGlow(item.outputState)}
-        className={cn(
-          'h-full w-full rounded-lg border border-border/50 bg-card/80 text-left shadow-sm',
-          'transition-shadow hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-        )}
-        onClick={onFocus}
-      >
-        {body}
-      </GlowCard>
+      <div className="shrink-0" style={{ width, height }}>
+        <GlowCard
+          as="button"
+          state={outputStateToGlow(item.outputState)}
+          className={shellClass}
+          onClick={onFocus}
+        >
+          {body}
+          {resizeHandle}
+        </GlowCard>
+      </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      className={cn(
-        'h-full w-full rounded-lg border border-border/50 bg-card/80 text-left shadow-sm',
-        'transition-shadow hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-      )}
-      onClick={onFocus}
-    >
-      {body}
-    </button>
+    <div className="relative shrink-0" style={{ width, height }}>
+      <button type="button" className={shellClass} onClick={onFocus}>
+        {body}
+      </button>
+      {resizeHandle}
+    </div>
   );
 }

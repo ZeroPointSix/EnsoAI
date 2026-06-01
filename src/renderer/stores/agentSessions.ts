@@ -4,7 +4,12 @@ import { normalizePath, pathsEqual } from '@/App/storage';
 import type { Session } from '@/components/chat/SessionBar';
 import type { AgentGroupState } from '@/components/chat/types';
 import { createInitialGroupState } from '@/components/chat/types';
+import { mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
 import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
+import {
+  removeCachedSessionPreview,
+  setCachedSessionPreview,
+} from '@/stores/sessionPreviewCache';
 import { snapshotTerminalPreview } from '@/stores/terminalPreviewRegistry';
 import { useAgentStatusStore } from './agentStatus';
 
@@ -244,6 +249,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
           newActiveIds[cwd] = null;
         }
         // Clean up runtime states
+        removeCachedSessionPreview('agent', id);
         const newRuntimeStates = { ...state.runtimeStates };
         delete newRuntimeStates[id];
         // Clean up enhanced input states
@@ -495,6 +501,9 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
     setSessionPreview: (sessionId, previewText) =>
       set((prev) => {
         const current = prev.runtimeStates[sessionId];
+        const merged = mergePreviewSnapshot(current?.previewText, previewText);
+        if (!merged.trim()) return prev;
+        setCachedSessionPreview('agent', sessionId, merged);
         return {
           runtimeStates: {
             ...prev.runtimeStates,
@@ -502,7 +511,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
               outputState: current?.outputState ?? 'idle',
               lastActivityAt: current?.lastActivityAt ?? Date.now(),
               wasActiveWhenOutputting: current?.wasActiveWhenOutputting ?? false,
-              previewText,
+              previewText: merged,
               previewEscapePending: '',
             },
           },
@@ -515,15 +524,18 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
         let changed = false;
         for (const session of prev.sessions) {
           const snapshot = snapshotTerminalPreview(session.id);
-          if (!snapshot) continue;
           const current = nextStates[session.id];
-          if (current?.previewText === snapshot && !current.previewEscapePending) continue;
+          const merged = mergePreviewSnapshot(current?.previewText, snapshot);
+          if (!merged || (merged === current?.previewText && !current?.previewEscapePending)) {
+            continue;
+          }
           changed = true;
+          setCachedSessionPreview('agent', session.id, merged);
           nextStates[session.id] = {
             outputState: current?.outputState ?? 'idle',
             lastActivityAt: current?.lastActivityAt ?? Date.now(),
             wasActiveWhenOutputting: current?.wasActiveWhenOutputting ?? false,
-            previewText: snapshot,
+            previewText: merged,
             previewEscapePending: '',
           };
         }
@@ -543,6 +555,9 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
           escapePending === current?.previewEscapePending
         ) {
           return prev;
+        }
+        if (previewText?.trim()) {
+          setCachedSessionPreview('agent', sessionId, previewText);
         }
         return {
           runtimeStates: {

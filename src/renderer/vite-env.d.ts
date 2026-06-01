@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference path="../preload/types.ts" />
 
 declare module '*?worker' {
   const workerConstructor: {

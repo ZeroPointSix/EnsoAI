@@ -50,6 +50,7 @@ import type {
   WorktreeRemoveOptions,
 } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
+import type { SessionCanvasSnapshot } from '@shared/types/sessionCanvas';
 import type { AgentStopNotificationData } from '@shared/types/agent';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
@@ -718,6 +719,69 @@ const electronAPI = {
       const handler = (_: unknown, data: Parameters<typeof callback>[0]) => callback(data);
       ipcRenderer.on(IPC_CHANNELS.AGENT_STATUS_UPDATE, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.AGENT_STATUS_UPDATE, handler);
+    },
+  },
+
+  // Session Canvas (standalone window)
+  sessionCanvasPanel: {
+    toggle: (): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_PANEL_TOGGLE),
+    focusSession: (params: {
+      kind: 'agent' | 'terminal';
+      sessionId: string;
+      repoPath: string;
+      cwd: string;
+    }): void => {
+      ipcRenderer.send(IPC_CHANNELS.SESSION_CANVAS_FOCUS_SESSION, params);
+    },
+    getSnapshot: (): Promise<boolean | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_GET_SNAPSHOT),
+    onSnapshotResponse: (callback: (snapshot: SessionCanvasSnapshot) => void): (() => void) => {
+      const handler = (_: unknown, snapshot: SessionCanvasSnapshot) => callback(snapshot);
+      ipcRenderer.on(IPC_CHANNELS.SESSION_CANVAS_SNAPSHOT_RESPONSE, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.SESSION_CANVAS_SNAPSHOT_RESPONSE, handler);
+    },
+    onSync: (callback: (snapshot: SessionCanvasSnapshot) => void): (() => void) => {
+      const handler = (_: unknown, snapshot: SessionCanvasSnapshot) => callback(snapshot);
+      ipcRenderer.on(IPC_CHANNELS.SESSION_CANVAS_SYNC, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.SESSION_CANVAS_SYNC, handler);
+    },
+    onFocusSession: (
+      callback: (params: {
+        kind: 'agent' | 'terminal';
+        sessionId: string;
+        repoPath: string;
+        cwd: string;
+      }) => void
+    ): (() => void) => {
+      const handler = (
+        _: unknown,
+        params: {
+          kind: 'agent' | 'terminal';
+          sessionId: string;
+          repoPath: string;
+          cwd: string;
+        }
+      ) => callback(params);
+      ipcRenderer.on(IPC_CHANNELS.SESSION_CANVAS_FOCUS_SESSION, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.SESSION_CANVAS_FOCUS_SESSION, handler);
+    },
+    resetBounds: (): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_PANEL_RESET_BOUNDS),
+    onVisibilityChanged: (callback: (visible: boolean) => void): (() => void) => {
+      const handler = (_: unknown, visible: boolean) => callback(visible);
+      ipcRenderer.on(IPC_CHANNELS.SESSION_CANVAS_PANEL_VISIBILITY_CHANGED, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.SESSION_CANVAS_PANEL_VISIBILITY_CHANGED, handler);
+    },
+    onGetSnapshot: (callback: () => void): (() => void) => {
+      ipcRenderer.on(IPC_CHANNELS.SESSION_CANVAS_GET_SNAPSHOT, callback);
+      return () => ipcRenderer.off(IPC_CHANNELS.SESSION_CANVAS_GET_SNAPSHOT, callback);
+    },
+    sendSnapshotResponse: (snapshot: SessionCanvasSnapshot): void => {
+      ipcRenderer.send(IPC_CHANNELS.SESSION_CANVAS_SNAPSHOT_RESPONSE, snapshot);
+    },
+    sendSync: (snapshot: SessionCanvasSnapshot): void => {
+      ipcRenderer.send(IPC_CHANNELS.SESSION_CANVAS_SYNC, snapshot);
     },
   },
 

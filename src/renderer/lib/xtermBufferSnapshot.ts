@@ -16,10 +16,11 @@ export function readXtermBufferSnapshot(terminal: Terminal, maxLines = SNAPSHOT_
     const line = buffer.getLine(i);
     if (!line) continue;
     const text = stripTerminalOutput(line.translateToString(true));
-    if (text.trim()) {
+    if (text.length > 0) {
       lines.push(text);
     }
   }
 
-  return lines.join('\n');
+  const joined = lines.join('\n').trimEnd();
+  return joined;
 }

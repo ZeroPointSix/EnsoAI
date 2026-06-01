@@ -1,5 +1,6 @@
 import type {
   GitWorktree,
+  SessionCanvasFocusParams,
   WorktreeCreateOptions,
   WorktreeMergeOptions,
   WorktreeMergeResult,
@@ -53,7 +54,6 @@ import { AddRepositoryDialog } from './components/git';
 import { CloneProgressFloat } from './components/git/CloneProgressFloat';
 import { ActionPanel } from './components/layout/ActionPanel';
 import { BackgroundLayer } from './components/layout/BackgroundLayer';
-import { DraggableSessionCanvasWindow } from './components/canvas';
 import { MainContent } from './components/layout/MainContent';
 import { RepositorySidebar } from './components/layout/RepositorySidebar';
 import { TemporaryWorkspacePanel } from './components/layout/TemporaryWorkspacePanel';
@@ -86,12 +86,16 @@ import {
   useWorktreeResolveConflict,
 } from './hooks/useWorktree';
 import { useI18n } from './i18n';
+import { buildSessionCanvasSnapshot } from './lib/buildSessionCanvasSnapshot';
+import { refreshAllCanvasPreviews } from './lib/refreshCanvasPreviews';
+import { pushSessionCanvasSnapshotToPanel } from './lib/sessionCanvasSync';
 import { useAgentSessionsStore } from './stores/agentSessions';
 import { initAgentTasksListener, useAgentTasksStore } from './stores/agentTasks';
 import { initCloneProgressListener } from './stores/cloneTasks';
 import { useEditorStore } from './stores/editor';
 import { useInitScriptStore } from './stores/initScript';
 import { useSettingsStore } from './stores/settings';
+import { useTerminalStore } from './stores/terminal';
 import { useTempWorkspaceStore } from './stores/tempWorkspace';
 import { useWorktreeStore } from './stores/worktree';
 import { initAgentActivityListener, useWorktreeActivityStore } from './stores/worktreeActivity';
@@ -177,10 +181,10 @@ export default function App() {
   // Agent Tasks Panel state (synced via IPC with independent BrowserWindow)
   const [isAgentTasksPanelOpen, setIsAgentTasksPanelOpen] = useState(false);
 
-  // Global session canvas overlay (not a main content tab)
-  const [isSessionCanvasOpen, setIsSessionCanvasOpen] = useState(false);
+  // Session canvas standalone window (Ctrl+5)
+  const [isSessionCanvasPanelOpen, setIsSessionCanvasPanelOpen] = useState(false);
   const toggleSessionCanvas = useCallback(() => {
-    setIsSessionCanvasOpen((prev) => !prev);
+    void window.electronAPI.sessionCanvasPanel.toggle();
   }, []);
 
   // Listen for agent task panel visibility changes from main process
@@ -197,6 +201,39 @@ export default function App() {
       window.electronAPI.agentTaskPanel.sendSnapshotResponse(tasks);
     });
   }, []);
+
+  useEffect(() => {
+    return window.electronAPI.sessionCanvasPanel.onVisibilityChanged((visible: boolean) => {
+      setIsSessionCanvasPanelOpen(visible);
+    });
+  }, []);
+
+  useEffect(() => {
+    return window.electronAPI.sessionCanvasPanel.onGetSnapshot(() => {
+      refreshAllCanvasPreviews();
+      const snapshot = buildSessionCanvasSnapshot();
+      window.electronAPI.sessionCanvasPanel.sendSnapshotResponse(snapshot);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isSessionCanvasPanelOpen) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleSync = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        pushSessionCanvasSnapshotToPanel();
+      }, 300);
+    };
+    scheduleSync();
+    const unsubAgent = useAgentSessionsStore.subscribe(scheduleSync);
+    const unsubTerminal = useTerminalStore.subscribe(scheduleSync);
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubAgent();
+      unsubTerminal();
+    };
+  }, [isSessionCanvasPanelOpen]);
 
   const {
     repositoryCollapsed,
@@ -773,6 +810,27 @@ export default function App() {
     );
   }, [handleNavigateToTask]);
 
+  const handleSessionCanvasFocus = useCallback(
+    async (params: SessionCanvasFocusParams) => {
+      await handleSwitchWorktreePath(params.cwd);
+      if (params.kind === 'agent') {
+        useAgentSessionsStore.getState().setActiveId(params.repoPath, params.cwd, params.sessionId);
+        useAgentSessionsStore.getState().markSessionActive(params.sessionId);
+        handleTabChange('chat');
+      } else {
+        useTerminalStore.getState().setActiveSession(params.sessionId);
+        handleTabChange('terminal');
+      }
+    },
+    [handleSwitchWorktreePath, handleTabChange]
+  );
+
+  useEffect(() => {
+    return window.electronAPI.sessionCanvasPanel.onFocusSession((params) => {
+      void handleSessionCanvasFocus(params);
+    });
+  }, [handleSessionCanvasFocus]);
+
   // Handle adding a local repository
   const handleAddLocalRepository = useCallback(
     (selectedPath: string, groupId: string | null) => {
@@ -1128,7 +1186,7 @@ export default function App() {
                   isSettingsActive={activeTab === 'settings'}
                   onToggleSettings={toggleSettings}
                   isFileDragOver={isFileDragOver}
-                  isSessionCanvasOpen={isSessionCanvasOpen}
+                  isSessionCanvasOpen={isSessionCanvasPanelOpen}
                   onToggleSessionCanvas={toggleSessionCanvas}
                 />
                 {/* Resize handle */}
@@ -1178,7 +1236,7 @@ export default function App() {
                     isFileDragOver={isFileDragOver}
                     temporaryWorkspaceEnabled={temporaryWorkspaceEnabled}
                     tempBasePath={tempBasePathDisplay}
-                    isSessionCanvasOpen={isSessionCanvasOpen}
+                    isSessionCanvasOpen={isSessionCanvasPanelOpen}
                     onToggleSessionCanvas={toggleSessionCanvas}
                   />
                   {/* Resize handle */}
@@ -1440,12 +1498,6 @@ export default function App() {
           />
         )}
 
-        <DraggableSessionCanvasWindow
-          open={isSessionCanvasOpen}
-          onOpenChange={setIsSessionCanvasOpen}
-          onSelectWorktreeByPath={handleSwitchWorktreePath}
-          onSwitchTab={handleTabChange}
-        />
       </div>
     </div>
   );

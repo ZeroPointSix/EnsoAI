@@ -278,6 +278,15 @@ export const IPC_CHANNELS = {
   AGENT_TASK_PANEL_RESET_BOUNDS: 'agent-task:panel:resetBounds',
   AGENT_TASK_SYNC: 'agent-task:sync',
 
+  // Session Canvas (standalone window)
+  SESSION_CANVAS_PANEL_TOGGLE: 'session-canvas:panel:toggle',
+  SESSION_CANVAS_PANEL_VISIBILITY_CHANGED: 'session-canvas:panel:visibilityChanged',
+  SESSION_CANVAS_GET_SNAPSHOT: 'session-canvas:getSnapshot',
+  SESSION_CANVAS_SNAPSHOT_RESPONSE: 'session-canvas:snapshotResponse',
+  SESSION_CANVAS_SYNC: 'session-canvas:sync',
+  SESSION_CANVAS_FOCUS_SESSION: 'session-canvas:focusSession',
+  SESSION_CANVAS_PANEL_RESET_BOUNDS: 'session-canvas:panel:resetBounds',
+
   // Logging
   LOG_UPDATE_CONFIG: 'log:update-config',
   LOG_OPEN_FOLDER: 'log:open-folder',

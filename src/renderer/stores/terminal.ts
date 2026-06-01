@@ -1,6 +1,8 @@
 import type { TerminalSession } from '@shared/types';
 import { create } from 'zustand';
+import { mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
 import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
+import { removeCachedSessionPreview, setCachedSessionPreview } from '@/stores/sessionPreviewCache';
 import { snapshotTerminalPreview } from '@/stores/terminalPreviewRegistry';
 
 export type TerminalSessionEntry = TerminalSession & {
@@ -39,14 +41,16 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       sessions: [...state.sessions, session],
       activeSessionId: session.id,
     })),
-  removeSession: (id) =>
-    set((state) => ({
+  removeSession: (id) => {
+    removeCachedSessionPreview('terminal', id);
+    return set((state) => ({
       sessions: state.sessions.filter((s) => s.id !== id),
       activeSessionId:
         state.activeSessionId === id
           ? state.sessions.find((s) => s.id !== id)?.id || null
           : state.activeSessionId,
-    })),
+    }));
+  },
   setActiveSession: (id) => set({ activeSessionId: id }),
   updateSession: (id, updates) =>
     set((state) => ({
@@ -84,6 +88,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       ) {
         return state;
       }
+      setCachedSessionPreview('terminal', id, previewText);
       return {
         sessions: state.sessions.map((s) =>
           s.id === id ? { ...s, previewText, previewEscapePending: escapePending } : s
@@ -92,20 +97,30 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     }),
 
   setSessionPreview: (id, previewText) =>
-    set((state) => ({
-      sessions: state.sessions.map((s) =>
-        s.id === id ? { ...s, previewText, previewEscapePending: '' } : s
-      ),
-    })),
+    set((state) => {
+      const merged = mergePreviewSnapshot(
+        state.sessions.find((s) => s.id === id)?.previewText,
+        previewText
+      );
+      if (!merged.trim()) return state;
+      setCachedSessionPreview('terminal', id, merged);
+      return {
+        sessions: state.sessions.map((s) =>
+          s.id === id ? { ...s, previewText: merged, previewEscapePending: '' } : s
+        ),
+      };
+    }),
 
   refreshCanvasPreviewsFromTerminals: () =>
     set((state) => {
       let changed = false;
       const sessions = state.sessions.map((session) => {
         const snapshot = snapshotTerminalPreview(session.id);
-        if (!snapshot || snapshot === session.previewText) return session;
+        const merged = mergePreviewSnapshot(session.previewText, snapshot);
+        if (!merged || merged === session.previewText) return session;
         changed = true;
-        return { ...session, previewText: snapshot, previewEscapePending: '' };
+        setCachedSessionPreview('terminal', session.id, merged);
+        return { ...session, previewText: merged, previewEscapePending: '' };
       });
       return changed ? { sessions } : state;
     }),

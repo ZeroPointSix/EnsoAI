@@ -50,7 +50,7 @@ export function SessionCanvasPreview({
   return (
     <div
       className={cn(
-        'relative flex min-h-[140px] max-h-[min(480px,45vh)] flex-1 resize-y flex-col overflow-hidden rounded-md border border-border/60',
+        'relative flex min-h-[100px] flex-1 flex-col overflow-hidden rounded-md border border-border/60',
         className
       )}
       style={{ backgroundColor: colors.background }}

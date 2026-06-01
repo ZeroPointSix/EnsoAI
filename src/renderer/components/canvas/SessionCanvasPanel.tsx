@@ -12,8 +12,8 @@ import {
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/i18n';
-import { getDisplayPreviewText } from '@/lib/terminalPreview';
 import { refreshAllCanvasPreviews } from '@/lib/refreshCanvasPreviews';
+import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { useTerminalStore } from '@/stores/terminal';
@@ -25,8 +25,11 @@ interface SessionCanvasPanelProps {
   /** When true, sync preview text from live xterm buffers (e.g. canvas opened). */
   syncPreviews?: boolean;
   onClose?: () => void;
-  onSelectWorktreeByPath: (worktreePath: string) => Promise<void> | void;
+  onSelectWorktreeByPath?: (worktreePath: string) => Promise<void> | void;
   onSwitchTab?: (tab: TabId) => void;
+  /** Standalone window: render cards from IPC snapshot instead of main-window stores. */
+  externalItems?: CanvasCardItem[];
+  onFocusExternal?: (item: CanvasCardItem) => void;
 }
 
 function buildCardItems(
@@ -39,7 +42,12 @@ function buildCardItems(
     return {
       kind: 'agent',
       session,
-      previewText: getDisplayPreviewText(runtime?.previewText, runtime?.previewEscapePending),
+      previewText: getResolvedSessionPreview(
+        'agent',
+        session.id,
+        runtime?.previewText,
+        runtime?.previewEscapePending
+      ),
       outputState: runtime?.outputState ?? 'idle',
     };
   });
@@ -47,7 +55,12 @@ function buildCardItems(
   const terminals: CanvasCardItem[] = terminalSessions.map((session) => ({
     kind: 'terminal',
     session,
-    previewText: getDisplayPreviewText(session.previewText, session.previewEscapePending),
+    previewText: getResolvedSessionPreview(
+      'terminal',
+      session.id,
+      session.previewText,
+      session.previewEscapePending
+    ),
   }));
 
   return [...agents, ...terminals];
@@ -60,6 +73,8 @@ export function SessionCanvasPanel({
   onClose,
   onSelectWorktreeByPath,
   onSwitchTab,
+  externalItems,
+  onFocusExternal,
 }: SessionCanvasPanelProps) {
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,14 +87,14 @@ export function SessionCanvasPanel({
   const setTerminalActive = useTerminalStore((s) => s.setActiveSession);
 
   useEffect(() => {
-    if (!syncPreviews) return;
+    if (!syncPreviews || externalItems) return;
     refreshAllCanvasPreviews();
-  }, [syncPreviews]);
+  }, [syncPreviews, externalItems]);
 
-  const allItems = useMemo(
-    () => buildCardItems(agentSessions, runtimeStates, terminalSessions),
-    [agentSessions, runtimeStates, terminalSessions]
-  );
+  const allItems = useMemo(() => {
+    if (externalItems) return externalItems;
+    return buildCardItems(agentSessions, runtimeStates, terminalSessions);
+  }, [externalItems, agentSessions, runtimeStates, terminalSessions]);
 
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return allItems;
@@ -109,8 +124,12 @@ export function SessionCanvasPanel({
 
   const handleFocus = useCallback(
     async (item: CanvasCardItem) => {
+      if (onFocusExternal) {
+        onFocusExternal(item);
+        return;
+      }
       const cwd = item.session.cwd;
-      await onSelectWorktreeByPath(cwd);
+      await onSelectWorktreeByPath?.(cwd);
       if (item.kind === 'agent') {
         setAgentActiveId(item.session.repoPath, cwd, item.session.id);
         markSessionActive(item.session.id);
@@ -121,6 +140,7 @@ export function SessionCanvasPanel({
       }
     },
     [
+      onFocusExternal,
       onSelectWorktreeByPath,
       onSwitchTab,
       setAgentActiveId,
@@ -196,12 +216,7 @@ export function SessionCanvasPanel({
             </Empty>
           </div>
         ) : (
-          <div
-            className={cn(
-              'grid gap-3',
-              'grid-cols-[repeat(auto-fill,minmax(300px,1fr))]'
-            )}
-          >
+          <div className="flex flex-wrap content-start gap-3">
             {filteredItems.map((item) => (
               <SessionCanvasCard
                 key={`${item.kind}-${item.session.id}`}
