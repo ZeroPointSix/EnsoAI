@@ -1,6 +1,6 @@
-appId: com.ensoai.app
-productName: EnsoAI
-copyright: Copyright © 2025
+appId: com.ensoaiplus.app
+productName: EnsoAIPlus
+copyright: Copyright © 2026
 
 directories:
   output: dist
@@ -94,7 +94,7 @@ mac:
   # Register enso:// URL scheme
   extendInfo:
     CFBundleURLTypes:
-      - CFBundleURLName: EnsoAI
+      - CFBundleURLName: EnsoAIPlus
         CFBundleURLSchemes:
           - enso
 
@@ -135,8 +135,8 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
-  executableName: enso-ai
-  maintainer: EnsoAI Team <crolin-zhang@users.noreply.github.com>
+  executableName: ensoaiplus
+  maintainer: EnsoAIPlus Team <crolin-zhang@users.noreply.github.com>
   category: Development
   # Register enso:// URL scheme
   mimeTypes:
@@ -144,6 +144,6 @@ linux:
 
 publish:
   provider: github
-  owner: J3n5en
+  owner: ZeroPointSix
   repo: EnsoAI
   releaseType: draft

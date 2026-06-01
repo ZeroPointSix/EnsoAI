@@ -117,7 +117,7 @@ export function SessionCanvasPanel({
       <div className="flex shrink-0 flex-col gap-3 border-b px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-medium">{t('Enso')}</h2>
+            <h2 className="text-sm font-medium">{t('EnsoAIPlus')}</h2>
             <p className="text-xs text-muted-foreground">
               {t('{{agents}} agents · {{terminals}} terminals', {
                 agents: agentCount,

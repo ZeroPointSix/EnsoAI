@@ -101,7 +101,7 @@ function writeLockFile({
   port,
   authToken,
   workspaceFolders = [],
-  ideName = 'EnsoAI',
+  ideName = 'EnsoAIPlus',
 }: {
   port: number;
   authToken: string;
@@ -738,7 +738,7 @@ export function updateClaudeWorkspaceFolders(folders: string[]): void {
 }
 
 // Dynamic enable/disable based on settings
-let bridgeOptions: ClaudeIdeBridgeOptions = { ideName: 'EnsoAI' };
+let bridgeOptions: ClaudeIdeBridgeOptions = { ideName: 'EnsoAIPlus' };
 
 export async function setClaudeBridgeEnabled(
   enabled: boolean,

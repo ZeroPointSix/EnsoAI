@@ -164,7 +164,7 @@ class CliInstaller {
         return match[1];
       }
       // Fallback for dev mode
-      return '/Applications/EnsoAI.app';
+      return '/Applications/EnsoAIPlus.app';
     }
     if (isWindows) {
       return app.getPath('exe');
@@ -232,7 +232,7 @@ if "%~1"=="" (
 )
 
 :: Check if EnsoAI is running
-tasklist /FI "IMAGENAME eq EnsoAI.exe" 2>NUL | find /I /N "EnsoAI.exe">NUL
+tasklist /FI "IMAGENAME eq EnsoAIPlus.exe" 2>NUL | find /I /N "EnsoAIPlus.exe">NUL
 if %ERRORLEVEL%==0 (
   :: App is running, use URL scheme with PowerShell for proper URL encoding
   for /f "usebackq delims=" %%i in (\`powershell -NoProfile -Command "[uri]::EscapeDataString('%TARGET_PATH%')"\`) do set "ENCODED_PATH=%%i"

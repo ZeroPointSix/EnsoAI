@@ -131,7 +131,7 @@ export function MainContent({
     { icon: React.ElementType; label: string }
   > = {
     chat: { icon: Sparkles, label: t('Agent') },
-    canvas: { icon: LayoutGrid, label: t('Enso') },
+    canvas: { icon: LayoutGrid, label: t('EnsoAIPlus') },
     file: { icon: FileCode, label: t('File') },
     terminal: { icon: Terminal, label: t('Terminal') },
     'source-control': { icon: GitBranch, label: t('Version Control') },

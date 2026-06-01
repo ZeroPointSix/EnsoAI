@@ -222,7 +222,7 @@ async function main() {
   for (const lockfile of lockfiles) {
     try {
       const content = JSON.parse(fs.readFileSync(path.join(IDE_DIR, lockfile), 'utf-8'));
-      if (content.ideName === 'EnsoAI') {
+      if (content.ideName === 'EnsoAIPlus') {
         const port = parseInt(path.basename(lockfile, '.lock'), 10);
         if (Number.isNaN(port)) continue;
         const score = getWorkspaceMatchScore(payloadCwd, content.workspaceFolders);
@@ -518,7 +518,7 @@ async function main() {
     for (const lockfile of lockfiles) {
       try {
         const content = JSON.parse(fs.readFileSync(path.join(IDE_DIR, lockfile), 'utf-8'));
-        if (content.ideName === 'EnsoAI') {
+        if (content.ideName === 'EnsoAIPlus') {
           const port = path.basename(lockfile, '.lock');
           const postData = JSON.stringify(data);
           const req = http.request({

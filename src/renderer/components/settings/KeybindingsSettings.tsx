@@ -200,7 +200,7 @@ export function KeybindingsSettings() {
             />
           </div>
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Switch to Enso')}</span>
+            <span className="text-sm">{t('Switch to EnsoAIPlus')}</span>
             <KeybindingInput
               value={
                 mainTabKeybindings.switchToCanvas ?? {

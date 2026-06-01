@@ -297,7 +297,7 @@ async function init(): Promise<void> {
   const logLevel = (ensoSettings?.state?.logLevel as 'error' | 'warn' | 'info' | 'debug') ?? 'info';
   const logRetentionDays = (ensoSettings?.state?.logRetentionDays as number) ?? 7;
   initLogger(loggingEnabled, logLevel, logRetentionDays);
-  log.info('EnsoAI started');
+  log.info('EnsoAIPlus started');
 
   // Check Git installation
   const gitInstalled = await checkGitInstalled();
@@ -314,7 +314,7 @@ async function init(): Promise<void> {
 
 app.whenReady().then(async () => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.ensoai.app');
+  electronApp.setAppUserModelId('com.ensoaiplus.app');
 
   // Allow EnhancedInput temp images to be previewed via local-file:// protocol.
   // NOTE: This is registered here (in the same module as the protocol handler)

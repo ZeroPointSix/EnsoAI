@@ -64,8 +64,8 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
         )}
         title={`${t('Settings')} (Ctrl+,)`}
       >
-        <img src={logoImage} alt="Enso AI" className="h-5 w-5" />
-        <span className="text-xs font-medium text-muted-foreground">Enso AI</span>
+        <img src={logoImage} alt="EnsoAIPlus" className="h-5 w-5" />
+        <span className="text-xs font-medium text-muted-foreground">EnsoAIPlus</span>
       </button>
 
       {/* Right: Actions and window controls */}
