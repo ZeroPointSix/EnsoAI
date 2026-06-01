@@ -418,7 +418,6 @@ export const zhTranslations: Record<string, string> = {
   'No output yet — open this session to stream preview': '暂无输出 — 打开该会话后将在此显示预览',
   'Agent running': '运行中',
   'New output': '有新输出',
-  Shell: 'Shell',
   '{{agents}} agents · {{terminals}} terminals': '{{agents}} 个 Agent · {{terminals}} 个终端',
   'Switch to File': '切换到 文件',
   'Switch to list view': '切换到列表视图',
