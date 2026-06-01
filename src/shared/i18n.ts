@@ -408,6 +408,7 @@ export const zhTranslations: Record<string, string> = {
   'Stop output notification': 'Agent 停止输出时发送系统通知',
   'Switch to Agent': '切换到 Agent',
   'Session Canvas': '会话画板',
+  'Session Canvas (Ctrl+5)': '会话画板 (Ctrl+5)',
   'Toggle session canvas': '打开/关闭会话画板',
   EnsoAIPlus: 'EnsoAIPlus',
   'Search sessions...': '搜索会话…',

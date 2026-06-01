@@ -32,8 +32,8 @@ export function SessionCanvasToolbarButton({
         className
       )}
       onClick={onToggle}
-      title={t('Session Canvas')}
-      aria-label={t('Session Canvas')}
+      title={t('Session Canvas (Ctrl+5)')}
+      aria-label={t('Session Canvas (Ctrl+5)')}
       aria-pressed={isOpen}
     >
       <LayoutGrid className="h-4 w-4" />

@@ -8,7 +8,7 @@
 
 ## 概述
 
-通过 **左侧边栏全局工具栏**（与「运行中项目」相邻的网格图标）打开 **会话画板覆盖层**，以网格卡片形式 **总览当前所有已打开的 Agent 会话与 Shell 终端**，减少在 chat / terminal / 各 worktree 之间的来回切换。画板 **不再** 占用主内容区 Tab 栏。
+通过 **左侧边栏全局工具栏**（与「运行中项目」相邻的网格图标）或 **Ctrl+5** 打开 **可拖动的悬浮会话画板窗口**（交互对齐 `DraggableSettingsWindow`），以网格卡片形式总览所有 Agent / Shell 会话。画板 **不再** 占用主内容区 Tab 栏，也不遮挡整屏主内容。
 
 本功能采用 **方案 A（轻量会话画板）**：画板内展示元数据 + 输出状态 + 文本预览，**不在画板内挂载可交互的 xterm**；用户单击卡片后跳转到对应 worktree 与 Agent/Terminal 面板进行操作。
 
@@ -93,11 +93,10 @@
 App.tsx
 ├── TreeSidebar / RepositorySidebar 顶栏
 │   └── SessionCanvasToolbarButton     # LayoutGrid，全局入口
-└── 主内容区（relative 容器）
-    ├── MainContent                    # Agent / File / Terminal 等 Tab（无 canvas）
-    └── SessionCanvasOverlay           # open 时 absolute inset-0 覆盖主内容
-        └── SessionCanvasPanel
-            └── SessionCanvasCard[]
+├── MainContent                        # Agent / File / Terminal（无 canvas Tab）
+└── DraggableSessionCanvasWindow       # createPortal → 可拖动悬浮窗（同设置窗）
+    └── SessionCanvasPanel (variant=floating)
+        └── SessionCanvasCard[]
 ```
 
 ### 已实现文件
@@ -217,14 +216,19 @@ flowchart TB
 - [ ] 按 worktree 分组标题
 - [x] `switchToCanvas` 快捷键与设置项（切换覆盖层）
 
-### Phase 3（方案 B，待产品确认）
+### Phase 3（体验 — 用户 2026-06-01 反馈）
 
-- [ ] 画板内选中卡片放大预览
-- [ ] 卡片拖拽排序（`@dnd-kit`，项目已有依赖）
+- [x] 预览乱码修复：合并缓冲后剥离 ANSI/OSC，跨 chunk 保留未完成 ESC（v0.2.48）
+- [x] 点击卡片跳转后**不自动关闭**画板（可继续总览其他会话）
+- [x] 侧栏按钮提示 `Ctrl+5`
+- [ ] 卡片自由拖拽布局（`@dnd-kit`）
+- [ ] 卡片拖大/缩小
+- [ ] 画板内直接输入（需全局终端宿主，见 Phase 4）
+- [ ] 画板内快捷键在会话间跳转（1–9 等）
 
 ### Phase 4（方案 C，仅必要时）
 
-- [ ] 全局终端宿主重构，画板内 live 多终端
+- [ ] 全局终端宿主重构，画板内 live 多终端 + 可交互输入
 
 ---
 

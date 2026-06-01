@@ -53,7 +53,7 @@ import { AddRepositoryDialog } from './components/git';
 import { CloneProgressFloat } from './components/git/CloneProgressFloat';
 import { ActionPanel } from './components/layout/ActionPanel';
 import { BackgroundLayer } from './components/layout/BackgroundLayer';
-import { SessionCanvasOverlay } from './components/canvas';
+import { DraggableSessionCanvasWindow } from './components/canvas';
 import { MainContent } from './components/layout/MainContent';
 import { RepositorySidebar } from './components/layout/RepositorySidebar';
 import { TemporaryWorkspacePanel } from './components/layout/TemporaryWorkspacePanel';
@@ -1303,12 +1303,6 @@ export default function App() {
               onOpenAgentTasks={() => window.electronAPI.agentTaskPanel.toggle()}
               isAgentTasksPanelOpen={isAgentTasksPanelOpen}
             />
-            <SessionCanvasOverlay
-              open={isSessionCanvasOpen}
-              onClose={() => setIsSessionCanvasOpen(false)}
-              onSelectWorktreeByPath={handleSwitchWorktreePath}
-              onSwitchTab={handleTabChange}
-            />
           </div>
         </div>
 
@@ -1445,6 +1439,13 @@ export default function App() {
             scrollToProvider={scrollToProvider}
           />
         )}
+
+        <DraggableSessionCanvasWindow
+          open={isSessionCanvasOpen}
+          onOpenChange={setIsSessionCanvasOpen}
+          onSelectWorktreeByPath={handleSwitchWorktreePath}
+          onSwitchTab={handleTabChange}
+        />
       </div>
     </div>
   );

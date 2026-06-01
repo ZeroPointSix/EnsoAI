@@ -193,6 +193,7 @@ function getInitialState() {
     // Settings display mode
     settingsDisplayMode: 'tab' as const,
     settingsModalPosition: null,
+    sessionCanvasModalPosition: null,
 
     // Terminal theme favorites
     favoriteTerminalThemes: [] as string[],
@@ -652,6 +653,7 @@ export const useSettingsStore = create<SettingsState>()(
       // Settings Display Setters
       setSettingsDisplayMode: (mode) => set({ settingsDisplayMode: mode }),
       setSettingsModalPosition: (position) => set({ settingsModalPosition: position }),
+      setSessionCanvasModalPosition: (position) => set({ sessionCanvasModalPosition: position }),
 
       // Terminal Theme Favorites Setters
       addFavoriteTerminalTheme: (theme) =>

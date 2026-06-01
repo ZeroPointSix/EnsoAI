@@ -4,7 +4,7 @@ import { normalizePath, pathsEqual } from '@/App/storage';
 import type { Session } from '@/components/chat/SessionBar';
 import type { AgentGroupState } from '@/components/chat/types';
 import { createInitialGroupState } from '@/components/chat/types';
-import { appendTerminalPreview } from '@/lib/terminalPreview';
+import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
 import { useAgentStatusStore } from './agentStatus';
 
 // Global storage key for all sessions across all repos
@@ -19,6 +19,8 @@ export interface SessionRuntimeState {
   wasActiveWhenOutputting: boolean; // Track if user was viewing this session during output
   /** Last lines of terminal output for session canvas preview (not persisted) */
   previewText?: string;
+  /** Incomplete ESC bytes waiting for the next PTY chunk */
+  previewEscapePending?: string;
 }
 
 // Enhanced input state for each session (not persisted)
@@ -479,8 +481,15 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
     appendSessionPreview: (sessionId, data) =>
       set((prev) => {
         const current = prev.runtimeStates[sessionId];
-        const previewText = appendTerminalPreview(current?.previewText, data);
-        if (!previewText || previewText === current?.previewText) {
+        const { previewText, escapePending } = appendTerminalPreviewChunk(
+          current?.previewText,
+          current?.previewEscapePending,
+          data
+        );
+        if (
+          previewText === current?.previewText &&
+          escapePending === current?.previewEscapePending
+        ) {
           return prev;
         }
         return {
@@ -491,6 +500,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
               lastActivityAt: current?.lastActivityAt ?? Date.now(),
               wasActiveWhenOutputting: current?.wasActiveWhenOutputting ?? false,
               previewText,
+              previewEscapePending: escapePending,
             },
           },
         };

@@ -1,9 +1,10 @@
 import type { TerminalSession } from '@shared/types';
 import { create } from 'zustand';
-import { appendTerminalPreview } from '@/lib/terminalPreview';
+import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
 
 export type TerminalSessionEntry = TerminalSession & {
   previewText?: string;
+  previewEscapePending?: string;
 };
 
 interface TerminalState {
@@ -50,12 +51,18 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     })),
   syncSessions: (sessions) =>
     set((state) => {
-      const previewById = new Map(state.sessions.map((s) => [s.id, s.previewText]));
+      const previewById = new Map(
+        state.sessions.map((s) => [s.id, { previewText: s.previewText, pending: s.previewEscapePending }])
+      );
       return {
-        sessions: sessions.map((s) => ({
-          ...s,
-          previewText: previewById.get(s.id),
-        })),
+        sessions: sessions.map((s) => {
+          const kept = previewById.get(s.id);
+          return {
+            ...s,
+            previewText: kept?.previewText,
+            previewEscapePending: kept?.pending,
+          };
+        }),
       };
     }),
 
@@ -63,12 +70,21 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     set((state) => {
       const session = state.sessions.find((s) => s.id === id);
       if (!session) return state;
-      const previewText = appendTerminalPreview(session.previewText, data);
-      if (!previewText || previewText === session.previewText) {
+      const { previewText, escapePending } = appendTerminalPreviewChunk(
+        session.previewText,
+        session.previewEscapePending,
+        data
+      );
+      if (
+        previewText === session.previewText &&
+        escapePending === session.previewEscapePending
+      ) {
         return state;
       }
       return {
-        sessions: state.sessions.map((s) => (s.id === id ? { ...s, previewText } : s)),
+        sessions: state.sessions.map((s) =>
+          s.id === id ? { ...s, previewText, previewEscapePending: escapePending } : s
+        ),
       };
     }),
 

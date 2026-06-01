@@ -10,6 +10,8 @@ export const Z_INDEX = {
   BASE: 0,
   /** Settings floating window - just above main window */
   SETTINGS_WINDOW: 10,
+  /** Session canvas floating window (same layer as settings) */
+  SESSION_CANVAS_WINDOW: 10,
   /** Dropdowns, menus, and popovers */
   DROPDOWN: 40,
   /** Background overlay for modal dialogs */

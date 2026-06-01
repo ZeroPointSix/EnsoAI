@@ -384,6 +384,7 @@ export interface SettingsState {
   // Settings display mode
   settingsDisplayMode: SettingsDisplayMode;
   settingsModalPosition: { x: number; y: number } | null;
+  sessionCanvasModalPosition: { x: number; y: number } | null;
 
   // Terminal theme favorites
   favoriteTerminalThemes: string[];
@@ -531,6 +532,7 @@ export interface SettingsState {
   // Setters - Settings display
   setSettingsDisplayMode: (mode: SettingsDisplayMode) => void;
   setSettingsModalPosition: (position: { x: number; y: number } | null) => void;
+  setSessionCanvasModalPosition: (position: { x: number; y: number } | null) => void;
 
   // Setters - Terminal theme favorites
   addFavoriteTerminalTheme: (theme: string) => void;

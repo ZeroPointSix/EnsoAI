@@ -1,4 +1,4 @@
-export { SessionCanvasOverlay } from './SessionCanvasOverlay';
+export { DraggableSessionCanvasWindow } from './DraggableSessionCanvasWindow';
 export { SessionCanvasPanel } from './SessionCanvasPanel';
 export { SessionCanvasToolbarButton } from './SessionCanvasToolbarButton';
 export { SessionCanvasCard, type CanvasCardItem } from './SessionCanvasCard';

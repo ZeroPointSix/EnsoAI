@@ -17,18 +17,13 @@ import '@xterm/xterm/css/xterm.css';
 const FILE_PATH_REGEX =
   /(?:^|[\s'"({[@])((?:\.{1,2}\/|\/)?(?:[\w.-]+\/)*[\w.-]+\.(?:tsx|ts|jsx|json|mjs|cjs|js|scss|css|less|html|vue|svelte|md|yaml|yml|toml|py|go|rs|java|cpp|hpp|c|h|rb|php|bash|zsh|sh))(?::(\d+))?(?::(\d+))?/g;
 
-// Check if data contains visible characters (not just ANSI control sequences)
-// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequences require ESC character
-const ANSI_ESCAPE_REGEX = /\x1b\[[0-9;?]*[a-zA-Z]/g;
+import { stripTerminalOutput } from '@/lib/terminalPreview';
 
 // Maximum length for session name derived from terminal current line
 const SESSION_NAME_MAX_LENGTH = 36;
 
 function hasVisibleContent(data: string): boolean {
-  // Remove all ANSI escape sequences
-  const stripped = data.replace(ANSI_ESCAPE_REGEX, '');
-  // Check if there are any non-whitespace visible characters
-  return stripped.trim().length > 0;
+  return stripTerminalOutput(data).trim().length > 0;
 }
 
 export interface UseXtermOptions {
@@ -573,7 +568,7 @@ export function useXterm({
           const line = buf.getLine(y);
           if (!line) return null;
           const raw = line.translateToString();
-          const stripped = raw.replace(ANSI_ESCAPE_REGEX, '');
+          const stripped = stripTerminalOutput(raw);
           const trimmed = stripped.trim();
           if (!trimmed) return null;
           return trimmed.length > SESSION_NAME_MAX_LENGTH
