@@ -9,6 +9,8 @@ export interface SessionCanvasCardSnapshot {
   repoPath: string;
   cwd: string;
   title: string;
+  /** Agent only: preserves rename vs OSC title resolution in standalone panel */
+  userRenamed?: boolean;
   previewText?: string;
   outputState?: SessionCanvasOutputState;
 }
@@ -22,4 +24,10 @@ export interface SessionCanvasFocusParams {
   sessionId: string;
   repoPath: string;
   cwd: string;
+}
+
+export interface SessionCanvasRenameParams {
+  kind: SessionCanvasCardKind;
+  sessionId: string;
+  title: string;
 }

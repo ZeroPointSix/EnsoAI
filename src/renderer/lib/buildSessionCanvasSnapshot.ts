@@ -25,6 +25,7 @@ function agentCard(session: Session, outputState: OutputState): SessionCanvasCar
     title: session.userRenamed
       ? session.name
       : session.terminalTitle || session.name,
+    userRenamed: session.userRenamed,
     previewText: getResolvedSessionPreview(
       'agent',
       session.id,

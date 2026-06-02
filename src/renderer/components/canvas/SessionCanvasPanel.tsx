@@ -1,6 +1,7 @@
 import { getPathBasename } from '@shared/utils/path';
+import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
 import { LayoutGrid, Search, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TabId } from '@/App/constants';
 import type { Session } from '@/components/chat/SessionBar';
 import {
@@ -12,6 +13,13 @@ import {
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/i18n';
+import {
+  CANVAS_CARD_DEFAULT_HEIGHT,
+  CANVAS_CARD_DEFAULT_WIDTH,
+  computeArrangedCanvasHeight,
+  computeArrangedPositions,
+} from '@/lib/arrangeSessionCanvasCards';
+import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { refreshAllCanvasPreviews } from '@/lib/refreshCanvasPreviews';
 import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
 import { cn } from '@/lib/utils';
@@ -19,19 +27,21 @@ import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { type CanvasCardItem, SessionCanvasCard } from './SessionCanvasCard';
+import {
+  SessionCanvasContextMenu,
+  type SessionCanvasContextMenuState,
+} from './SessionCanvasContextMenu';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { getDefaultCardPosition } from './useSessionCanvasCardDrag';
-import { getSessionCanvasCardKey } from './useSessionCanvasCardResize';
+import { getSessionCanvasCardKey } from '@/lib/sessionCanvasCardKey';
 
 interface SessionCanvasPanelProps {
   variant?: 'embedded' | 'floating';
   isActive?: boolean;
-  /** When true, sync preview text from live xterm buffers (e.g. canvas opened). */
   syncPreviews?: boolean;
   onClose?: () => void;
   onSelectWorktreeByPath?: (worktreePath: string) => Promise<void> | void;
   onSwitchTab?: (tab: TabId) => void;
-  /** Standalone window: render cards from IPC snapshot instead of main-window stores. */
   externalItems?: CanvasCardItem[];
   onFocusExternal?: (item: CanvasCardItem) => void;
 }
@@ -82,21 +92,52 @@ export function SessionCanvasPanel({
 }: SessionCanvasPanelProps) {
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
+  const [focusedCardKey, setFocusedCardKey] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<SessionCanvasContextMenuState | null>(null);
+  const [renameToken, setRenameToken] = useState(0);
+  const [renameTargetKey, setRenameTargetKey] = useState<string | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   const agentSessions = useAgentSessionsStore((s) => s.sessions);
   const runtimeStates = useAgentSessionsStore((s) => s.runtimeStates);
   const terminalSessions = useTerminalStore((s) => s.sessions);
   const setAgentActiveId = useAgentSessionsStore((s) => s.setActiveId);
   const markSessionActive = useAgentSessionsStore((s) => s.markSessionActive);
-  const updateSession = useAgentSessionsStore((s) => s.updateSession);
+  const updateAgentSession = useAgentSessionsStore((s) => s.updateSession);
+  const updateTerminalSession = useTerminalStore((s) => s.updateSession);
   const setTerminalActive = useTerminalStore((s) => s.setActiveSession);
-  const cardSizes = useSettingsStore((s) => s.sessionCanvasCardSizes);
-  const cardPositions = useSettingsStore((s) => s.sessionCanvasCardPositions);
+  const setCardPosition = useSettingsStore((s) => s.setSessionCanvasCardPosition);
+  const setCardSize = useSettingsStore((s) => s.setSessionCanvasCardSize);
 
   useEffect(() => {
     if (!syncPreviews || externalItems) return;
     refreshAllCanvasPreviews();
   }, [syncPreviews, externalItems]);
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setCanvasSize({
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!focusedCardKey) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFocusedCardKey(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [focusedCardKey]);
 
   const allItems = useMemo(() => {
     if (externalItems) return externalItems;
@@ -111,7 +152,7 @@ export function SessionCanvasPanel({
       const repo = (
         item.kind === 'agent' ? item.session.repoPath : item.session.cwd
       ).toLowerCase();
-      const title = resolveSessionCanvasCardTitle(item, 'terminal').toLowerCase();
+      const title = resolveSessionCanvasCardTitle(item, t('Terminal')).toLowerCase();
       const preview = (item.previewText ?? '').toLowerCase();
       return (
         cwd.includes(q) ||
@@ -121,7 +162,23 @@ export function SessionCanvasPanel({
         getPathBasename(item.session.cwd).toLowerCase().includes(q)
       );
     });
-  }, [allItems, searchQuery]);
+  }, [allItems, searchQuery, t]);
+
+  const focusedItem = useMemo(
+    () =>
+      focusedCardKey
+        ? filteredItems.find((item) => getSessionCanvasCardKey(item) === focusedCardKey)
+        : undefined,
+    [filteredItems, focusedCardKey]
+  );
+
+  const focusSize = useMemo(
+    () => ({
+      width: Math.max(280, Math.round(canvasSize.width * 0.6)),
+      height: Math.max(240, Math.round(canvasSize.height * 0.6)),
+    }),
+    [canvasSize.width, canvasSize.height]
+  );
 
   const agentCount = agentSessions.length;
   const terminalCount = terminalSessions.length;
@@ -153,24 +210,67 @@ export function SessionCanvasPanel({
     ]
   );
 
-  const handleRenameAgentSession = useCallback(
-    (sessionId: string, name: string) => {
-      if (externalItems) return;
-      updateSession(sessionId, { name, userRenamed: true });
+  const handleRenameSession = useCallback(
+    (kind: SessionCanvasCardKind, sessionId: string, name: string) => {
+      if (externalItems) {
+        window.electronAPI.sessionCanvasPanel.renameSession({ kind, sessionId, title: name });
+        return;
+      }
+      if (kind === 'agent') {
+        updateAgentSession(sessionId, { name, terminalTitle: undefined, userRenamed: true });
+      } else {
+        updateTerminalSession(sessionId, { title: name });
+      }
+      pushSessionCanvasSnapshotToPanel();
     },
-    [externalItems, updateSession]
+    [externalItems, updateAgentSession, updateTerminalSession]
   );
 
-  const canvasMinHeight = useMemo(() => {
-    let maxBottom = 360;
-    filteredItems.forEach((item, index) => {
+  const handleArrange = useCallback(() => {
+    const containerWidth = canvasRef.current?.clientWidth ?? canvasSize.width;
+    const positions = computeArrangedPositions(filteredItems, containerWidth);
+    for (const item of filteredItems) {
       const key = getSessionCanvasCardKey(item);
-      const pos = cardPositions[key] ?? getDefaultCardPosition(index);
-      const size = cardSizes[key] ?? { width: 320, height: 300 };
-      maxBottom = Math.max(maxBottom, pos.y + size.height + 24);
-    });
-    return maxBottom;
-  }, [filteredItems, cardPositions, cardSizes]);
+      const pos = positions[key];
+      if (pos) setCardPosition(key, pos);
+      setCardSize(key, {
+        width: CANVAS_CARD_DEFAULT_WIDTH,
+        height: CANVAS_CARD_DEFAULT_HEIGHT,
+      });
+    }
+    setContextMenu(null);
+    setFocusedCardKey(null);
+  }, [filteredItems, canvasSize.width, setCardPosition, setCardSize]);
+
+  const handleCardClick = useCallback(
+    (item: CanvasCardItem, event: React.MouseEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        setFocusedCardKey(null);
+        void handleFocus(item);
+        return;
+      }
+      setFocusedCardKey(getSessionCanvasCardKey(item));
+    },
+    [handleFocus]
+  );
+
+  const openContextMenu = useCallback((event: React.MouseEvent, item: CanvasCardItem | null) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({ x: event.clientX, y: event.clientY, item });
+  }, []);
+
+  const canvasMinHeight = useMemo(() => {
+    if (focusedCardKey) {
+      return Math.max(360, canvasSize.height);
+    }
+    return computeArrangedCanvasHeight(
+      filteredItems.length,
+      canvasSize.width,
+      CANVAS_CARD_DEFAULT_WIDTH,
+      CANVAS_CARD_DEFAULT_HEIGHT
+    );
+  }, [filteredItems.length, canvasSize.width, canvasSize.height, focusedCardKey]);
 
   const isFloating = variant === 'floating';
 
@@ -217,7 +317,11 @@ export function SessionCanvasPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div
+        ref={canvasRef}
+        className="relative flex-1 overflow-y-auto p-4"
+        onContextMenu={(e) => openContextMenu(e, null)}
+      >
         {filteredItems.length === 0 ? (
           <div className="flex h-full min-h-[320px] items-center justify-center">
             <Empty className="border-0">
@@ -240,19 +344,89 @@ export function SessionCanvasPanel({
           </div>
         ) : (
           <div className="relative w-full" style={{ minHeight: canvasMinHeight }}>
-            {filteredItems.map((item, index) => (
-              <SessionCanvasCard
-                key={`${item.kind}-${item.session.id}`}
-                item={item}
-                index={index}
-                isActive={isActive}
-                onFocus={() => handleFocus(item)}
-                onRenameAgentSession={externalItems ? undefined : handleRenameAgentSession}
-              />
-            ))}
+            {filteredItems.map((item, index) => {
+              const key = getSessionCanvasCardKey(item);
+              const isFocused = focusedCardKey === key;
+              const isDimmed = Boolean(focusedCardKey && !isFocused);
+              return (
+                <SessionCanvasCard
+                  key={`${item.kind}-${item.session.id}`}
+                  item={item}
+                  index={index}
+                  isActive={isActive}
+                  isFocused={isFocused && !focusedItem}
+                  isDimmed={isDimmed}
+                  disableDrag={Boolean(focusedCardKey)}
+                  onCardClick={(e) => handleCardClick(item, e)}
+                  onRenameSession={handleRenameSession}
+                  onContextMenu={(e) => openContextMenu(e, item)}
+                  renameRequestToken={
+                    renameTargetKey === key ? renameToken : undefined
+                  }
+                />
+              );
+            })}
           </div>
         )}
+
+        {focusedItem ? (
+          <div
+            className="absolute inset-0 z-40 flex items-center justify-center bg-black/55"
+            onClick={() => setFocusedCardKey(null)}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <div
+              className="relative"
+              style={{ width: focusSize.width, height: focusSize.height }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SessionCanvasCard
+                item={focusedItem}
+                index={0}
+                isActive={isActive}
+                isFocused
+                sizeOverride={focusSize}
+                positionOverride={{ x: 0, y: 0 }}
+                disableDrag
+                onCardClick={(e) => handleCardClick(focusedItem, e)}
+                onRenameSession={handleRenameSession}
+                onContextMenu={(e) => openContextMenu(e, focusedItem)}
+                renameRequestToken={
+                  renameTargetKey === getSessionCanvasCardKey(focusedItem)
+                    ? renameToken
+                    : undefined
+                }
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
+
+      <SessionCanvasContextMenu
+        menu={contextMenu}
+        onClose={() => setContextMenu(null)}
+        onArrange={handleArrange}
+        onRename={
+          contextMenu?.item
+            ? () => {
+                const key = getSessionCanvasCardKey(contextMenu.item!);
+                setRenameTargetKey(key);
+                setRenameToken((n) => n + 1);
+                setContextMenu(null);
+              }
+            : undefined
+        }
+        onJumpToSession={
+          contextMenu?.item
+            ? () => {
+                const item = contextMenu.item!;
+                setContextMenu(null);
+                setFocusedCardKey(null);
+                void handleFocus(item);
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

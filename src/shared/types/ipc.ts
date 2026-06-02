@@ -286,6 +286,7 @@ export const IPC_CHANNELS = {
   SESSION_CANVAS_SYNC: 'session-canvas:sync',
   SESSION_CANVAS_FOCUS_SESSION: 'session-canvas:focusSession',
   SESSION_CANVAS_PANEL_RESET_BOUNDS: 'session-canvas:panel:resetBounds',
+  SESSION_CANVAS_RENAME_SESSION: 'session-canvas:renameSession',
 
   // Logging
   LOG_UPDATE_CONFIG: 'log:update-config',

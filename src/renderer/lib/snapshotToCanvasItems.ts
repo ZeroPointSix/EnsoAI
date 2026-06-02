@@ -22,7 +22,8 @@ export function snapshotCardsToCanvasItems(cards: SessionCanvasCardSnapshot[]): 
         activated: true,
         repoPath: card.repoPath,
         cwd: card.cwd,
-        terminalTitle: card.title,
+        userRenamed: card.userRenamed,
+        terminalTitle: card.userRenamed ? undefined : card.title,
       };
       return {
         kind: 'agent',

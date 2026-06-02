@@ -783,6 +783,23 @@ const electronAPI = {
     sendSync: (snapshot: SessionCanvasSnapshot): void => {
       ipcRenderer.send(IPC_CHANNELS.SESSION_CANVAS_SYNC, snapshot);
     },
+    renameSession: (params: {
+      kind: 'agent' | 'terminal';
+      sessionId: string;
+      title: string;
+    }): void => {
+      ipcRenderer.send(IPC_CHANNELS.SESSION_CANVAS_RENAME_SESSION, params);
+    },
+    onRenameSession: (
+      callback: (params: { kind: 'agent' | 'terminal'; sessionId: string; title: string }) => void
+    ): (() => void) => {
+      const handler = (
+        _: unknown,
+        params: { kind: 'agent' | 'terminal'; sessionId: string; title: string }
+      ) => callback(params);
+      ipcRenderer.on(IPC_CHANNELS.SESSION_CANVAS_RENAME_SESSION, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.SESSION_CANVAS_RENAME_SESSION, handler);
+    },
   },
 
   // Agent Task Panel

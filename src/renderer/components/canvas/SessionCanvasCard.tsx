@@ -1,6 +1,7 @@
 import { getPathBasename } from '@shared/utils/path';
+import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
 import { Bot, GripVertical, Sparkles, Terminal } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Session } from '@/components/chat/SessionBar';
 import { Badge } from '@/components/ui/badge';
 import { GlowCard } from '@/components/ui/glow-card';
@@ -31,8 +32,15 @@ interface SessionCanvasCardProps {
   item: CanvasCardItem;
   index: number;
   isActive?: boolean;
-  onFocus: () => void;
-  onRenameAgentSession?: (sessionId: string, name: string) => void;
+  isFocused?: boolean;
+  isDimmed?: boolean;
+  sizeOverride?: { width: number; height: number };
+  positionOverride?: { x: number; y: number };
+  disableDrag?: boolean;
+  onCardClick: (event: React.MouseEvent) => void;
+  onRenameSession?: (kind: SessionCanvasCardKind, sessionId: string, name: string) => void;
+  onContextMenu?: (event: React.MouseEvent) => void;
+  renameRequestToken?: number;
 }
 
 function outputStateToGlow(state: OutputState): 'idle' | 'running' | 'waiting_input' | 'completed' {
@@ -74,13 +82,25 @@ export function SessionCanvasCard({
   item,
   index,
   isActive = true,
-  onFocus,
-  onRenameAgentSession,
+  isFocused = false,
+  isDimmed = false,
+  sizeOverride,
+  positionOverride,
+  disableDrag = false,
+  onCardClick,
+  onRenameSession,
+  onContextMenu,
+  renameRequestToken,
 }: SessionCanvasCardProps) {
   const { t } = useI18n();
   const cardKey = getSessionCanvasCardKey(item);
-  const { width, height, handleResizePointerDown } = useSessionCanvasCardResize(cardKey);
-  const { position, isDragging, handleDragPointerDown } = useSessionCanvasCardDrag(cardKey, index);
+  const { width, height, handleResizePointerDown } = useSessionCanvasCardResize(cardKey, sizeOverride);
+  const dragEnabled = !disableDrag && !isFocused && !positionOverride;
+  const { position, isDragging, handleDragPointerDown } = useSessionCanvasCardDrag(
+    cardKey,
+    index,
+    positionOverride
+  );
 
   const isAgent = item.kind === 'agent';
   const title = resolveSessionCanvasCardTitle(item, t('Terminal'));
@@ -92,12 +112,36 @@ export function SessionCanvasCard({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(title);
 
+  useEffect(() => {
+    if (!isRenaming) {
+      setRenameValue(title);
+    }
+  }, [title, isRenaming]);
+
+  useEffect(() => {
+    if (renameRequestToken === undefined || renameRequestToken === 0) return;
+    if (!onRenameSession) return;
+    setRenameValue(title);
+    setIsRenaming(true);
+  }, [renameRequestToken, onRenameSession, title]);
+
   const commitRename = useCallback(() => {
     const next = renameValue.trim();
     setIsRenaming(false);
-    if (!isAgent || !onRenameAgentSession || !next || next === title) return;
-    onRenameAgentSession(item.session.id, next);
-  }, [renameValue, title, isAgent, onRenameAgentSession, item]);
+    if (!onRenameSession || !next || next === title) return;
+    onRenameSession(item.kind, item.session.id, next);
+  }, [renameValue, title, onRenameSession, item]);
+
+  const beginRename = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onRenameSession) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setRenameValue(title);
+      setIsRenaming(true);
+    },
+    [onRenameSession, title]
+  );
 
   const titleNode = isRenaming ? (
     <Input
@@ -119,14 +163,8 @@ export function SessionCanvasCard({
   ) : (
     <span
       className="min-w-0 flex-1 truncate text-sm font-medium"
-      title={onRenameAgentSession && isAgent ? t('Double-click to rename') : title}
-      onDoubleClick={(e) => {
-        if (!onRenameAgentSession || !isAgent) return;
-        e.preventDefault();
-        e.stopPropagation();
-        setRenameValue(title);
-        setIsRenaming(true);
-      }}
+      title={onRenameSession ? t('Double-click to rename') : title}
+      onDoubleClick={beginRename}
     >
       {title}
     </span>
@@ -135,18 +173,22 @@ export function SessionCanvasCard({
   const body = (
     <div className="flex h-full min-h-0 flex-col gap-2 p-3 text-left">
       <div className="flex min-w-0 items-start gap-2">
-        <button
-          type="button"
-          aria-label={t('Drag card')}
-          className={cn(
-            'mt-0.5 flex h-7 w-5 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground active:cursor-grabbing',
-            isDragging && 'cursor-grabbing'
-          )}
-          onPointerDown={handleDragPointerDown}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
+        {dragEnabled ? (
+          <button
+            type="button"
+            aria-label={t('Drag card')}
+            className={cn(
+              'mt-0.5 flex h-7 w-5 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground active:cursor-grabbing',
+              isDragging && 'cursor-grabbing'
+            )}
+            onPointerDown={handleDragPointerDown}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        ) : (
+          <span className="mt-0.5 h-7 w-5 shrink-0" />
+        )}
         <div
           className={cn(
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
@@ -186,45 +228,66 @@ export function SessionCanvasCard({
       <p className="truncate text-[10px] text-muted-foreground/80" title={item.session.cwd}>
         {item.session.cwd}
       </p>
+      {isFocused ? (
+        <p className="text-[10px] text-muted-foreground">{t('Ctrl+click to jump to session · Esc to close')}</p>
+      ) : null}
     </div>
   );
 
   const shellClass = cn(
     'relative flex h-full w-full flex-col rounded-lg border border-border/50 bg-card/80 text-left shadow-sm',
     'transition-shadow hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-    isDragging && 'ring-2 ring-primary/40'
+    isDragging && 'ring-2 ring-primary/40',
+    isFocused && 'ring-2 ring-primary border-primary/50 shadow-lg',
+    isDimmed && 'opacity-40 pointer-events-none'
   );
 
-  const resizeHandle = (
-    <button
-      type="button"
-      aria-label={t('Resize')}
-      className="absolute bottom-1 right-1 z-10 flex h-4 w-4 cursor-se-resize items-end justify-end rounded-sm p-0.5 text-muted-foreground/70 hover:text-foreground"
-      onPointerDown={handleResizePointerDown}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <span className="block h-2 w-2 border-r-2 border-b-2 border-current" />
-    </button>
-  );
+  const resizeHandle =
+    !isFocused && !sizeOverride ? (
+      <button
+        type="button"
+        aria-label={t('Resize')}
+        className="absolute bottom-1 right-1 z-10 flex h-4 w-4 cursor-se-resize items-end justify-end rounded-sm p-0.5 text-muted-foreground/70 hover:text-foreground"
+        onPointerDown={handleResizePointerDown}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="block h-2 w-2 border-r-2 border-b-2 border-current" />
+      </button>
+    ) : null;
 
+  const resolvedPosition = positionOverride ?? position;
   const positionedStyle = {
     position: 'absolute' as const,
-    left: position.x,
-    top: position.y,
+    left: resolvedPosition.x,
+    top: resolvedPosition.y,
     width,
     height,
-    zIndex: isDragging ? 20 : 1,
+    zIndex: isFocused ? 50 : isDragging ? 20 : isDimmed ? 0 : 1,
+  };
+
+  const handleShellClick = (e: React.MouseEvent) => {
+    if (isDimmed) return;
+    onCardClick(e);
+  };
+
+  const handleShellContextMenu = (e: React.MouseEvent) => {
+    if (isDimmed) return;
+    onContextMenu?.(e);
   };
 
   if (isAgent && item.outputState !== 'idle') {
     return (
-      <div style={positionedStyle}>
-        <GlowCard
-          as="button"
-          state={outputStateToGlow(item.outputState)}
-          className={shellClass}
-          onClick={onFocus}
-        >
+      <div
+        style={positionedStyle}
+        role="button"
+        tabIndex={0}
+        onClick={handleShellClick}
+        onContextMenu={handleShellContextMenu}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') handleShellClick(e as unknown as React.MouseEvent);
+        }}
+      >
+        <GlowCard as="div" state={outputStateToGlow(item.outputState)} className={shellClass}>
           {body}
           {resizeHandle}
         </GlowCard>
@@ -234,7 +297,12 @@ export function SessionCanvasCard({
 
   return (
     <div style={positionedStyle}>
-      <button type="button" className={shellClass} onClick={onFocus}>
+      <button
+        type="button"
+        className={shellClass}
+        onClick={handleShellClick}
+        onContextMenu={handleShellContextMenu}
+      >
         {body}
       </button>
       {resizeHandle}

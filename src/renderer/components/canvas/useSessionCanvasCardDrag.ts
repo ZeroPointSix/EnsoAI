@@ -14,18 +14,23 @@ export function getDefaultCardPosition(index: number): { x: number; y: number } 
   };
 }
 
-export function useSessionCanvasCardDrag(cardKey: string, index: number) {
+export function useSessionCanvasCardDrag(
+  cardKey: string,
+  index: number,
+  fixedPosition?: { x: number; y: number }
+) {
   const saved = useSettingsStore((s) => s.sessionCanvasCardPositions[cardKey]);
   const setCardPosition = useSettingsStore((s) => s.setSessionCanvasCardPosition);
 
   const defaultPos = getDefaultCardPosition(index);
-  const position = saved ?? defaultPos;
+  const position = fixedPosition ?? saved ?? defaultPos;
 
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, posX: position.x, posY: position.y });
 
   const handleDragPointerDown = useCallback(
     (e: React.PointerEvent) => {
+      if (fixedPosition) return;
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(true);
@@ -37,11 +42,11 @@ export function useSessionCanvasCardDrag(cardKey: string, index: number) {
       };
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [position.x, position.y]
+    [fixedPosition, position.x, position.y]
   );
 
   useEffect(() => {
-    if (!isDragging) return;
+    if (!isDragging || fixedPosition) return;
 
     const handleMove = (e: PointerEvent) => {
       const deltaX = e.clientX - dragStart.current.x;
@@ -60,7 +65,7 @@ export function useSessionCanvasCardDrag(cardKey: string, index: number) {
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
-  }, [isDragging, cardKey, setCardPosition]);
+  }, [isDragging, fixedPosition, cardKey, setCardPosition]);
 
   return {
     position,

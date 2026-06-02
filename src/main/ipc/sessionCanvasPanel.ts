@@ -1,4 +1,8 @@
-import type { SessionCanvasFocusParams, SessionCanvasSnapshot } from '@shared/types/sessionCanvas';
+import type {
+  SessionCanvasFocusParams,
+  SessionCanvasRenameParams,
+  SessionCanvasSnapshot,
+} from '@shared/types/sessionCanvas';
 import { IPC_CHANNELS } from '@shared/types';
 import type { BrowserWindow } from 'electron';
 import { ipcMain } from 'electron';
@@ -69,4 +73,13 @@ export function registerSessionCanvasPanelHandlers(mainWindow: BrowserWindow): v
       panelWindow.webContents.send(IPC_CHANNELS.SESSION_CANVAS_SYNC, snapshot);
     }
   });
+
+  ipcMain.on(
+    IPC_CHANNELS.SESSION_CANVAS_RENAME_SESSION,
+    (_event, params: SessionCanvasRenameParams) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_CHANNELS.SESSION_CANVAS_RENAME_SESSION, params);
+      }
+    }
+  );
 }

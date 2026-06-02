@@ -1,5 +1,6 @@
 import type {
   SessionCanvasFocusParams,
+  SessionCanvasRenameParams,
   SessionCanvasSnapshot,
 } from '@shared/types/sessionCanvas';
 import type { ElectronAPI } from './index';
@@ -17,6 +18,8 @@ export type SessionCanvasPanelBridge = {
   onGetSnapshot: (callback: () => void) => (() => void);
   sendSnapshotResponse: (snapshot: SessionCanvasSnapshot) => void;
   sendSync: (snapshot: SessionCanvasSnapshot) => void;
+  renameSession: (params: SessionCanvasRenameParams) => void;
+  onRenameSession: (callback: (params: SessionCanvasRenameParams) => void) => (() => void);
 };
 
 declare global {

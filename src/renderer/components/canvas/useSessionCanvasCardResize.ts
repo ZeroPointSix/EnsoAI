@@ -9,29 +9,31 @@ const MIN_HEIGHT = 200;
 const MAX_WIDTH = 960;
 const MAX_HEIGHT = 720;
 
-export function getSessionCanvasCardKey(item: CanvasCardItem): string {
-  return `${item.kind}-${item.session.id}`;
-}
+export { getSessionCanvasCardKey } from '@/lib/sessionCanvasCardKey';
 
-export function useSessionCanvasCardResize(cardKey: string) {
+export function useSessionCanvasCardResize(
+  cardKey: string,
+  sizeOverride?: { width: number; height: number }
+) {
   const saved = useSettingsStore((s) => s.sessionCanvasCardSizes[cardKey]);
   const setCardSize = useSettingsStore((s) => s.setSessionCanvasCardSize);
 
-  const width = saved?.width ?? DEFAULT_WIDTH;
-  const height = saved?.height ?? DEFAULT_HEIGHT;
+  const width = sizeOverride?.width ?? saved?.width ?? DEFAULT_WIDTH;
+  const height = sizeOverride?.height ?? saved?.height ?? DEFAULT_HEIGHT;
 
   const [isResizing, setIsResizing] = useState(false);
   const resizeStart = useRef({ x: 0, y: 0, width, height });
 
   const handleResizePointerDown = useCallback(
     (e: React.PointerEvent) => {
+      if (sizeOverride) return;
       e.preventDefault();
       e.stopPropagation();
       setIsResizing(true);
       resizeStart.current = { x: e.clientX, y: e.clientY, width, height };
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [width, height]
+    [sizeOverride, width, height]
   );
 
   useEffect(() => {

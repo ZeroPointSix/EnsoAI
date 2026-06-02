@@ -836,6 +836,21 @@ export default function App() {
     });
   }, [handleSessionCanvasFocus]);
 
+  useEffect(() => {
+    return window.electronAPI.sessionCanvasPanel.onRenameSession((params) => {
+      if (params.kind === 'agent') {
+        useAgentSessionsStore.getState().updateSession(params.sessionId, {
+          name: params.title,
+          terminalTitle: undefined,
+          userRenamed: true,
+        });
+      } else {
+        useTerminalStore.getState().updateSession(params.sessionId, { title: params.title });
+      }
+      pushSessionCanvasSnapshotToPanel();
+    });
+  }, []);
+
   // Handle adding a local repository
   const handleAddLocalRepository = useCallback(
     (selectedPath: string, groupId: string | null) => {
