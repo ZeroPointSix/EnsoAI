@@ -419,6 +419,22 @@ export const zhTranslations: Record<string, string> = {
     '在 Agent 或终端中打开会话后，可在此总览预览。',
   'Try a different search term.': '请尝试其他搜索词。',
   'No output yet — open this session to stream preview': '暂无输出 — 打开该会话后将在此显示预览',
+  'Send a prompt or command to this agent…': '向此 Agent 发送提示或命令…',
+  'Send a command to this shell…': '向此 Shell 发送命令…',
+  'Enter to send · Shift+Enter for newline': 'Enter 发送 · Shift+Enter 换行',
+  'Command sent': '已发送',
+  'If nothing happens, open the session with Ctrl+click first.':
+    '若无反应，请先 Ctrl+点击打开该会话。',
+  'Terminal not running — Ctrl+click to open this session first.':
+    '终端未运行 — 请先 Ctrl+点击打开该会话。',
+  'Session not running': '会话未运行',
+  'Open the session with Ctrl+click to start its terminal first.':
+    '请先 Ctrl+点击打开会话以启动终端。',
+  'Send a Claude prompt… (@ file, images supported)':
+    '发送 Claude 提示…（支持 @ 文件与图片）',
+  'Enter to send · Shift+Enter for newline · @ to mention files':
+    'Enter 发送 · Shift+Enter 换行 · @ 引用文件',
+  'Attach image': '附加图片',
   'Agent running': '运行中',
   'New output': '有新输出',
   '{{agents}} agents · {{terminals}} terminals': '{{agents}} 个 Agent · {{terminals}} 个终端',

@@ -490,6 +490,10 @@ export class PtyManager {
     return id;
   }
 
+  exists(id: string): boolean {
+    return this.sessions.has(id);
+  }
+
   write(id: string, data: string): void {
     const session = this.sessions.get(id);
     if (session) {

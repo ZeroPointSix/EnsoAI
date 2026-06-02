@@ -77,6 +77,10 @@ export function registerTerminalHandlers(): void {
     ptyManager.destroy(id);
   });
 
+  ipcMain.handle(IPC_CHANNELS.TERMINAL_EXISTS, async (_, id: string) => {
+    return ptyManager.exists(id);
+  });
+
   ipcMain.handle(IPC_CHANNELS.TERMINAL_GET_ACTIVITY, async (_, id: string) => {
     return ptyManager.getProcessActivity(id);
   });

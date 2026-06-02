@@ -13,6 +13,7 @@ import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { resolveSessionCanvasSubtitle } from './sessionCanvasSubtitle';
 import { SessionCanvasPreview } from './SessionCanvasPreview';
+import { SessionCanvasQuickInput } from './SessionCanvasQuickInput';
 import { getSessionCanvasCardKey, useSessionCanvasCardResize } from './useSessionCanvasCardResize';
 import { useSessionCanvasCardDrag } from './useSessionCanvasCardDrag';
 
@@ -216,7 +217,17 @@ export function SessionCanvasCard({
         text={previewText}
         placeholder={t('No output yet — open this session to stream preview')}
         isActive={isActive}
+        className={isFocused ? 'min-h-[120px]' : undefined}
       />
+
+      {isFocused ? (
+        <SessionCanvasQuickInput
+          sessionId={item.session.id}
+          kind={item.kind}
+          agentId={isAgent ? item.session.agentId : undefined}
+          cwd={item.session.cwd}
+        />
+      ) : null}
 
       <p className="truncate text-[10px] text-muted-foreground/80" title={item.session.cwd}>
         {item.session.cwd}

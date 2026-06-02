@@ -5,6 +5,7 @@ import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
+import { useTerminalWriteStore } from '@/stores/terminalWrite';
 import { TerminalSearchBar, type TerminalSearchBarRef } from './TerminalSearchBar';
 
 interface ShellTerminalProps {
@@ -63,6 +64,7 @@ export function ShellTerminal({
     findNext,
     findPrevious,
     clearSearch,
+    write,
     terminal,
     clear,
     refreshRenderer,
@@ -84,6 +86,13 @@ export function ShellTerminal({
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
   const _xtermKeybindings = useSettingsStore((state) => state.xtermKeybindings);
   const { showScrollToBottom, handleScrollToBottom } = useTerminalScrollToBottom(terminal);
+  const { register, unregister } = useTerminalWriteStore();
+
+  useEffect(() => {
+    if (!terminalSessionId || !write) return;
+    register(terminalSessionId, write, () => terminal?.focus());
+    return () => unregister(terminalSessionId);
+  }, [terminalSessionId, write, terminal, register, unregister]);
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback(
