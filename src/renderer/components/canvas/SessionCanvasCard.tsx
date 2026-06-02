@@ -23,11 +23,14 @@ export type CanvasCardItem =
       session: Session;
       previewText?: string;
       outputState: OutputState;
+      /** Resolved `pty-N` id for quick input (standalone snapshot or registry) */
+      ptyIdHint?: string;
     }
   | {
       kind: 'terminal';
       session: TerminalSessionEntry;
       previewText?: string;
+      ptyIdHint?: string;
     };
 
 interface SessionCanvasCardProps {
@@ -226,6 +229,7 @@ export function SessionCanvasCard({
           kind={item.kind}
           agentId={isAgent ? item.session.agentId : undefined}
           cwd={item.session.cwd}
+          ptyIdHint={item.ptyIdHint}
         />
       ) : null}
 

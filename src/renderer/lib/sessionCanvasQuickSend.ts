@@ -1,3 +1,4 @@
+import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 
 function delay(ms: number): Promise<void> {
@@ -15,6 +16,7 @@ function buildPayload(content: string, imagePaths: string[]): string {
 
 async function writeChunks(
   sessionId: string,
+  ptyId: string,
   writer: ((data: string) => void) | undefined,
   message: string
 ): Promise<void> {
@@ -23,7 +25,7 @@ async function writeChunks(
       writer(data);
       return;
     }
-    void window.electronAPI.terminal.write(sessionId, data);
+    void window.electronAPI.terminal.write(ptyId, data);
   };
 
   const hasInternalNewlines = message.includes('\n');
@@ -38,9 +40,17 @@ async function writeChunks(
   }
 }
 
-export async function sessionCanvasPtyExists(sessionId: string): Promise<boolean> {
+export async function sessionCanvasPtyExists(
+  sessionId: string,
+  ptyIdHint?: string
+): Promise<boolean> {
+  if (useTerminalWriteStore.getState().writers.has(sessionId)) {
+    return true;
+  }
+  const ptyId = resolveSessionPtyId(sessionId, ptyIdHint);
+  if (!ptyId) return false;
   try {
-    return await window.electronAPI.terminal.exists(sessionId);
+    return await window.electronAPI.terminal.exists(ptyId);
   } catch {
     return false;
   }
@@ -48,22 +58,28 @@ export async function sessionCanvasPtyExists(sessionId: string): Promise<boolean
 
 /**
  * Send a one-shot command to a session PTY from the session canvas quick input.
- * Prefers the xterm write bridge when mounted; falls back to IPC write (standalone canvas window).
+ * Prefers the xterm write bridge when mounted; falls back to IPC write with resolved `pty-N` id.
  */
 export async function sendSessionCanvasQuickInput(
   sessionId: string,
   content: string,
-  imagePaths: string[] = []
+  imagePaths: string[] = [],
+  ptyIdHint?: string
 ): Promise<boolean> {
   const trimmed = content.trim();
   if (!trimmed && imagePaths.length === 0) return false;
 
-  const exists = await sessionCanvasPtyExists(sessionId);
-  if (!exists) return false;
+  const ptyId = resolveSessionPtyId(sessionId, ptyIdHint);
+  const writer = useTerminalWriteStore.getState().writers.get(sessionId);
+
+  if (!writer) {
+    if (!ptyId) return false;
+    const exists = await window.electronAPI.terminal.exists(ptyId);
+    if (!exists) return false;
+  }
 
   const message = buildPayload(trimmed, imagePaths);
-  const writer = useTerminalWriteStore.getState().writers.get(sessionId);
-  await writeChunks(sessionId, writer, message);
+  await writeChunks(sessionId, ptyId ?? sessionId, writer, message);
   return true;
 }
 

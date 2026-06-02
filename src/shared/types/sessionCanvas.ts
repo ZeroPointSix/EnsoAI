@@ -6,6 +6,8 @@ export interface SessionCanvasCardSnapshot {
   key: string;
   kind: SessionCanvasCardKind;
   sessionId: string;
+  /** Main-process PTY id (`pty-N`), not the UI session id */
+  ptyId?: string;
   repoPath: string;
   cwd: string;
   title: string;

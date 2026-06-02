@@ -34,6 +34,7 @@ import {
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { getDefaultCardPosition } from './useSessionCanvasCardDrag';
 import { getSessionCanvasCardKey } from '@/lib/sessionCanvasCardKey';
+import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 
 interface SessionCanvasPanelProps {
   variant?: 'embedded' | 'floating';
@@ -63,12 +64,14 @@ function buildCardItems(
         runtime?.previewEscapePending
       ),
       outputState: runtime?.outputState ?? 'idle',
+      ptyIdHint: resolveSessionPtyId(session.id),
     };
   });
 
   const terminals: CanvasCardItem[] = terminalSessions.map((session) => ({
     kind: 'terminal',
     session,
+    ptyIdHint: resolveSessionPtyId(session.id),
     previewText: getResolvedSessionPreview(
       'terminal',
       session.id,

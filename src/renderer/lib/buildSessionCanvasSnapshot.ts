@@ -7,6 +7,7 @@ import type { OutputState } from '@/stores/agentSessions';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
 import type { TerminalSessionEntry } from '@/stores/terminal';
+import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { useTerminalStore } from '@/stores/terminal';
 
 function mapOutputState(state: OutputState | undefined): SessionCanvasCardSnapshot['outputState'] {
@@ -20,6 +21,7 @@ function agentCard(session: Session, outputState: OutputState): SessionCanvasCar
     key: `agent-${session.id}`,
     kind: 'agent',
     sessionId: session.id,
+    ptyId: resolveSessionPtyId(session.id),
     repoPath: session.repoPath,
     cwd: session.cwd,
     title: session.userRenamed
@@ -44,6 +46,7 @@ function terminalCard(session: TerminalSessionEntry): SessionCanvasCardSnapshot 
     key: `terminal-${session.id}`,
     kind: 'terminal',
     sessionId: session.id,
+    ptyId: resolveSessionPtyId(session.id),
     repoPath: session.cwd,
     cwd: session.cwd,
     title: session.title || 'Terminal',

@@ -11,19 +11,21 @@ import { cn } from '@/lib/utils';
 interface SessionCanvasBasicQuickInputProps {
   sessionId: string;
   kind: SessionCanvasCardKind;
+  ptyIdHint?: string;
   className?: string;
 }
 
 export function SessionCanvasBasicQuickInput({
   sessionId,
   kind,
+  ptyIdHint,
   className,
 }: SessionCanvasBasicQuickInputProps) {
   const { t } = useI18n();
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { ptyExists, checkingPty } = useSessionCanvasPtyExists(sessionId, true);
+  const { ptyExists, checkingPty } = useSessionCanvasPtyExists(sessionId, true, ptyIdHint);
 
   useEffect(() => {
     if (!ptyExists || checkingPty) return;
@@ -39,7 +41,7 @@ export function SessionCanvasBasicQuickInput({
 
     setSending(true);
     try {
-      const sent = await sendSessionCanvasQuickInput(sessionId, trimmed);
+      const sent = await sendSessionCanvasQuickInput(sessionId, trimmed, [], ptyIdHint);
       if (!sent) {
         toastManager.add({
           type: 'warning',

@@ -31,6 +31,7 @@ export function snapshotCardsToCanvasItems(cards: SessionCanvasCardSnapshot[]): 
         session,
         previewText: card.previewText,
         outputState: toOutputState(card.outputState),
+        ptyIdHint: card.ptyId,
       };
     }
 
@@ -45,6 +46,7 @@ export function snapshotCardsToCanvasItems(cards: SessionCanvasCardSnapshot[]): 
       kind: 'terminal',
       session,
       previewText: card.previewText,
+      ptyIdHint: card.ptyId,
     };
   });
 }

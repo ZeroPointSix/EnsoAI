@@ -18,12 +18,14 @@ import { cn } from '@/lib/utils';
 interface SessionCanvasClaudeQuickInputProps {
   sessionId: string;
   cwd: string;
+  ptyIdHint?: string;
   className?: string;
 }
 
 export function SessionCanvasClaudeQuickInput({
   sessionId,
   cwd,
+  ptyIdHint,
   className,
 }: SessionCanvasClaudeQuickInputProps) {
   const { t } = useI18n();
@@ -37,7 +39,7 @@ export function SessionCanvasClaudeQuickInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionListRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
-  const { ptyExists, checkingPty } = useSessionCanvasPtyExists(sessionId, true);
+  const { ptyExists, checkingPty } = useSessionCanvasPtyExists(sessionId, true, ptyIdHint);
 
   useEffect(() => {
     if (!ptyExists || checkingPty) return;
@@ -124,7 +126,7 @@ export function SessionCanvasClaudeQuickInput({
 
     setSending(true);
     try {
-      const sent = await sendSessionCanvasQuickInput(sessionId, trimmed, imagePaths);
+      const sent = await sendSessionCanvasQuickInput(sessionId, trimmed, imagePaths, ptyIdHint);
       if (!sent) {
         toastManager.add({
           type: 'warning',

@@ -8,6 +8,7 @@ interface SessionCanvasQuickInputProps {
   kind: SessionCanvasCardKind;
   agentId?: string;
   cwd?: string;
+  ptyIdHint?: string;
   className?: string;
 }
 
@@ -16,15 +17,26 @@ export function SessionCanvasQuickInput({
   kind,
   agentId,
   cwd,
+  ptyIdHint,
   className,
 }: SessionCanvasQuickInputProps) {
   if (kind === 'agent' && isClaudeCanvasAgent(agentId) && cwd) {
     return (
-      <SessionCanvasClaudeQuickInput sessionId={sessionId} cwd={cwd} className={className} />
+      <SessionCanvasClaudeQuickInput
+        sessionId={sessionId}
+        cwd={cwd}
+        ptyIdHint={ptyIdHint}
+        className={className}
+      />
     );
   }
 
   return (
-    <SessionCanvasBasicQuickInput sessionId={sessionId} kind={kind} className={className} />
+    <SessionCanvasBasicQuickInput
+      sessionId={sessionId}
+      kind={kind}
+      ptyIdHint={ptyIdHint}
+      className={className}
+    />
   );
 }

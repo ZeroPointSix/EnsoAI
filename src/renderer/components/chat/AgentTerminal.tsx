@@ -10,6 +10,8 @@ import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
 import { type OutputState, useAgentSessionsStore } from '@/stores/agentSessions';
 import { useSettingsStore } from '@/stores/settings';
+import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
+import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 
@@ -143,6 +145,8 @@ export function AgentTerminal({
   const setOutputState = useAgentSessionsStore((s) => s.setOutputState);
   const markSessionActive = useAgentSessionsStore((s) => s.markSessionActive);
   const appendSessionPreview = useAgentSessionsStore((s) => s.appendSessionPreview);
+  const setSessionPtyId = useSessionPtyRegistry((s) => s.setPtyId);
+  const clearSessionPtyId = useSessionPtyRegistry((s) => s.clearPtyId);
 
   const terminalSessionId = id ?? sessionId;
   const resumeSessionId = sessionId ?? id;
@@ -461,6 +465,9 @@ export function AgentTerminal({
 
   // Handle exit with auto-close logic
   const handleExit = useCallback(() => {
+    if (terminalSessionId) {
+      clearSessionPtyId(terminalSessionId);
+    }
     const runtime = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
     const isSessionNotFound = outputBufferRef.current.includes(
       'No conversation found with session ID'
@@ -470,7 +477,18 @@ export function AgentTerminal({
       onExit?.();
     }
     // Quick exit without session error - keep tab open for debugging
-  }, [onExit]);
+  }, [onExit, terminalSessionId, clearSessionPtyId]);
+
+  const handlePtyInit = useCallback(
+    (ptyId: string) => {
+      if (terminalSessionId) {
+        setSessionPtyId(terminalSessionId, ptyId);
+        pushSessionCanvasSnapshotToPanel();
+      }
+      ptyIdRef.current = ptyId;
+    },
+    [terminalSessionId, setSessionPtyId]
+  );
 
   // Track output for error detection and idle notification
   const handleData = useCallback(
@@ -746,6 +764,7 @@ export function AgentTerminal({
     onData: handleData,
     onCustomKey: handleCustomKey,
     onTitleChange: handleTitleChange,
+    onInit: handlePtyInit,
     onSplit,
     onMerge,
     canMerge,

@@ -4,6 +4,8 @@ import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
 import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
+import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
+import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
 import { useTerminalStore } from '@/stores/terminal';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 import { TerminalSearchBar, type TerminalSearchBarRef } from './TerminalSearchBar';
@@ -36,6 +38,26 @@ export function ShellTerminal({
 }: ShellTerminalProps) {
   const { t } = useI18n();
   const appendTerminalPreview = useTerminalStore((s) => s.appendTerminalPreview);
+  const setSessionPtyId = useSessionPtyRegistry((s) => s.setPtyId);
+  const clearSessionPtyId = useSessionPtyRegistry((s) => s.clearPtyId);
+
+  const handleExit = useCallback(() => {
+    if (terminalSessionId) {
+      clearSessionPtyId(terminalSessionId);
+    }
+    onExit?.();
+  }, [terminalSessionId, clearSessionPtyId, onExit]);
+
+  const handlePtyInit = useCallback(
+    (ptyId: string) => {
+      if (terminalSessionId) {
+        setSessionPtyId(terminalSessionId, ptyId);
+        pushSessionCanvasSnapshotToPanel();
+      }
+      onInit?.(ptyId);
+    },
+    [terminalSessionId, setSessionPtyId, onInit]
+  );
 
   const handleData = useCallback(
     (data: string) => {
@@ -72,10 +94,10 @@ export function ShellTerminal({
     cwd,
     isActive,
     initialCommand,
-    onExit,
+    onExit: handleExit,
     onData: handleData,
     onTitleChange,
-    onInit,
+    onInit: handlePtyInit,
     onSplit,
     onMerge,
     canMerge,
