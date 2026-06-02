@@ -1,7 +1,6 @@
-import { getPathBasename } from '@shared/utils/path';
 import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
 import { Bot, GripVertical, Sparkles, Terminal } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import type { Session } from '@/components/chat/SessionBar';
 import { Badge } from '@/components/ui/badge';
 import { GlowCard } from '@/components/ui/glow-card';
@@ -10,7 +9,9 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { OutputState } from '@/stores/agentSessions';
 import type { TerminalSessionEntry } from '@/stores/terminal';
+import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
+import { resolveSessionCanvasSubtitle } from './sessionCanvasSubtitle';
 import { SessionCanvasPreview } from './SessionCanvasPreview';
 import { getSessionCanvasCardKey, useSessionCanvasCardResize } from './useSessionCanvasCardResize';
 import { useSessionCanvasCardDrag } from './useSessionCanvasCardDrag';
@@ -104,43 +105,38 @@ export function SessionCanvasCard({
 
   const isAgent = item.kind === 'agent';
   const title = resolveSessionCanvasCardTitle(item, t('Terminal'));
-  const repoName = getPathBasename(isAgent ? item.session.repoPath : item.session.cwd);
-  const worktreeLabel = getPathBasename(item.session.cwd);
+  const subtitle = resolveSessionCanvasSubtitle(item, t('Shell'));
   const previewText = item.previewText;
   const Icon = isAgent ? Sparkles : Terminal;
 
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState(title);
+  const handleCommitRename = useCallback(
+    (name: string) => {
+      onRenameSession?.(item.kind, item.session.id, name);
+    },
+    [onRenameSession, item]
+  );
 
-  useEffect(() => {
-    if (!isRenaming) {
-      setRenameValue(title);
-    }
-  }, [title, isRenaming]);
+  const {
+    isRenaming,
+    renameValue,
+    setRenameValue,
+    commitRename,
+    beginRename,
+    cancelRename,
+  } = useSessionCanvasRename({
+    displayTitle: title,
+    renameRequestToken,
+    canRename: Boolean(onRenameSession),
+    onCommit: handleCommitRename,
+  });
 
-  useEffect(() => {
-    if (renameRequestToken === undefined || renameRequestToken === 0) return;
-    if (!onRenameSession) return;
-    setRenameValue(title);
-    setIsRenaming(true);
-  }, [renameRequestToken, onRenameSession, title]);
-
-  const commitRename = useCallback(() => {
-    const next = renameValue.trim();
-    setIsRenaming(false);
-    if (!onRenameSession || !next || next === title) return;
-    onRenameSession(item.kind, item.session.id, next);
-  }, [renameValue, title, onRenameSession, item]);
-
-  const beginRename = useCallback(
+  const handleBeginRename = useCallback(
     (e: React.MouseEvent) => {
-      if (!onRenameSession) return;
       e.preventDefault();
       e.stopPropagation();
-      setRenameValue(title);
-      setIsRenaming(true);
+      beginRename();
     },
-    [onRenameSession, title]
+    [beginRename]
   );
 
   const titleNode = isRenaming ? (
@@ -151,8 +147,7 @@ export function SessionCanvasCard({
       onKeyDown={(e) => {
         if (e.key === 'Enter') commitRename();
         if (e.key === 'Escape') {
-          setRenameValue(title);
-          setIsRenaming(false);
+          cancelRename();
         }
         e.stopPropagation();
       }}
@@ -164,7 +159,7 @@ export function SessionCanvasCard({
     <span
       className="min-w-0 flex-1 truncate text-sm font-medium"
       title={onRenameSession ? t('Double-click to rename') : title}
-      onDoubleClick={beginRename}
+      onDoubleClick={handleBeginRename}
     >
       {title}
     </span>
@@ -208,10 +203,8 @@ export function SessionCanvasCard({
               </Badge>
             )}
           </div>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {repoName}
-            <span className="mx-1 text-border">·</span>
-            {worktreeLabel}
+          <p className="mt-0.5 truncate text-xs text-muted-foreground" title={subtitle}>
+            {subtitle}
           </p>
         </div>
         {isAgent && (

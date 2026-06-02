@@ -470,6 +470,7 @@ export function SessionBar({
   const [dragging, setDragging] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const editingBaselineRef = useRef('');
   const [showAgentMenu, setShowAgentMenu] = useState(false);
   const [showProviderMenu, setShowProviderMenu] = useState(false);
   const [installedAgents, setInstalledAgents] = useState<Set<string>>(new Set());
@@ -749,14 +750,17 @@ export function SessionBar({
   }, [state.collapsed]);
 
   const handleStartEdit = useCallback((session: Session) => {
+    const initial = getSessionDisplayName(session);
+    editingBaselineRef.current = initial;
     setEditingId(session.id);
-    setEditingName(getSessionDisplayName(session));
+    setEditingName(initial);
     setTimeout(() => inputRef.current?.select(), 0);
   }, []);
 
   const handleFinishEdit = useCallback(() => {
-    if (editingId && editingName.trim()) {
-      onRenameSession(editingId, editingName.trim());
+    const next = editingName.trim();
+    if (editingId && next && next !== editingBaselineRef.current) {
+      onRenameSession(editingId, next);
     }
     setEditingId(null);
     setEditingName('');

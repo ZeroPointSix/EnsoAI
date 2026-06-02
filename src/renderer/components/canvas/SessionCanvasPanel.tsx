@@ -361,7 +361,7 @@ export function SessionCanvasPanel({
                   onRenameSession={handleRenameSession}
                   onContextMenu={(e) => openContextMenu(e, item)}
                   renameRequestToken={
-                    renameTargetKey === key ? renameToken : undefined
+                    renameTargetKey === key && focusedCardKey !== key ? renameToken : undefined
                   }
                 />
               );
@@ -409,10 +409,13 @@ export function SessionCanvasPanel({
         onRename={
           contextMenu?.item
             ? () => {
-                const key = getSessionCanvasCardKey(contextMenu.item!);
-                setRenameTargetKey(key);
-                setRenameToken((n) => n + 1);
+                const item = contextMenu.item!;
+                const key = getSessionCanvasCardKey(item);
                 setContextMenu(null);
+                window.setTimeout(() => {
+                  setRenameTargetKey(key);
+                  setRenameToken((n) => n + 1);
+                }, 0);
               }
             : undefined
         }

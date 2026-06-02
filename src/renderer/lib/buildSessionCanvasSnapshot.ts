@@ -26,6 +26,9 @@ function agentCard(session: Session, outputState: OutputState): SessionCanvasCar
       ? session.name
       : session.terminalTitle || session.name,
     userRenamed: session.userRenamed,
+    agentId: session.agentId,
+    agentCommand: session.agentCommand,
+    customPath: session.customPath,
     previewText: getResolvedSessionPreview(
       'agent',
       session.id,

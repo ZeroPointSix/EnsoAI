@@ -11,6 +11,9 @@ export interface SessionCanvasCardSnapshot {
   title: string;
   /** Agent only: preserves rename vs OSC title resolution in standalone panel */
   userRenamed?: boolean;
+  agentId?: string;
+  agentCommand?: string;
+  customPath?: string;
   previewText?: string;
   outputState?: SessionCanvasOutputState;
 }
