@@ -24,6 +24,7 @@ export function SessionCanvasBasicQuickInput({
   const { t } = useI18n();
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { ptyExists, checkingPty } = useSessionCanvasPtyExists(sessionId, true, ptyIdHint);
 
@@ -37,8 +38,9 @@ export function SessionCanvasBasicQuickInput({
 
   const handleSend = useCallback(async () => {
     const trimmed = value.trim();
-    if (!trimmed || sending || !ptyExists) return;
+    if (!trimmed || sendingRef.current || sending || !ptyExists) return;
 
+    sendingRef.current = true;
     setSending(true);
     try {
       const sent = await sendSessionCanvasQuickInput(sessionId, trimmed, [], ptyIdHint);
@@ -52,9 +54,10 @@ export function SessionCanvasBasicQuickInput({
       }
       setValue('');
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
-  }, [value, sending, sessionId, ptyExists, t]);
+  }, [value, sending, sessionId, ptyExists, t, ptyIdHint]);
 
   const placeholder =
     kind === 'agent'

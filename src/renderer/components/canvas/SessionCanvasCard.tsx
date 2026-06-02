@@ -292,17 +292,25 @@ export function SessionCanvasCard({
     onContextMenu?.(e);
   };
 
+  const shellInteractiveProps = isFocused
+    ? {}
+    : {
+        role: 'button' as const,
+        tabIndex: 0,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            handleShellClick(e as unknown as React.MouseEvent);
+          }
+        },
+      };
+
   if (isAgent && item.outputState !== 'idle') {
     return (
       <div
         style={positionedStyle}
-        role="button"
-        tabIndex={0}
         onClick={handleShellClick}
         onContextMenu={handleShellContextMenu}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') handleShellClick(e as unknown as React.MouseEvent);
-        }}
+        {...shellInteractiveProps}
       >
         <GlowCard as="div" state={glowState} className={shellClass}>
           {body}
@@ -314,14 +322,14 @@ export function SessionCanvasCard({
 
   return (
     <div style={positionedStyle}>
-      <button
-        type="button"
+      <div
         className={shellClass}
         onClick={handleShellClick}
         onContextMenu={handleShellContextMenu}
+        {...shellInteractiveProps}
       >
         {body}
-      </button>
+      </div>
       {resizeHandle}
     </div>
   );

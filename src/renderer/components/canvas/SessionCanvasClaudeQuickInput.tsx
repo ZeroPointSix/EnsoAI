@@ -32,6 +32,7 @@ export function SessionCanvasClaudeQuickInput({
   const [value, setValue] = useState('');
   const [imagePaths, setImagePaths] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionResults, setMentionResults] = useState<FileSearchResult[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -122,8 +123,16 @@ export function SessionCanvasClaudeQuickInput({
 
   const handleSend = useCallback(async () => {
     const trimmed = value.trim();
-    if ((!trimmed && imagePaths.length === 0) || sending || !ptyExists) return;
+    if (
+      (!trimmed && imagePaths.length === 0) ||
+      sendingRef.current ||
+      sending ||
+      !ptyExists
+    ) {
+      return;
+    }
 
+    sendingRef.current = true;
     setSending(true);
     try {
       const sent = await sendSessionCanvasQuickInput(sessionId, trimmed, imagePaths, ptyIdHint);
@@ -139,9 +148,10 @@ export function SessionCanvasClaudeQuickInput({
       setImagePaths([]);
       setMentionQuery(null);
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
-  }, [value, imagePaths, sending, sessionId, ptyExists, t]);
+  }, [value, imagePaths, sending, sessionId, ptyExists, t, ptyIdHint]);
 
   const disabled = sending || checkingPty || !ptyExists;
   const canSend = Boolean(value.trim() || imagePaths.length > 0);

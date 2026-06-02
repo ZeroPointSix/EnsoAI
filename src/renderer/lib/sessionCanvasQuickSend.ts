@@ -5,6 +5,8 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const inFlightBySession = new Set<string>();
+
 function buildPayload(content: string, imagePaths: string[]): string {
   let message = content;
   if (imagePaths.length > 0) {
@@ -68,6 +70,7 @@ export async function sendSessionCanvasQuickInput(
 ): Promise<boolean> {
   const trimmed = content.trim();
   if (!trimmed && imagePaths.length === 0) return false;
+  if (inFlightBySession.has(sessionId)) return false;
 
   const ptyId = resolveSessionPtyId(sessionId, ptyIdHint);
   const writer = useTerminalWriteStore.getState().writers.get(sessionId);
@@ -78,9 +81,14 @@ export async function sendSessionCanvasQuickInput(
     if (!exists) return false;
   }
 
-  const message = buildPayload(trimmed, imagePaths);
-  await writeChunks(sessionId, ptyId ?? sessionId, writer, message);
-  return true;
+  inFlightBySession.add(sessionId);
+  try {
+    const message = buildPayload(trimmed, imagePaths);
+    await writeChunks(sessionId, ptyId ?? sessionId, writer, message);
+    return true;
+  } finally {
+    inFlightBySession.delete(sessionId);
+  }
 }
 
 export function hasSessionCanvasQuickInputWriter(sessionId: string): boolean {

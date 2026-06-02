@@ -5,6 +5,23 @@ import { app, BrowserWindow } from 'electron';
 
 let sessionCanvasWindow: BrowserWindow | null = null;
 let mainWindowRef: BrowserWindow | null = null;
+let mainWindowCloseHooked = false;
+
+function teardownSessionCanvasWindow(win: BrowserWindow): void {
+  try {
+    if (win.isFullScreen()) {
+      win.setFullScreen(false);
+    }
+    if (win.isMaximized()) {
+      win.unmaximize();
+    }
+  } catch {
+    // ignore teardown errors while the app is exiting
+  }
+
+  win.removeAllListeners('close');
+  win.destroy();
+}
 
 const BOUNDS_FILE = join(app.getPath('userData'), 'session-canvas-window-bounds.json');
 
@@ -66,6 +83,10 @@ export function createSessionCanvasWindow(): BrowserWindow {
     windowOptions.frame = false;
   }
 
+  if (mainWindowRef && !mainWindowRef.isDestroyed()) {
+    windowOptions.parent = mainWindowRef;
+  }
+
   sessionCanvasWindow = new BrowserWindow(windowOptions);
 
   sessionCanvasWindow.on('close', (e) => {
@@ -118,8 +139,7 @@ export function hideSessionCanvasWindow(): void {
 
 export function destroySessionCanvasWindow(): void {
   if (sessionCanvasWindow && !sessionCanvasWindow.isDestroyed()) {
-    sessionCanvasWindow.removeAllListeners('close');
-    sessionCanvasWindow.close();
+    teardownSessionCanvasWindow(sessionCanvasWindow);
   }
   sessionCanvasWindow = null;
 }
@@ -147,4 +167,13 @@ export function resetSessionCanvasWindowBounds(): void {
 
 export function setSessionCanvasMainWindowRef(ref: BrowserWindow): void {
   mainWindowRef = ref;
+
+  if (mainWindowCloseHooked || ref.isDestroyed()) {
+    return;
+  }
+
+  mainWindowCloseHooked = true;
+  ref.on('close', () => {
+    destroySessionCanvasWindow();
+  });
 }
