@@ -175,13 +175,15 @@ export function SessionCanvasPanel({
     [filteredItems, focusedCardKey]
   );
 
-  const focusSize = useMemo(
-    () => ({
-      width: Math.max(280, Math.round(canvasSize.width * 0.6)),
-      height: Math.max(240, Math.round(canvasSize.height * 0.6)),
-    }),
-    [canvasSize.width, canvasSize.height]
-  );
+  const focusSize = useMemo(() => {
+    const pad = 32;
+    const maxW = Math.max(280, canvasSize.width - pad);
+    const maxH = Math.max(280, canvasSize.height - pad);
+    return {
+      width: Math.min(maxW, Math.max(280, Math.round(canvasSize.width * 0.92))),
+      height: Math.min(maxH, Math.max(280, Math.round(canvasSize.height * 0.9))),
+    };
+  }, [canvasSize.width, canvasSize.height]);
 
   const agentCount = agentSessions.length;
   const terminalCount = terminalSessions.length;
@@ -349,15 +351,17 @@ export function SessionCanvasPanel({
           <div className="relative w-full" style={{ minHeight: canvasMinHeight }}>
             {filteredItems.map((item, index) => {
               const key = getSessionCanvasCardKey(item);
-              const isFocused = focusedCardKey === key;
-              const isDimmed = Boolean(focusedCardKey && !isFocused);
+              if (focusedCardKey === key) {
+                return null;
+              }
+              const isDimmed = Boolean(focusedCardKey);
               return (
                 <SessionCanvasCard
                   key={`${item.kind}-${item.session.id}`}
                   item={item}
                   index={index}
                   isActive={isActive}
-                  isFocused={isFocused && !focusedItem}
+                  isFocused={false}
                   isDimmed={isDimmed}
                   disableDrag={Boolean(focusedCardKey)}
                   onCardClick={(e) => handleCardClick(item, e)}
@@ -374,12 +378,12 @@ export function SessionCanvasPanel({
 
         {focusedItem ? (
           <div
-            className="absolute inset-0 z-40 flex items-center justify-center bg-black/55"
+            className="absolute inset-0 z-40 flex items-center justify-center overflow-hidden bg-black/55 p-3"
             onClick={() => setFocusedCardKey(null)}
             onContextMenu={(e) => e.preventDefault()}
           >
             <div
-              className="relative"
+              className="relative flex max-h-full max-w-full min-h-0 min-w-0 overflow-hidden"
               style={{ width: focusSize.width, height: focusSize.height }}
               onClick={(e) => e.stopPropagation()}
             >

@@ -169,8 +169,15 @@ export function SessionCanvasCard({
     </span>
   );
 
+  const glowState = isFocused ? 'idle' : outputStateToGlow(isAgent ? item.outputState : 'idle');
+
   const body = (
-    <div className="flex h-full min-h-0 flex-col gap-2 p-3 text-left">
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-col gap-2 p-3 text-left',
+        isFocused && 'overflow-hidden'
+      )}
+    >
       <div className="flex min-w-0 items-start gap-2">
         {dragEnabled ? (
           <button
@@ -220,25 +227,27 @@ export function SessionCanvasCard({
         text={previewText}
         placeholder={t('No output yet — open this session to stream preview')}
         isActive={isActive}
-        className={isFocused ? 'min-h-[120px]' : undefined}
+        className={isFocused ? 'min-h-0 flex-1' : undefined}
       />
 
       {isFocused ? (
-        <SessionCanvasQuickInput
-          sessionId={item.session.id}
-          kind={item.kind}
-          agentId={isAgent ? item.session.agentId : undefined}
-          cwd={item.session.cwd}
-          ptyIdHint={item.ptyIdHint}
-        />
-      ) : null}
-
-      <p className="truncate text-[10px] text-muted-foreground/80" title={item.session.cwd}>
-        {item.session.cwd}
-      </p>
-      {isFocused ? (
-        <p className="text-[10px] text-muted-foreground">{t('Ctrl+click to jump to session · Esc to close')}</p>
-      ) : null}
+        <div className="shrink-0">
+          <SessionCanvasQuickInput
+            sessionId={item.session.id}
+            kind={item.kind}
+            agentId={isAgent ? item.session.agentId : undefined}
+            cwd={item.session.cwd}
+            ptyIdHint={item.ptyIdHint}
+          />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {t('Ctrl+click to jump to session · Esc to close')}
+          </p>
+        </div>
+      ) : (
+        <p className="truncate text-[10px] text-muted-foreground/80" title={item.session.cwd}>
+          {item.session.cwd}
+        </p>
+      )}
     </div>
   );
 
@@ -246,7 +255,7 @@ export function SessionCanvasCard({
     'relative flex h-full w-full flex-col rounded-lg border border-border/50 bg-card/80 text-left shadow-sm',
     'transition-shadow hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
     isDragging && 'ring-2 ring-primary/40',
-    isFocused && 'ring-2 ring-primary border-primary/50 shadow-lg',
+    isFocused && 'ring-2 ring-primary border-primary/50 shadow-lg overflow-hidden',
     isDimmed && 'opacity-40 pointer-events-none'
   );
 
@@ -295,7 +304,7 @@ export function SessionCanvasCard({
           if (e.key === 'Enter' || e.key === ' ') handleShellClick(e as unknown as React.MouseEvent);
         }}
       >
-        <GlowCard as="div" state={outputStateToGlow(item.outputState)} className={shellClass}>
+        <GlowCard as="div" state={glowState} className={shellClass}>
           {body}
           {resizeHandle}
         </GlowCard>
