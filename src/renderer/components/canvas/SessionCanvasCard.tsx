@@ -1,14 +1,18 @@
 import { getPathBasename } from '@shared/utils/path';
-import { Bot, Sparkles, Terminal } from 'lucide-react';
+import { Bot, GripVertical, Sparkles, Terminal } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import type { Session } from '@/components/chat/SessionBar';
 import { Badge } from '@/components/ui/badge';
 import { GlowCard } from '@/components/ui/glow-card';
+import { Input } from '@/components/ui/input';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { OutputState } from '@/stores/agentSessions';
 import type { TerminalSessionEntry } from '@/stores/terminal';
+import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { SessionCanvasPreview } from './SessionCanvasPreview';
 import { getSessionCanvasCardKey, useSessionCanvasCardResize } from './useSessionCanvasCardResize';
+import { useSessionCanvasCardDrag } from './useSessionCanvasCardDrag';
 
 export type CanvasCardItem =
   | {
@@ -25,8 +29,10 @@ export type CanvasCardItem =
 
 interface SessionCanvasCardProps {
   item: CanvasCardItem;
+  index: number;
   isActive?: boolean;
   onFocus: () => void;
+  onRenameAgentSession?: (sessionId: string, name: string) => void;
 }
 
 function outputStateToGlow(state: OutputState): 'idle' | 'running' | 'waiting_input' | 'completed' {
@@ -64,23 +70,83 @@ function StatusBadge({ outputState }: { outputState: OutputState }) {
   );
 }
 
-export function SessionCanvasCard({ item, isActive = true, onFocus }: SessionCanvasCardProps) {
+export function SessionCanvasCard({
+  item,
+  index,
+  isActive = true,
+  onFocus,
+  onRenameAgentSession,
+}: SessionCanvasCardProps) {
   const { t } = useI18n();
   const cardKey = getSessionCanvasCardKey(item);
   const { width, height, handleResizePointerDown } = useSessionCanvasCardResize(cardKey);
+  const { position, isDragging, handleDragPointerDown } = useSessionCanvasCardDrag(cardKey, index);
 
   const isAgent = item.kind === 'agent';
-  const title = isAgent
-    ? item.session.terminalTitle || item.session.name
-    : item.session.title || t('Terminal');
+  const title = resolveSessionCanvasCardTitle(item, t('Terminal'));
   const repoName = getPathBasename(isAgent ? item.session.repoPath : item.session.cwd);
   const worktreeLabel = getPathBasename(item.session.cwd);
   const previewText = item.previewText;
   const Icon = isAgent ? Sparkles : Terminal;
 
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(title);
+
+  const commitRename = useCallback(() => {
+    const next = renameValue.trim();
+    setIsRenaming(false);
+    if (!isAgent || !onRenameAgentSession || !next || next === title) return;
+    onRenameAgentSession(item.session.id, next);
+  }, [renameValue, title, isAgent, onRenameAgentSession, item]);
+
+  const titleNode = isRenaming ? (
+    <Input
+      value={renameValue}
+      onChange={(e) => setRenameValue(e.target.value)}
+      onBlur={commitRename}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commitRename();
+        if (e.key === 'Escape') {
+          setRenameValue(title);
+          setIsRenaming(false);
+        }
+        e.stopPropagation();
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="h-7 min-w-0 flex-1 text-sm"
+      autoFocus
+    />
+  ) : (
+    <span
+      className="min-w-0 flex-1 truncate text-sm font-medium"
+      title={onRenameAgentSession && isAgent ? t('Double-click to rename') : title}
+      onDoubleClick={(e) => {
+        if (!onRenameAgentSession || !isAgent) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setRenameValue(title);
+        setIsRenaming(true);
+      }}
+    >
+      {title}
+    </span>
+  );
+
   const body = (
     <div className="flex h-full min-h-0 flex-col gap-2 p-3 text-left">
       <div className="flex min-w-0 items-start gap-2">
+        <button
+          type="button"
+          aria-label={t('Drag card')}
+          className={cn(
+            'mt-0.5 flex h-7 w-5 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground active:cursor-grabbing',
+            isDragging && 'cursor-grabbing'
+          )}
+          onPointerDown={handleDragPointerDown}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
         <div
           className={cn(
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
@@ -91,7 +157,7 @@ export function SessionCanvasCard({ item, isActive = true, onFocus }: SessionCan
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{title}</span>
+            {titleNode}
             {isAgent ? (
               <StatusBadge outputState={item.outputState} />
             ) : (
@@ -125,7 +191,8 @@ export function SessionCanvasCard({ item, isActive = true, onFocus }: SessionCan
 
   const shellClass = cn(
     'relative flex h-full w-full flex-col rounded-lg border border-border/50 bg-card/80 text-left shadow-sm',
-    'transition-shadow hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    'transition-shadow hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    isDragging && 'ring-2 ring-primary/40'
   );
 
   const resizeHandle = (
@@ -140,9 +207,18 @@ export function SessionCanvasCard({ item, isActive = true, onFocus }: SessionCan
     </button>
   );
 
+  const positionedStyle = {
+    position: 'absolute' as const,
+    left: position.x,
+    top: position.y,
+    width,
+    height,
+    zIndex: isDragging ? 20 : 1,
+  };
+
   if (isAgent && item.outputState !== 'idle') {
     return (
-      <div className="shrink-0" style={{ width, height }}>
+      <div style={positionedStyle}>
         <GlowCard
           as="button"
           state={outputStateToGlow(item.outputState)}
@@ -157,7 +233,7 @@ export function SessionCanvasCard({ item, isActive = true, onFocus }: SessionCan
   }
 
   return (
-    <div className="relative shrink-0" style={{ width, height }}>
+    <div style={positionedStyle}>
       <button type="button" className={shellClass} onClick={onFocus}>
         {body}
       </button>

@@ -16,8 +16,12 @@ import { refreshAllCanvasPreviews } from '@/lib/refreshCanvasPreviews';
 import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
+import { useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { type CanvasCardItem, SessionCanvasCard } from './SessionCanvasCard';
+import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
+import { getDefaultCardPosition } from './useSessionCanvasCardDrag';
+import { getSessionCanvasCardKey } from './useSessionCanvasCardResize';
 
 interface SessionCanvasPanelProps {
   variant?: 'embedded' | 'floating';
@@ -84,7 +88,10 @@ export function SessionCanvasPanel({
   const terminalSessions = useTerminalStore((s) => s.sessions);
   const setAgentActiveId = useAgentSessionsStore((s) => s.setActiveId);
   const markSessionActive = useAgentSessionsStore((s) => s.markSessionActive);
+  const updateSession = useAgentSessionsStore((s) => s.updateSession);
   const setTerminalActive = useTerminalStore((s) => s.setActiveSession);
+  const cardSizes = useSettingsStore((s) => s.sessionCanvasCardSizes);
+  const cardPositions = useSettingsStore((s) => s.sessionCanvasCardPositions);
 
   useEffect(() => {
     if (!syncPreviews || externalItems) return;
@@ -104,10 +111,7 @@ export function SessionCanvasPanel({
       const repo = (
         item.kind === 'agent' ? item.session.repoPath : item.session.cwd
       ).toLowerCase();
-      const title =
-        item.kind === 'agent'
-          ? (item.session.terminalTitle || item.session.name).toLowerCase()
-          : (item.session.title || 'terminal').toLowerCase();
+      const title = resolveSessionCanvasCardTitle(item, 'terminal').toLowerCase();
       const preview = (item.previewText ?? '').toLowerCase();
       return (
         cwd.includes(q) ||
@@ -148,6 +152,25 @@ export function SessionCanvasPanel({
       markSessionActive,
     ]
   );
+
+  const handleRenameAgentSession = useCallback(
+    (sessionId: string, name: string) => {
+      if (externalItems) return;
+      updateSession(sessionId, { name, userRenamed: true });
+    },
+    [externalItems, updateSession]
+  );
+
+  const canvasMinHeight = useMemo(() => {
+    let maxBottom = 360;
+    filteredItems.forEach((item, index) => {
+      const key = getSessionCanvasCardKey(item);
+      const pos = cardPositions[key] ?? getDefaultCardPosition(index);
+      const size = cardSizes[key] ?? { width: 320, height: 300 };
+      maxBottom = Math.max(maxBottom, pos.y + size.height + 24);
+    });
+    return maxBottom;
+  }, [filteredItems, cardPositions, cardSizes]);
 
   const isFloating = variant === 'floating';
 
@@ -216,13 +239,15 @@ export function SessionCanvasPanel({
             </Empty>
           </div>
         ) : (
-          <div className="flex flex-wrap content-start gap-3">
-            {filteredItems.map((item) => (
+          <div className="relative w-full" style={{ minHeight: canvasMinHeight }}>
+            {filteredItems.map((item, index) => (
               <SessionCanvasCard
                 key={`${item.kind}-${item.session.id}`}
                 item={item}
+                index={index}
                 isActive={isActive}
                 onFocus={() => handleFocus(item)}
+                onRenameAgentSession={externalItems ? undefined : handleRenameAgentSession}
               />
             ))}
           </div>

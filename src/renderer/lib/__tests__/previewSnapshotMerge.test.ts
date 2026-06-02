@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mergePreviewSnapshot, shouldApplyPreviewSnapshot } from '../previewSnapshotMerge';
+import {
+  mergeAuthoritativePreviewSnapshot,
+  mergePreviewSnapshot,
+  shouldApplyPreviewSnapshot,
+} from '../previewSnapshotMerge';
 
 describe('shouldApplyPreviewSnapshot', () => {
   it('rejects empty incoming', () => {
@@ -29,5 +33,17 @@ describe('mergePreviewSnapshot', () => {
 
   it('applies better incoming', () => {
     expect(mergePreviewSnapshot('old', 'new longer text')).toBe('new longer text');
+  });
+});
+
+describe('mergeAuthoritativePreviewSnapshot', () => {
+  it('replaces long thinking text with shorter live terminal screen', () => {
+    const thinking = 'L'.repeat(2000);
+    const finalReply = '你好！很高兴认识你。\n\n* Cooked for 21s';
+    expect(mergeAuthoritativePreviewSnapshot(thinking, finalReply)).toBe(finalReply);
+  });
+
+  it('keeps existing when incoming is empty', () => {
+    expect(mergeAuthoritativePreviewSnapshot('keep', '')).toBe('keep');
   });
 });

@@ -1,5 +1,5 @@
 import { getDisplayPreviewText } from '@/lib/terminalPreview';
-import { mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
+import { mergeAuthoritativePreviewSnapshot, mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
 
 export type SessionPreviewKind = 'agent' | 'terminal';
 
@@ -72,7 +72,7 @@ export function getResolvedSessionPreview(
   const runtime = getDisplayPreviewText(runtimeText, runtimePending);
   const cached = getCachedSessionPreview(kind, sessionId);
   if (runtime?.trim() && cached?.trim()) {
-    return mergePreviewSnapshot(cached, runtime) || undefined;
+    return mergeAuthoritativePreviewSnapshot(cached, runtime) || undefined;
   }
   return runtime?.trim() ? runtime : cached;
 }

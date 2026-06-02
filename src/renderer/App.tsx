@@ -226,10 +226,15 @@ export default function App() {
       }, 300);
     };
     scheduleSync();
+    const poll = window.setInterval(() => {
+      refreshAllCanvasPreviews();
+      pushSessionCanvasSnapshotToPanel();
+    }, 2000);
     const unsubAgent = useAgentSessionsStore.subscribe(scheduleSync);
     const unsubTerminal = useTerminalStore.subscribe(scheduleSync);
     return () => {
       if (timer) clearTimeout(timer);
+      window.clearInterval(poll);
       unsubAgent();
       unsubTerminal();
     };

@@ -26,3 +26,16 @@ export function mergePreviewSnapshot(
   }
   return incoming!.trim() ? incoming! : existing ?? '';
 }
+
+/**
+ * Live xterm snapshot wins over streamed/cached preview (OpenCove-style).
+ * Use when refreshing from mounted terminals so TUI redraws (e.g. Claude thinking → reply) are not blocked by longer stale text.
+ */
+export function mergeAuthoritativePreviewSnapshot(
+  _existing: string | undefined,
+  incoming: string | null | undefined
+): string {
+  const next = incoming?.trim() ?? '';
+  if (!next) return _existing ?? '';
+  return incoming!;
+}

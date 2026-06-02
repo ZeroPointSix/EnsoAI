@@ -196,6 +196,7 @@ function getInitialState() {
     sessionCanvasModalPosition: null,
     sessionCanvasModalBounds: null,
     sessionCanvasCardSizes: {},
+    sessionCanvasCardPositions: {},
 
     // Terminal theme favorites
     favoriteTerminalThemes: [] as string[],
@@ -662,6 +663,13 @@ export const useSettingsStore = create<SettingsState>()(
           sessionCanvasCardSizes: {
             ...state.sessionCanvasCardSizes,
             [cardKey]: size,
+          },
+        })),
+      setSessionCanvasCardPosition: (cardKey, position) =>
+        set((state) => ({
+          sessionCanvasCardPositions: {
+            ...state.sessionCanvasCardPositions,
+            [cardKey]: position,
           },
         })),
 

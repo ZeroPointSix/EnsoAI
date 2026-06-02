@@ -22,7 +22,9 @@ function agentCard(session: Session, outputState: OutputState): SessionCanvasCar
     sessionId: session.id,
     repoPath: session.repoPath,
     cwd: session.cwd,
-    title: session.terminalTitle || session.name,
+    title: session.userRenamed
+      ? session.name
+      : session.terminalTitle || session.name,
     previewText: getResolvedSessionPreview(
       'agent',
       session.id,
