@@ -82,9 +82,13 @@ export const useSessionCanvasPromptStore = create<SessionCanvasPromptState>()(
         })),
 
       deletePrompt: (promptId) =>
-        set((state) => ({
-          prompts: state.prompts.filter((p) => p.id !== promptId),
-        })),
+        set((state) => {
+          const next = state.prompts.filter((p) => p.id !== promptId);
+          if (next.length === 0) {
+            return { prompts: [], promptsEnabled: false };
+          }
+          return { prompts: next };
+        }),
 
       reorderPrompts: (orderedIds) =>
         set((state) => {

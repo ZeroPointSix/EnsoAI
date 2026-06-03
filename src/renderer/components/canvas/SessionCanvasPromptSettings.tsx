@@ -1,6 +1,7 @@
 import { Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { toastManager } from '@/components/ui/toast';
 import {
   Dialog,
   DialogContent,
@@ -88,6 +89,21 @@ export function SessionCanvasPromptSettings({ className }: SessionCanvasPromptSe
     });
     setDialogOpen(true);
   }, []);
+
+  const handleDeletePrompt = useCallback(
+    (prompt: SessionCanvasCustomPrompt) => {
+      const isLast = prompts.length === 1;
+      deletePrompt(prompt.id);
+      if (isLast) {
+        toastManager.add({
+          type: 'info',
+          title: t('Templates cleared'),
+          description: t('Quick templates disabled on canvas. Tap Load 寸止 defaults to restore.'),
+        });
+      }
+    },
+    [deletePrompt, prompts.length, t]
+  );
 
   const handleSave = useCallback(() => {
     if (!form.name.trim()) return;
@@ -264,7 +280,7 @@ export function SessionCanvasPromptSettings({ className }: SessionCanvasPromptSe
                       size="icon"
                       variant="ghost"
                       className="h-7 w-7 text-destructive"
-                      onClick={() => deletePrompt(prompt.id)}
+                      onClick={() => handleDeletePrompt(prompt)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -273,10 +289,10 @@ export function SessionCanvasPromptSettings({ className }: SessionCanvasPromptSe
                 <div className="rounded-md bg-muted/40 px-2 py-1.5 font-mono text-[10px] leading-snug text-foreground/90 whitespace-pre-wrap max-h-32 overflow-y-auto">
                   {prompt.type === 'conditional' ? (
                     <>
-                      <span className="text-muted-foreground">{t('On')}: </span>
+                      <span className="text-muted-foreground">{t('When ON (append on send)')}: </span>
                       {prompt.templateTrue || '—'}
                       {'\n'}
-                      <span className="text-muted-foreground">{t('Off')}: </span>
+                      <span className="text-muted-foreground">{t('When OFF (append on send)')}: </span>
                       {prompt.templateFalse || '—'}
                     </>
                   ) : prompt.content.trim() ? (

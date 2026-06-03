@@ -474,7 +474,13 @@ export const zhTranslations: Record<string, string> = {
   'Includes 6 quick chips and 4 context switches.': '包含 6 个快捷芯片与 4 个上下文开关。',
   'Template list': '模板列表',
   'Canvas display': '看板显示',
-  'Select file': '选择文件',
+  'Continue prompt default': '请按照最佳实践继续',
+  'Chip click appends this text to the input box on the card.':
+    '点击芯片后，会将此文本追加到看板卡片的输入框中。',
+  'Ctrl+Shift+Enter to continue': 'Ctrl+Shift+Enter 继续',
+  'Templates cleared': '已清空全部模板',
+  'Quick templates disabled on canvas. Tap Load 寸止 defaults to restore.':
+    '看板已关闭快捷模板显示。可在设置中点击「加载寸止预设模板」恢复。',
   'Scroll to bottom': '滚到底部',
   'Attach image': '附加图片',
   'Agent running': '运行中',

@@ -289,6 +289,10 @@ export function SessionCanvasUnifiedQuickInput({
   });
   const canSend = Boolean(value.trim() || imagePaths.length > 0 || hasConditionalText);
 
+  const hasPromptChrome =
+    promptsEnabled && (normalPrompts.length > 0 || conditionalPrompts.length > 0);
+  const useInputPanel = hasPromptChrome || imagePaths.length > 0;
+
   const placeholder =
     claudeMode && cwd
       ? t('Type your prompt here (@ file, paste images)…')
@@ -342,11 +346,12 @@ export function SessionCanvasUnifiedQuickInput({
 
       <div
         className={cn(
-          'flex min-h-0 max-h-[min(46vh,340px)] flex-col gap-2 overflow-y-auto rounded-md',
-          'border border-border/60 bg-muted/20 p-2'
+          'flex min-h-0 flex-col gap-2',
+          useInputPanel &&
+            'max-h-[min(46vh,340px)] overflow-y-auto rounded-md border border-border/60 bg-muted/20 p-2'
         )}
       >
-        {promptsEnabled && normalPrompts.length > 0 ? (
+        {hasPromptChrome && normalPrompts.length > 0 ? (
           <div className="shrink-0 space-y-1">
             <p className="text-[10px] font-medium text-foreground/90">{t('Quick templates')}</p>
             <div className="flex flex-wrap gap-1">
@@ -370,7 +375,7 @@ export function SessionCanvasUnifiedQuickInput({
           </div>
         ) : null}
 
-        {promptsEnabled && conditionalPrompts.length > 0 ? (
+        {hasPromptChrome && conditionalPrompts.length > 0 ? (
           <div className="shrink-0 space-y-1">
             <p className="text-[10px] font-medium text-foreground/90">{t('Context append')}</p>
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -430,9 +435,9 @@ export function SessionCanvasUnifiedQuickInput({
           disabled={disabled}
           placeholder={placeholder}
           className={cn(
-            'min-h-[88px] max-h-48 w-full shrink-0 resize-y rounded-md border border-border/80',
-            'bg-background/90 px-2.5 py-2 font-mono text-[11px] leading-snug',
-            'placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'min-h-[88px] max-h-48 w-full shrink-0 resize-y rounded-md px-2.5 py-2 font-mono text-[11px] leading-snug',
+            'bg-background/90 placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            useInputPanel ? 'border-0 shadow-none' : 'border border-border/80',
             disabled && 'cursor-not-allowed opacity-60'
           )}
           onChange={(e) => handleContentChange(e.target.value)}
