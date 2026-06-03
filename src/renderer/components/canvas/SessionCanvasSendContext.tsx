@@ -6,37 +6,24 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import {
-  composeSessionCanvasOutgoingMessage,
-  DEFAULT_SESSION_CANVAS_CONTEXT_TOGGLES,
-  loadContextToggleEnabled,
-  saveContextToggleEnabled,
-  SESSION_CANVAS_CONTINUE_PROMPT,
-} from '@/lib/sessionCanvasSendExtras';
+import { composeSessionCanvasOutgoingMessage } from '@/lib/sessionCanvasComposeMessage';
+import { useSessionCanvasPromptStore } from '@/stores/sessionCanvasPromptStore';
 
 interface SessionCanvasSendContextValue {
   supplement: string;
   setSupplement: (value: string) => void;
   clearSupplement: () => void;
-  enabledById: Record<string, boolean>;
-  setToggleEnabled: (id: string, enabled: boolean) => void;
   composeMessage: (body: string) => string;
   continuePrompt: string;
+  enableContinueReply: boolean;
 }
 
 const SessionCanvasSendContext = createContext<SessionCanvasSendContextValue | null>(null);
 
 export function SessionCanvasSendProvider({ children }: { children: ReactNode }) {
   const [supplement, setSupplement] = useState('');
-  const [enabledById, setEnabledById] = useState(loadContextToggleEnabled);
-
-  const setToggleEnabled = useCallback((id: string, enabled: boolean) => {
-    setEnabledById((prev) => {
-      const next = { ...prev, [id]: enabled };
-      saveContextToggleEnabled(next);
-      return next;
-    });
-  }, []);
+  const prompts = useSessionCanvasPromptStore((s) => s.prompts);
+  const reply = useSessionCanvasPromptStore((s) => s.reply);
 
   const clearSupplement = useCallback(() => setSupplement(''), []);
 
@@ -44,10 +31,9 @@ export function SessionCanvasSendProvider({ children }: { children: ReactNode })
     (body: string) =>
       composeSessionCanvasOutgoingMessage(body, {
         supplement,
-        toggles: DEFAULT_SESSION_CANVAS_CONTEXT_TOGGLES,
-        enabledById,
+        prompts,
       }),
-    [supplement, enabledById]
+    [supplement, prompts]
   );
 
   const value = useMemo(
@@ -55,12 +41,11 @@ export function SessionCanvasSendProvider({ children }: { children: ReactNode })
       supplement,
       setSupplement,
       clearSupplement,
-      enabledById,
-      setToggleEnabled,
       composeMessage,
-      continuePrompt: SESSION_CANVAS_CONTINUE_PROMPT,
+      continuePrompt: reply.continuePrompt,
+      enableContinueReply: reply.enableContinueReply,
     }),
-    [supplement, enabledById, setToggleEnabled, composeMessage, clearSupplement]
+    [supplement, composeMessage, clearSupplement, reply]
   );
 
   return (
@@ -76,7 +61,6 @@ export function useSessionCanvasSend() {
   return ctx;
 }
 
-/** Optional compose when extras panel is not mounted (standalone fallback). */
 export function useSessionCanvasSendOptional() {
   return useContext(SessionCanvasSendContext);
 }

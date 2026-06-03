@@ -770,6 +770,12 @@ const electronAPI = {
     },
     resetBounds: (): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_PANEL_RESET_BOUNDS),
+    toggleFullscreen: (): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_TOGGLE_FULLSCREEN),
+    setCompactMode: (compact: boolean): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_SET_COMPACT, compact),
+    getDisplayMode: (): Promise<'compact' | 'normal' | 'maximized'> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_GET_DISPLAY_MODE),
     onVisibilityChanged: (callback: (visible: boolean) => void): (() => void) => {
       const handler = (_: unknown, visible: boolean) => callback(visible);
       ipcRenderer.on(IPC_CHANNELS.SESSION_CANVAS_PANEL_VISIBILITY_CHANGED, handler);

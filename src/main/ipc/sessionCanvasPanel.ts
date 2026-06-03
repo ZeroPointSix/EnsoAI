@@ -10,9 +10,12 @@ import {
   getSessionCanvasWindow,
   hideSessionCanvasWindow,
   isSessionCanvasVisible,
+  getSessionCanvasDisplayMode,
   resetSessionCanvasWindowBounds,
+  setSessionCanvasCompactMode,
   setSessionCanvasMainWindowRef,
   showSessionCanvasWindow,
+  toggleSessionCanvasFullscreen,
 } from '../windows/SessionCanvasWindow';
 
 export function registerSessionCanvasPanelHandlers(mainWindow: BrowserWindow): void {
@@ -55,6 +58,18 @@ export function registerSessionCanvasPanelHandlers(mainWindow: BrowserWindow): v
 
   ipcMain.handle(IPC_CHANNELS.SESSION_CANVAS_PANEL_RESET_BOUNDS, () => {
     resetSessionCanvasWindowBounds();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_CANVAS_TOGGLE_FULLSCREEN, () => {
+    return toggleSessionCanvasFullscreen();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_CANVAS_SET_COMPACT, (_event, compact: boolean) => {
+    setSessionCanvasCompactMode(Boolean(compact));
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_CANVAS_GET_DISPLAY_MODE, () => {
+    return getSessionCanvasDisplayMode();
   });
 
   ipcMain.on(

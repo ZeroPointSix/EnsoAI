@@ -1,11 +1,13 @@
 import type { SessionCanvasFocusParams, SessionCanvasSnapshot } from '@shared/types/sessionCanvas';
-import { LayoutGrid, RotateCcw, X } from 'lucide-react';
-import { type CSSProperties, useCallback, useEffect, useMemo } from 'react';
+import { LayoutGrid, Maximize2, Minimize2, RotateCcw, Settings, X } from 'lucide-react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import { getAgentTaskPanelHeaderClassName, isMacPlatform } from '@/components/agent-tasks/agentTaskPanelTitleBar';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { snapshotCardsToCanvasItems } from '@/lib/snapshotToCanvasItems';
+import { cn } from '@/lib/utils';
 import { useSessionCanvasStandaloneStore } from '@/stores/sessionCanvasStandalone';
+import { SessionCanvasPromptSettings } from './SessionCanvasPromptSettings';
 import type { CanvasCardItem } from './SessionCanvasCard';
 import { SessionCanvasPanel } from './SessionCanvasPanel';
 
@@ -14,10 +16,14 @@ const isMac = isMacPlatform(platform);
 const dragRegionStyle = { WebkitAppRegion: 'drag' } as CSSProperties;
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties;
 
+type DisplayMode = 'compact' | 'normal' | 'maximized';
+
 export function SessionCanvasStandaloneApp() {
   const { t } = useI18n();
   const snapshot = useSessionCanvasStandaloneStore((s) => s.snapshot);
   const setSnapshot = useSessionCanvasStandaloneStore((s) => s.setSnapshot);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('normal');
+  const [openSettings, setOpenSettings] = useState(false);
 
   const applySnapshot = useCallback(
     (next: SessionCanvasSnapshot) => {
@@ -28,6 +34,7 @@ export function SessionCanvasStandaloneApp() {
 
   useEffect(() => {
     window.electronAPI.sessionCanvasPanel.getSnapshot();
+    void window.electronAPI.sessionCanvasPanel.getDisplayMode().then(setDisplayMode);
     return window.electronAPI.sessionCanvasPanel.onSnapshotResponse((data) => {
       applySnapshot(data);
     });
@@ -63,8 +70,23 @@ export function SessionCanvasStandaloneApp() {
   }, []);
 
   const handleResetBounds = useCallback(() => {
-    window.electronAPI.sessionCanvasPanel.resetBounds();
+    void window.electronAPI.sessionCanvasPanel.resetBounds().then(() => {
+      setDisplayMode('normal');
+    });
   }, []);
+
+  const handleToggleFullscreen = useCallback(() => {
+    void window.electronAPI.sessionCanvasPanel.toggleFullscreen().then((maximized) => {
+      setDisplayMode(maximized ? 'maximized' : 'normal');
+    });
+  }, []);
+
+  const handleToggleCompact = useCallback(() => {
+    const nextCompact = displayMode !== 'compact';
+    void window.electronAPI.sessionCanvasPanel.setCompactMode(nextCompact).then(() => {
+      setDisplayMode(nextCompact ? 'compact' : 'normal');
+    });
+  }, [displayMode]);
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -80,6 +102,33 @@ export function SessionCanvasStandaloneApp() {
           </span>
         </div>
         <div className="flex items-center gap-1" style={noDragRegionStyle}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setOpenSettings((v) => !v)}
+            className={cn('h-7 w-7', openSettings && 'bg-accent')}
+            title={t('Prompt templates')}
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleToggleCompact}
+            className="h-7 w-7"
+            title={displayMode === 'compact' ? t('Normal window') : t('Compact window')}
+          >
+            <Minimize2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleToggleFullscreen}
+            className="h-7 w-7"
+            title={displayMode === 'maximized' ? t('Restore window') : t('Fullscreen')}
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -103,12 +152,16 @@ export function SessionCanvasStandaloneApp() {
         </div>
       </div>
       <div className="min-h-0 flex-1">
-        <SessionCanvasPanel
-          variant="floating"
-          isActive
-          externalItems={items}
-          onFocusExternal={handleFocusExternal}
-        />
+        {openSettings ? (
+          <SessionCanvasPromptSettings className="h-full" />
+        ) : (
+          <SessionCanvasPanel
+            variant="floating"
+            isActive
+            externalItems={items}
+            onFocusExternal={handleFocusExternal}
+          />
+        )}
       </div>
     </div>
   );

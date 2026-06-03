@@ -172,8 +172,23 @@ export function SessionCanvasClaudeQuickInput({
   );
 
   const handleContinue = useCallback(async () => {
-    await deliverMessage(continuePrompt, []);
-  }, [deliverMessage, continuePrompt]);
+    if (sendingRef.current || sending || !ptyExists) return;
+    sendingRef.current = true;
+    setSending(true);
+    try {
+      const sent = await sendSessionCanvasQuickInput(sessionId, continuePrompt, [], ptyIdHint);
+      if (!sent) {
+        toastManager.add({
+          type: 'warning',
+          title: t('Session not running'),
+          description: t('Open the session with Ctrl+click to start its terminal first.'),
+        });
+      }
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }, [continuePrompt, sending, sessionId, ptyExists, t, ptyIdHint]);
 
   const disabled = sending || checkingPty || !ptyExists;
   const canSend = Boolean(value.trim() || imagePaths.length > 0);

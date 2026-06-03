@@ -1,6 +1,6 @@
 import { getPathBasename } from '@shared/utils/path';
 import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
-import { LayoutGrid, Search, X } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Search, Settings, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TabId } from '@/App/constants';
 import type { Session } from '@/components/chat/SessionBar';
@@ -11,6 +11,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/i18n';
 import {
@@ -35,6 +36,7 @@ import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { getDefaultCardPosition } from './useSessionCanvasCardDrag';
 import { getSessionCanvasCardKey } from '@/lib/sessionCanvasCardKey';
 import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
+import { SessionCanvasPromptSettings } from './SessionCanvasPromptSettings';
 
 interface SessionCanvasPanelProps {
   variant?: 'embedded' | 'floating';
@@ -100,6 +102,7 @@ export function SessionCanvasPanel({
   const [renameToken, setRenameToken] = useState(0);
   const [renameTargetKey, setRenameTargetKey] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  const [panelView, setPanelView] = useState<'canvas' | 'settings'>('canvas');
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const agentSessions = useAgentSessionsStore((s) => s.sessions);
@@ -279,6 +282,26 @@ export function SessionCanvasPanel({
 
   const isFloating = variant === 'floating';
 
+  if (panelView === 'settings') {
+    return (
+      <div className="flex h-full flex-col overflow-hidden">
+        <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1 text-xs"
+            onClick={() => setPanelView('canvas')}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            {t('Back to canvas')}
+          </Button>
+        </div>
+        <SessionCanvasPromptSettings className="flex-1" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div
@@ -298,27 +321,53 @@ export function SessionCanvasPanel({
                 })}
               </p>
             </div>
-            {onClose && (
-              <button
+            <div className="flex items-center gap-1">
+              <Button
                 type="button"
-                onClick={onClose}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
-                title={t('Close')}
-                aria-label={t('Close')}
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                title={t('Prompt templates')}
+                onClick={() => setPanelView('settings')}
               >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+                <Settings className="h-4 w-4" />
+              </Button>
+              {onClose ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+                  title={t('Close')}
+                  aria-label={t('Close')}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
           </div>
         )}
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('Search sessions...')}
-            className="no-drag h-9 pl-9"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('Search sessions...')}
+              className="no-drag h-9 pl-9"
+            />
+          </div>
+          {isFloating ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="no-drag h-9 w-9 shrink-0"
+              title={t('Prompt templates')}
+              onClick={() => setPanelView('settings')}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          ) : null}
         </div>
       </div>
 

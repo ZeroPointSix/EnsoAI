@@ -32,6 +32,13 @@ const DEFAULT_BOUNDS = {
   minHeight: 400,
 };
 
+const COMPACT_BOUNDS = {
+  width: 720,
+  height: 540,
+};
+
+export type SessionCanvasDisplayMode = 'compact' | 'normal' | 'maximized';
+
 function loadBounds(): Partial<Electron.Rectangle> {
   try {
     const fs = require('node:fs');
@@ -160,9 +167,45 @@ export function isSessionCanvasVisible(): boolean {
 
 export function resetSessionCanvasWindowBounds(): void {
   if (sessionCanvasWindow && !sessionCanvasWindow.isDestroyed()) {
+    if (sessionCanvasWindow.isMaximized()) {
+      sessionCanvasWindow.unmaximize();
+    }
     sessionCanvasWindow.setSize(DEFAULT_BOUNDS.width, DEFAULT_BOUNDS.height);
     sessionCanvasWindow.center();
   }
+}
+
+export function toggleSessionCanvasFullscreen(): boolean {
+  const win = sessionCanvasWindow;
+  if (!win || win.isDestroyed()) return false;
+  if (win.isMaximized() || win.isFullScreen()) {
+    if (win.isFullScreen()) win.setFullScreen(false);
+    if (win.isMaximized()) win.unmaximize();
+    return false;
+  }
+  win.maximize();
+  return true;
+}
+
+export function setSessionCanvasCompactMode(compact: boolean): void {
+  const win = sessionCanvasWindow;
+  if (!win || win.isDestroyed()) return;
+  if (win.isMaximized()) win.unmaximize();
+  if (win.isFullScreen()) win.setFullScreen(false);
+  const size = compact ? COMPACT_BOUNDS : DEFAULT_BOUNDS;
+  win.setSize(size.width, size.height);
+  win.center();
+}
+
+export function getSessionCanvasDisplayMode(): SessionCanvasDisplayMode {
+  const win = sessionCanvasWindow;
+  if (!win || win.isDestroyed()) return 'normal';
+  if (win.isMaximized() || win.isFullScreen()) return 'maximized';
+  const bounds = win.getBounds();
+  if (bounds.width <= COMPACT_BOUNDS.width + 8 && bounds.height <= COMPACT_BOUNDS.height + 8) {
+    return 'compact';
+  }
+  return 'normal';
 }
 
 export function setSessionCanvasMainWindowRef(ref: BrowserWindow): void {
