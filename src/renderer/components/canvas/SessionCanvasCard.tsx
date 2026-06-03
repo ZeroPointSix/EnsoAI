@@ -13,6 +13,7 @@ import type { TerminalSessionEntry } from '@/stores/terminal';
 import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { resolveSessionCanvasSubtitle } from './sessionCanvasSubtitle';
+import { resolveCanvasCardPreviewText } from '@/lib/canvasPreviewQuality';
 import { resolveCanvasAgentDisplayState } from '@/lib/canvasAgentState/resolveCanvasAgentDisplayState';
 import { useCanvasCardDisplayStore } from '@/stores/canvasCardDisplayStore';
 import {
@@ -107,8 +108,9 @@ export function SessionCanvasCard({
     );
   });
 
-  const previewText =
+  const rawPreviewText =
     item.kind === 'agent' ? (liveAgentPreview ?? item.previewText) : item.previewText;
+  const previewText = resolveCanvasCardPreviewText(rawPreviewText);
   const Icon = isAgent ? Sparkles : Terminal;
 
   const handleCommitRename = useCallback(

@@ -1,3 +1,4 @@
+import { resolveCanvasCardPreviewText } from '@/lib/canvasPreviewQuality';
 import { getDisplayPreviewText } from '@/lib/terminalPreview';
 import { mergeAuthoritativePreviewSnapshot, mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
 
@@ -49,8 +50,9 @@ export function setCachedSessionPreview(
   if (!trimmed) return;
   const existing = memoryCache[key];
   const merged = mergePreviewSnapshot(existing, trimmed);
-  if (!merged.trim() || merged === existing) return;
-  memoryCache = { ...memoryCache, [key]: merged };
+  const display = resolveCanvasCardPreviewText(merged, existing);
+  if (!display?.trim() || display === existing) return;
+  memoryCache = { ...memoryCache, [key]: display };
   persistCache();
 }
 
@@ -72,7 +74,8 @@ export function getResolvedSessionPreview(
   const runtime = getDisplayPreviewText(runtimeText, runtimePending);
   const cached = getCachedSessionPreview(kind, sessionId);
   if (runtime?.trim() && cached?.trim()) {
-    return mergeAuthoritativePreviewSnapshot(cached, runtime) || undefined;
+    const merged = mergeAuthoritativePreviewSnapshot(cached, runtime);
+    return resolveCanvasCardPreviewText(merged, cached) || undefined;
   }
-  return runtime?.trim() ? runtime : cached;
+  return resolveCanvasCardPreviewText(runtime, cached);
 }

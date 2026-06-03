@@ -1,3 +1,5 @@
+import { isLowSignalCanvasPreview } from '@/lib/canvasPreviewQuality';
+
 /** Whether incoming terminal preview should replace existing stored text. */
 export function shouldApplyPreviewSnapshot(
   existing: string | undefined,
@@ -32,10 +34,16 @@ export function mergePreviewSnapshot(
  * Use when refreshing from mounted terminals so TUI redraws (e.g. Claude thinking → reply) are not blocked by longer stale text.
  */
 export function mergeAuthoritativePreviewSnapshot(
-  _existing: string | undefined,
+  existing: string | undefined,
   incoming: string | null | undefined
 ): string {
   const next = incoming?.trim() ?? '';
-  if (!next) return _existing ?? '';
+  if (!next) return existing ?? '';
+
+  const prev = existing?.trim() ?? '';
+  if (isLowSignalCanvasPreview(next) && prev && !isLowSignalCanvasPreview(prev)) {
+    return existing!;
+  }
+
   return incoming!;
 }

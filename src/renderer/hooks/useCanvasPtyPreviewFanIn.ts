@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
+import { isLowSignalCanvasPreview } from '@/lib/canvasPreviewQuality';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
-import { hasTerminalPreviewReader } from '@/stores/terminalPreviewRegistry';
+import { hasTerminalPreviewReader, snapshotTerminalPreview } from '@/stores/terminalPreviewRegistry';
 import { useTerminalStore } from '@/stores/terminal';
 
 /**
@@ -21,7 +22,10 @@ export function useCanvasPtyPreviewFanIn(enabled: boolean): void {
 
       for (const [sessionId, ptyId] of Object.entries(ptyMap)) {
         if (ptyId !== id) continue;
-        if (hasTerminalPreviewReader(sessionId)) break;
+        if (hasTerminalPreviewReader(sessionId)) {
+          const snap = snapshotTerminalPreview(sessionId);
+          if (snap?.trim() && !isLowSignalCanvasPreview(snap)) break;
+        }
         if (agentIds.has(sessionId)) {
           appendAgent(sessionId, data);
         } else {
