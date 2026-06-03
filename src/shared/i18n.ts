@@ -419,6 +419,10 @@ export const zhTranslations: Record<string, string> = {
     '在 Agent 或终端中打开会话后，可在此总览预览。',
   'Try a different search term.': '请尝试其他搜索词。',
   'No output yet — open this session to stream preview': '暂无输出 — 打开该会话后将在此显示预览',
+  'Click to open session · Double-click for quick input': '单击打开会话 · 双击展开快捷输入',
+  'Click to open session — start terminal in main window first':
+    '单击打开会话 — 请先在主窗口启动该终端',
+  'Esc to close · Double-click card to expand input': 'Esc 关闭 · 双击卡片可展开输入',
   'Send a prompt or command to this agent…': '向此 Agent 发送提示或命令…',
   'Send a command to this shell…': '向此 Shell 发送命令…',
   'Enter to send · Shift+Enter for newline': 'Enter 发送 · Shift+Enter 换行',

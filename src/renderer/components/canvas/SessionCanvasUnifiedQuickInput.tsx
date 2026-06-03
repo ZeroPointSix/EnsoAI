@@ -367,7 +367,7 @@ export function SessionCanvasUnifiedQuickInput({
 
       {!checkingPty && !ptyExists ? (
         <p className="shrink-0 rounded-md border border-dashed border-border/80 bg-muted/30 px-2 py-1.5 text-[10px] text-muted-foreground">
-          {t('Terminal not running — Ctrl+click to open this session first.')}
+          {t('Terminal not running — click the card to open this session in the main window first.')}
         </p>
       ) : null}
 

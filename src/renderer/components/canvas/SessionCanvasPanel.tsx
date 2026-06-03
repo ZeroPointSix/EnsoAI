@@ -146,15 +146,6 @@ export function SessionCanvasPanel({
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!focusedCardKey) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFocusedCardKey(null);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [focusedCardKey]);
-
   const allItems = useMemo(() => {
     if (externalItems) return externalItems;
     return buildCardItems(agentSessions, runtimeStates, terminalSessions);
@@ -188,6 +179,21 @@ export function SessionCanvasPanel({
     [filteredItems, focusedCardKey]
   );
 
+  useEffect(() => {
+    if (focusedCardKey && !focusedItem) {
+      setFocusedCardKey(null);
+    }
+  }, [focusedCardKey, focusedItem]);
+
+  useEffect(() => {
+    if (!focusedCardKey) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFocusedCardKey(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [focusedCardKey]);
+
   const focusSize = useMemo(() => {
     const pad = 32;
     const maxW = Math.max(280, canvasSize.width - pad);
@@ -198,8 +204,8 @@ export function SessionCanvasPanel({
     };
   }, [canvasSize.width, canvasSize.height]);
 
-  const agentCount = agentSessions.length;
-  const terminalCount = terminalSessions.length;
+  const agentCount = allItems.filter((i) => i.kind === 'agent').length;
+  const terminalCount = allItems.filter((i) => i.kind === 'terminal').length;
 
   const handleFocus = useCallback(
     async (item: CanvasCardItem) => {
@@ -260,17 +266,21 @@ export function SessionCanvasPanel({
     setFocusedCardKey(null);
   }, [filteredItems, canvasSize.width, setCardPosition, setCardSize]);
 
+  /** 单击跳转主窗口会话；双击展开快捷输入浮层（避免单击后整板变灰不可点） */
   const handleCardClick = useCallback(
     (item: CanvasCardItem, event: React.MouseEvent) => {
-      if (event.ctrlKey || event.metaKey) {
-        setFocusedCardKey(null);
-        void handleFocus(item);
-        return;
-      }
-      setFocusedCardKey(getSessionCanvasCardKey(item));
+      if (event.detail > 1) return;
+      setFocusedCardKey(null);
+      void handleFocus(item);
     },
     [handleFocus]
   );
+
+  const handleCardDoubleClick = useCallback((item: CanvasCardItem, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setFocusedCardKey(getSessionCanvasCardKey(item));
+  }, []);
 
   const openContextMenu = useCallback((event: React.MouseEvent, item: CanvasCardItem | null) => {
     event.preventDefault();
@@ -413,7 +423,7 @@ export function SessionCanvasPanel({
               if (focusedCardKey === key) {
                 return null;
               }
-              const isDimmed = Boolean(focusedCardKey);
+              const isSoftDimmed = Boolean(focusedCardKey);
               return (
                 <SessionCanvasCard
                   key={`${item.kind}-${item.session.id}`}
@@ -421,9 +431,10 @@ export function SessionCanvasPanel({
                   index={index}
                   isActive={isActive}
                   isFocused={false}
-                  isDimmed={isDimmed}
+                  isDimmed={isSoftDimmed}
                   disableDrag={Boolean(focusedCardKey)}
                   onCardClick={(e) => handleCardClick(item, e)}
+                  onCardDoubleClick={(e) => handleCardDoubleClick(item, e)}
                   onRenameSession={handleRenameSession}
                   onContextMenu={(e) => openContextMenu(e, item)}
                   renameRequestToken={
@@ -455,6 +466,7 @@ export function SessionCanvasPanel({
                 positionOverride={{ x: 0, y: 0 }}
                 disableDrag
                 onCardClick={(e) => handleCardClick(focusedItem, e)}
+                onCardDoubleClick={(e) => handleCardDoubleClick(focusedItem, e)}
                 onRenameSession={handleRenameSession}
                 onContextMenu={(e) => openContextMenu(e, focusedItem)}
                 renameRequestToken={

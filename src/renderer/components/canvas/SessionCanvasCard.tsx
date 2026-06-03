@@ -21,6 +21,7 @@ import {
   CanvasAgentStatusDot,
   canvasAgentIconAccentClass,
 } from './CanvasAgentStatusDot';
+import { useSessionCanvasPtyExists } from '@/hooks/useSessionCanvasPtyExists';
 import { SessionCanvasPreview } from './SessionCanvasPreview';
 import { SessionCanvasQuickInput } from './SessionCanvasQuickInput';
 import { getSessionCanvasCardKey, useSessionCanvasCardResize } from './useSessionCanvasCardResize';
@@ -54,6 +55,7 @@ interface SessionCanvasCardProps {
   positionOverride?: { x: number; y: number };
   disableDrag?: boolean;
   onCardClick: (event: React.MouseEvent) => void;
+  onCardDoubleClick?: (event: React.MouseEvent) => void;
   onRenameSession?: (kind: SessionCanvasCardKind, sessionId: string, name: string) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
   renameRequestToken?: number;
@@ -70,6 +72,21 @@ function outputStateToGlow(state: OutputState): 'idle' | 'running' | 'waiting_in
   }
 }
 
+function agentDisplayStateToGlow(
+  state: CanvasAgentDisplayState
+): 'idle' | 'running' | 'waiting_input' | 'completed' {
+  switch (state) {
+    case 'working':
+      return 'running';
+    case 'blocked':
+      return 'waiting_input';
+    case 'completed':
+      return 'completed';
+    default:
+      return 'idle';
+  }
+}
+
 export function SessionCanvasCard({
   item,
   index,
@@ -80,6 +97,7 @@ export function SessionCanvasCard({
   positionOverride,
   disableDrag = false,
   onCardClick,
+  onCardDoubleClick,
   onRenameSession,
   onContextMenu,
   renameRequestToken,
@@ -111,6 +129,8 @@ export function SessionCanvasCard({
   const rawPreviewText =
     item.kind === 'agent' ? (liveAgentPreview ?? item.previewText) : item.previewText;
   const previewText = resolveCanvasCardPreviewText(rawPreviewText);
+  const ptyIdHint = item.ptyIdHint;
+  const { ptyExists } = useSessionCanvasPtyExists(item.session.id, !isFocused, ptyIdHint);
   const Icon = isAgent ? Sparkles : Terminal;
 
   const handleCommitRename = useCallback(
@@ -169,8 +189,6 @@ export function SessionCanvasCard({
     </span>
   );
 
-  const glowState = isFocused ? 'idle' : outputStateToGlow(isAgent ? item.outputState : 'idle');
-
   const hookDisplayState = useCanvasCardDisplayStore((s) =>
     isAgent && item.kind === 'agent' ? s.bySessionId[item.session.id] : undefined
   );
@@ -186,6 +204,16 @@ export function SessionCanvasCard({
       hookState: hookDisplayState ?? snapshotDisplayState,
     });
   }, [isAgent, item, previewText, hookDisplayState, snapshotDisplayState]);
+
+  const glowState = isFocused
+    ? 'idle'
+    : item.kind === 'agent'
+      ? agentDisplayStateToGlow(agentDisplayState)
+      : outputStateToGlow('idle');
+  const showAgentGlow =
+    item.kind === 'agent' &&
+    !isFocused &&
+    (item.outputState !== 'idle' || agentDisplayState !== 'idle');
 
   const body = (
     <div
@@ -260,7 +288,7 @@ export function SessionCanvasCard({
               className="min-h-0 flex-1"
             />
             <p className="shrink-0 text-[10px] text-muted-foreground">
-              {t('Ctrl+click to jump to session · Esc to close')}
+              {t('Esc to close · Double-click card to expand input')}
             </p>
           </div>
         </div>
@@ -272,7 +300,9 @@ export function SessionCanvasCard({
             isActive={isActive}
           />
           <p className="truncate text-[10px] text-muted-foreground/80" title={item.session.cwd}>
-            {item.session.cwd}
+            {ptyExists
+              ? t('Click to open session · Double-click for quick input')
+              : t('Click to open session — start terminal in main window first')}
           </p>
         </>
       )}
@@ -284,7 +314,8 @@ export function SessionCanvasCard({
     'transition-shadow hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
     isDragging && 'ring-2 ring-primary/40',
     isFocused && 'ring-2 ring-primary border-primary/50 shadow-lg overflow-hidden',
-    isDimmed && 'opacity-40 pointer-events-none'
+    isDimmed && 'opacity-50 saturate-75',
+    !isFocused && ptyExists && 'ring-1 ring-primary/35 border-primary/25'
   );
 
   const resizeHandle =
@@ -311,12 +342,14 @@ export function SessionCanvasCard({
   };
 
   const handleShellClick = (e: React.MouseEvent) => {
-    if (isDimmed) return;
     onCardClick(e);
   };
 
+  const handleShellDoubleClick = (e: React.MouseEvent) => {
+    onCardDoubleClick?.(e);
+  };
+
   const handleShellContextMenu = (e: React.MouseEvent) => {
-    if (isDimmed) return;
     onContextMenu?.(e);
   };
 
@@ -332,14 +365,15 @@ export function SessionCanvasCard({
         },
       };
 
-  if (isAgent && item.outputState !== 'idle') {
+  const shellHandlers = {
+    onClick: handleShellClick,
+    onDoubleClick: handleShellDoubleClick,
+    onContextMenu: handleShellContextMenu,
+  };
+
+  if (showAgentGlow) {
     return (
-      <div
-        style={positionedStyle}
-        onClick={handleShellClick}
-        onContextMenu={handleShellContextMenu}
-        {...shellInteractiveProps}
-      >
+      <div style={positionedStyle} {...shellHandlers} {...shellInteractiveProps}>
         <GlowCard as="div" state={glowState} className={shellClass}>
           {body}
           {resizeHandle}
@@ -350,12 +384,7 @@ export function SessionCanvasCard({
 
   return (
     <div style={positionedStyle}>
-      <div
-        className={shellClass}
-        onClick={handleShellClick}
-        onContextMenu={handleShellContextMenu}
-        {...shellInteractiveProps}
-      >
+      <div className={shellClass} {...shellHandlers} {...shellInteractiveProps}>
         {body}
       </div>
       {resizeHandle}
