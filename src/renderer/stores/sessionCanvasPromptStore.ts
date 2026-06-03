@@ -100,14 +100,35 @@ export const useSessionCanvasPromptStore = create<SessionCanvasPromptState>()(
           return { prompts: reordered };
         }),
 
-      resetToDefaults: () => set(mergeWithDefaults(DEFAULT_SESSION_CANVAS_PROMPT_CONFIG)),
+      resetToDefaults: () => {
+        const defaults = DEFAULT_SESSION_CANVAS_PROMPT_CONFIG;
+        const now = new Date().toISOString();
+        set({
+          promptsEnabled: defaults.promptsEnabled,
+          maxPrompts: defaults.maxPrompts,
+          prompts: defaults.prompts.map((p) => ({
+            ...p,
+            createdAt: now,
+            updatedAt: now,
+          })),
+          reply: { ...defaults.reply },
+        });
+      },
     }),
     {
       name: 'ensoai.sessionCanvas.promptConfig',
-      version: 1,
+      version: 2,
+      migrate: (persisted) => {
+        const parsed = (persisted ?? {}) as Partial<SessionCanvasPromptConfig>;
+        return mergeWithDefaults(parsed);
+      },
       merge: (persisted, current) => {
         const parsed = (persisted ?? {}) as Partial<SessionCanvasPromptConfig>;
-        return { ...current, ...mergeWithDefaults(parsed) };
+        const merged = mergeWithDefaults(parsed);
+        if (merged.prompts.length === 0) {
+          return { ...current, ...mergeWithDefaults(DEFAULT_SESSION_CANVAS_PROMPT_CONFIG) };
+        }
+        return { ...current, ...merged };
       },
     }
   )

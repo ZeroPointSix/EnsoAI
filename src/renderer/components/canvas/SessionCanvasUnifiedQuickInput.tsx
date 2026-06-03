@@ -60,6 +60,8 @@ export function SessionCanvasUnifiedQuickInput({
   const promptsEnabled = useSessionCanvasPromptStore((s) => s.promptsEnabled);
   const prompts = useSessionCanvasPromptStore((s) => s.prompts);
   const setConditionalState = useSessionCanvasPromptStore((s) => s.setConditionalState);
+  const enableContinueReply = useSessionCanvasPromptStore((s) => s.reply.enableContinueReply);
+  const continuePrompt = useSessionCanvasPromptStore((s) => s.reply.continuePrompt);
 
   const normalPrompts = selectNormalPrompts(prompts);
   const conditionalPrompts = selectConditionalPrompts(prompts);
@@ -244,6 +246,27 @@ export function SessionCanvasUnifiedQuickInput({
   const handleSend = useCallback(async () => {
     await deliverMessage(value, imagePaths);
   }, [deliverMessage, value, imagePaths]);
+
+  const handleContinue = useCallback(async () => {
+    const text = continuePrompt.trim();
+    if (!text || sendingRef.current || sending || !ptyExists) return;
+
+    sendingRef.current = true;
+    setSending(true);
+    try {
+      const sent = await sendSessionCanvasQuickInput(sessionId, text, [], ptyIdHint);
+      if (!sent) {
+        toastManager.add({
+          type: 'warning',
+          title: t('Session not running'),
+          description: t('Open the session with Ctrl+click to start its terminal first.'),
+        });
+      }
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }, [continuePrompt, sending, sessionId, ptyExists, t, ptyIdHint]);
 
   const handleNormalChip = useCallback((content: string) => {
     if (!content.trim()) {
@@ -462,6 +485,17 @@ export function SessionCanvasUnifiedQuickInput({
                 return;
               }
             }
+            if (
+              e.key === 'Enter' &&
+              e.ctrlKey &&
+              e.shiftKey &&
+              enableContinueReply &&
+              continuePrompt.trim()
+            ) {
+              e.preventDefault();
+              void handleContinue();
+              return;
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void handleSend();
@@ -499,6 +533,9 @@ export function SessionCanvasUnifiedQuickInput({
         {claudeMode
           ? t('Enter to send · Shift+Enter for newline · @ to mention files')
           : t('Enter to send · Shift+Enter for newline')}
+        {enableContinueReply && continuePrompt.trim()
+          ? ` · ${t('Ctrl+Shift+Enter to continue')}`
+          : null}
       </p>
     </div>
   );
