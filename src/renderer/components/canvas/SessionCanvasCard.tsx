@@ -12,6 +12,11 @@ import type { TerminalSessionEntry } from '@/stores/terminal';
 import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { resolveSessionCanvasSubtitle } from './sessionCanvasSubtitle';
+import {
+  type CanvasAgentDisplayState,
+  CanvasAgentStatusDot,
+  canvasAgentIconAccentClass,
+} from './CanvasAgentStatusDot';
 import { SessionCanvasPreview } from './SessionCanvasPreview';
 import { SessionCanvasQuickInput } from './SessionCanvasQuickInput';
 import { getSessionCanvasCardKey, useSessionCanvasCardResize } from './useSessionCanvasCardResize';
@@ -23,6 +28,8 @@ export type CanvasCardItem =
       session: Session;
       previewText?: string;
       outputState: OutputState;
+      /** 四色状态灯（仅展示；未传则为 idle） */
+      agentDisplayState?: CanvasAgentDisplayState;
       /** Resolved `pty-N` id for quick input (standalone snapshot or registry) */
       ptyIdHint?: string;
     }
@@ -57,30 +64,6 @@ function outputStateToGlow(state: OutputState): 'idle' | 'running' | 'waiting_in
     default:
       return 'idle';
   }
-}
-
-function StatusBadge({ outputState }: { outputState: OutputState }) {
-  const { t } = useI18n();
-  if (outputState === 'idle') return null;
-
-  const variant =
-    outputState === 'outputting'
-      ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-      : 'bg-blue-500/15 text-blue-600 dark:text-blue-400';
-
-  const label = outputState === 'outputting' ? t('Agent running') : t('New output');
-
-  return (
-    <span
-      className={cn(
-        'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none',
-        variant,
-        outputState === 'outputting' && 'animate-pulse'
-      )}
-    >
-      {label}
-    </span>
-  );
 }
 
 export function SessionCanvasCard({
@@ -170,6 +153,8 @@ export function SessionCanvasCard({
   );
 
   const glowState = isFocused ? 'idle' : outputStateToGlow(isAgent ? item.outputState : 'idle');
+  const agentDisplayState: CanvasAgentDisplayState =
+    isAgent && item.kind === 'agent' ? (item.agentDisplayState ?? 'idle') : 'idle';
 
   const body = (
     <div
@@ -195,21 +180,21 @@ export function SessionCanvasCard({
         <div
           className={cn(
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-            isAgent ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+            isAgent ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+            isAgent && canvasAgentIconAccentClass(agentDisplayState)
           )}
         >
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
+            {isAgent ? <CanvasAgentStatusDot state={agentDisplayState} /> : null}
             {titleNode}
-            {isAgent ? (
-              <StatusBadge outputState={item.outputState} />
-            ) : (
+            {!isAgent ? (
               <Badge variant="outline" className="shrink-0 h-5 px-1.5 text-[10px]">
                 {t('Shell')}
               </Badge>
-            )}
+            ) : null}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground" title={subtitle}>
             {subtitle}
