@@ -288,16 +288,13 @@ export function setSessionCanvasCompactMode(compact: boolean): void {
     return;
   }
 
-  const restore = persistedWindowState.normalBounds ?? {
+  const restore: Electron.Rectangle = persistedWindowState.normalBounds ?? {
+    x: current.x,
+    y: current.y,
     width: DEFAULT_BOUNDS.width,
     height: DEFAULT_BOUNDS.height,
   };
-  win.setBounds({
-    x: restore.x ?? current.x,
-    y: restore.y ?? current.y,
-    width: restore.width || DEFAULT_BOUNDS.width,
-    height: restore.height || DEFAULT_BOUNDS.height,
-  });
+  win.setBounds(restore);
   const bounds = win.getBounds();
   saveWindowState({
     x: bounds.x,
