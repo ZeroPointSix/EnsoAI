@@ -28,6 +28,12 @@ coverage/
 # Misc
 *.pem
 thumbs.db
+.gh-*
+.build-watch*
+.watch-build*
+.git-push-*.txt
+.jobs.json
+.test-*.txt
 dist*/
 build/cer.p12
 
