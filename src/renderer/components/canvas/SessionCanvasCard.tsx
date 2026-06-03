@@ -173,10 +173,7 @@ export function SessionCanvasCard({
 
   const body = (
     <div
-      className={cn(
-        'flex h-full min-h-0 flex-col gap-2 p-3 text-left',
-        isFocused && 'overflow-hidden'
-      )}
+      className={cn('flex h-full min-h-0 flex-col gap-2 p-3 text-left', isFocused && 'overflow-hidden')}
     >
       <div className="flex min-w-0 items-start gap-2">
         {dragEnabled ? (
@@ -223,34 +220,40 @@ export function SessionCanvasCard({
         )}
       </div>
 
-      <SessionCanvasPreview
-        text={previewText}
-        placeholder={t('No output yet — open this session to stream preview')}
-        isActive={isActive}
-        className={
-          isFocused ? 'max-h-[38%] min-h-[64px] shrink-0 overflow-y-auto' : undefined
-        }
-      />
-
       {isFocused ? (
-        <div className="flex min-h-[120px] min-w-0 flex-1 flex-col gap-1 overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(4.5rem,38%)_minmax(11rem,1fr)] gap-2 overflow-hidden">
+          <SessionCanvasPreview
+            text={previewText}
+            placeholder={t('No output yet — open this session to stream preview')}
+            isActive={isActive}
+            className="!min-h-0 !flex-none h-full min-h-0 overflow-hidden"
+          />
+          <div className="flex min-h-0 min-w-0 flex-col gap-1 overflow-hidden">
             <SessionCanvasQuickInput
               sessionId={item.session.id}
               kind={item.kind}
               agentId={isAgent ? item.session.agentId : undefined}
               cwd={item.session.cwd}
               ptyIdHint={item.ptyIdHint}
+              expanded
+              className="min-h-0 flex-1"
             />
+            <p className="shrink-0 text-[10px] text-muted-foreground">
+              {t('Ctrl+click to jump to session · Esc to close')}
+            </p>
           </div>
-          <p className="shrink-0 text-[10px] text-muted-foreground">
-            {t('Ctrl+click to jump to session · Esc to close')}
-          </p>
         </div>
       ) : (
-        <p className="truncate text-[10px] text-muted-foreground/80" title={item.session.cwd}>
-          {item.session.cwd}
-        </p>
+        <>
+          <SessionCanvasPreview
+            text={previewText}
+            placeholder={t('No output yet — open this session to stream preview')}
+            isActive={isActive}
+          />
+          <p className="truncate text-[10px] text-muted-foreground/80" title={item.session.cwd}>
+            {item.session.cwd}
+          </p>
+        </>
       )}
     </div>
   );

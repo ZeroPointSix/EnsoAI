@@ -32,6 +32,8 @@ interface SessionCanvasUnifiedQuickInputProps {
   cwd?: string;
   ptyIdHint?: string;
   claudeMode?: boolean;
+  /** Fill parent height on focused cards (decoupled from template chip count). */
+  expanded?: boolean;
   className?: string;
 }
 
@@ -41,6 +43,7 @@ export function SessionCanvasUnifiedQuickInput({
   cwd,
   ptyIdHint,
   claudeMode = false,
+  expanded = false,
   className,
 }: SessionCanvasUnifiedQuickInputProps) {
   const { t } = useI18n();
@@ -302,7 +305,11 @@ export function SessionCanvasUnifiedQuickInput({
 
   return (
     <div
-      className={cn('relative flex min-h-0 shrink-0 flex-col gap-1.5', className)}
+      className={cn(
+        'relative flex flex-col gap-1.5',
+        expanded ? 'h-full min-h-0' : 'min-h-0 shrink-0',
+        className
+      )}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
@@ -347,8 +354,11 @@ export function SessionCanvasUnifiedQuickInput({
       <div
         className={cn(
           'flex min-h-0 flex-col gap-2',
+          expanded && 'min-h-0 flex-1',
           useInputPanel &&
-            'max-h-[min(46vh,340px)] overflow-y-auto rounded-md border border-border/60 bg-muted/20 p-2'
+            (expanded
+              ? 'min-h-0 flex-1 overflow-y-auto rounded-md border border-border/60 bg-muted/20 p-2'
+              : 'max-h-[min(46vh,340px)] overflow-y-auto rounded-md border border-border/60 bg-muted/20 p-2')
         )}
       >
         {hasPromptChrome && normalPrompts.length > 0 ? (
@@ -431,12 +441,15 @@ export function SessionCanvasUnifiedQuickInput({
         <textarea
           ref={textareaRef}
           value={value}
-          rows={4}
+          rows={expanded ? 6 : 4}
           disabled={disabled}
           placeholder={placeholder}
           className={cn(
-            'min-h-[88px] max-h-48 w-full shrink-0 resize-y rounded-md px-2.5 py-2 font-mono text-[11px] leading-snug',
+            'w-full resize-y rounded-md px-2.5 py-2 font-mono text-[11px] leading-snug',
             'bg-background/90 placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            expanded
+              ? 'min-h-[8rem] flex-1 max-h-none'
+              : 'min-h-[88px] max-h-48 shrink-0',
             useInputPanel ? 'border-0 shadow-none' : 'border border-border/80',
             disabled && 'cursor-not-allowed opacity-60'
           )}

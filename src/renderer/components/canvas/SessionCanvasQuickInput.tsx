@@ -9,6 +9,8 @@ interface SessionCanvasQuickInputProps {
   agentId?: string;
   cwd?: string;
   ptyIdHint?: string;
+  /** Focused overlay card: fill allocated height (not shrink with template count). */
+  expanded?: boolean;
   className?: string;
 }
 
@@ -18,6 +20,7 @@ export function SessionCanvasQuickInput({
   agentId,
   cwd,
   ptyIdHint,
+  expanded = false,
   className,
 }: SessionCanvasQuickInputProps) {
   const claudeMode = kind === 'agent' && isClaudeCanvasAgent(agentId) && Boolean(cwd);
@@ -30,6 +33,7 @@ export function SessionCanvasQuickInput({
         cwd={cwd}
         ptyIdHint={ptyIdHint}
         claudeMode={claudeMode}
+        expanded={expanded}
         className={className}
       />
     </SessionCanvasSendProvider>
