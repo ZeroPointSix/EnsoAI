@@ -1,20 +1,17 @@
 /**
- * Dev-channel identity — must stay isolated from production EnsoAIPlus.
- * This file is only on the `dev` branch; main uses production values in electron-builder.yml.
+ * Production app identity (main branch). Dev channel uses dev branch appIdentity overrides.
  */
-export const BUILD_CHANNEL = 'dev' as const;
+export const BUILD_CHANNEL = 'production' as const;
 
-export const APP_USER_MODEL_ID = 'com.ensoaiplus.dev.app';
+export const APP_USER_MODEL_ID = 'com.ensoaiplus.app';
 
-/** Deep-link protocol (not `enso` — avoids opening the production app). */
-export const URL_SCHEME = 'enso-dev';
+export const URL_SCHEME = 'enso';
 
-export const PRODUCT_NAME = 'EnsoAIPlus Dev';
+export const PRODUCT_NAME = 'EnsoAIPlus';
 
-/** Windows/macOS userData folder name under appData. */
-export const USER_DATA_DIR_NAME = 'EnsoAIPlus Dev';
+export const USER_DATA_DIR_NAME = 'EnsoAIPlus';
 
-export const IDE_BRIDGE_NAME = 'EnsoAIPlus Dev';
+export const IDE_BRIDGE_NAME = 'EnsoAIPlus';
 
 export function ensoProtocolPrefix(): string {
   return `${URL_SCHEME}:`;

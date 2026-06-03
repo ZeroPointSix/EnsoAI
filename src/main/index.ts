@@ -95,7 +95,7 @@ if (app.isPackaged) {
   electronApp.setAppUserModelId(APP_USER_MODEL_ID);
 }
 
-// Register deep-link scheme (enso-dev on dev branch — not production enso://)
+// Register deep-link scheme (enso://)
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
     app.setAsDefaultProtocolClient(URL_SCHEME, process.execPath, [process.argv[1]]);
