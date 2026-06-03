@@ -478,6 +478,13 @@ export const zhTranslations: Record<string, string> = {
   'Chip click appends this text to the input box on the card.':
     '点击芯片后，会将此文本追加到看板卡片的输入框中。',
   'Ctrl+Shift+Enter to continue': 'Ctrl+Shift+Enter 继续',
+  'Back to canvas': '返回看板',
+  'Template name placeholder': '例如：✅完成',
+  'Template description placeholder': '简短说明（可选）',
+  'Template content placeholder': '点击芯片时追加到输入框的文本…',
+  'Condition label placeholder': '例如：是否生成测试脚本',
+  'Normal window': '标准窗口',
+  'Compact window': '紧凑窗口',
   'Templates cleared': '已清空全部模板',
   'Quick templates disabled on canvas. Tap Load 寸止 defaults to restore.':
     '看板已关闭快捷模板显示。可在设置中点击「加载寸止预设模板」恢复。',

@@ -5,6 +5,7 @@ import { app, BrowserWindow } from 'electron';
 
 let sessionCanvasWindow: BrowserWindow | null = null;
 let mainWindowRef: BrowserWindow | null = null;
+
 function teardownSessionCanvasWindow(win: BrowserWindow): void {
   try {
     if (win.isFullScreen()) {
@@ -37,25 +38,53 @@ const COMPACT_BOUNDS = {
 
 export type SessionCanvasDisplayMode = 'compact' | 'normal' | 'maximized';
 
-function loadBounds(): Partial<Electron.Rectangle> {
+interface SessionCanvasWindowPersisted {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  displayMode?: SessionCanvasDisplayMode;
+  normalBounds?: Electron.Rectangle;
+}
+
+let persistedWindowState: SessionCanvasWindowPersisted = {};
+
+function isCompactSize(bounds: Electron.Rectangle): boolean {
+  return (
+    bounds.width <= COMPACT_BOUNDS.width + 8 && bounds.height <= COMPACT_BOUNDS.height + 8
+  );
+}
+
+function loadWindowState(): SessionCanvasWindowPersisted {
   try {
     const fs = require('node:fs');
     if (fs.existsSync(BOUNDS_FILE)) {
-      return JSON.parse(fs.readFileSync(BOUNDS_FILE, 'utf-8'));
+      const parsed = JSON.parse(fs.readFileSync(BOUNDS_FILE, 'utf-8')) as SessionCanvasWindowPersisted;
+      persistedWindowState = parsed;
+      return parsed;
     }
   } catch {
     // ignore
   }
+  persistedWindowState = {};
   return {};
 }
 
-function saveBounds(bounds: Partial<Electron.Rectangle>): void {
+function saveWindowState(patch: Partial<SessionCanvasWindowPersisted>): void {
+  persistedWindowState = { ...persistedWindowState, ...patch };
   try {
     const fs = require('node:fs');
-    fs.writeFileSync(BOUNDS_FILE, JSON.stringify(bounds));
+    fs.writeFileSync(BOUNDS_FILE, JSON.stringify(persistedWindowState));
   } catch {
     // ignore
   }
+}
+
+function getPersistedDisplayMode(win: BrowserWindow): SessionCanvasDisplayMode {
+  if (win.isMaximized() || win.isFullScreen()) {
+    return 'maximized';
+  }
+  return persistedWindowState.displayMode ?? 'normal';
 }
 
 export function createSessionCanvasWindow(): BrowserWindow {
@@ -63,15 +92,17 @@ export function createSessionCanvasWindow(): BrowserWindow {
     return sessionCanvasWindow;
   }
 
-  const savedBounds = loadBounds();
+  const saved = loadWindowState();
+  const initialWidth = saved.width || DEFAULT_BOUNDS.width;
+  const initialHeight = saved.height || DEFAULT_BOUNDS.height;
 
   const windowOptions: Electron.BrowserWindowConstructorOptions = {
-    width: savedBounds.width || DEFAULT_BOUNDS.width,
-    height: savedBounds.height || DEFAULT_BOUNDS.height,
+    width: initialWidth,
+    height: initialHeight,
     minWidth: DEFAULT_BOUNDS.minWidth,
     minHeight: DEFAULT_BOUNDS.minHeight,
-    x: savedBounds.x,
-    y: savedBounds.y,
+    x: saved.x,
+    y: saved.y,
     show: false,
     title: 'Session Canvas',
     webPreferences: {
@@ -90,6 +121,17 @@ export function createSessionCanvasWindow(): BrowserWindow {
 
   sessionCanvasWindow = new BrowserWindow(windowOptions);
 
+  if (!saved.displayMode) {
+    persistedWindowState.displayMode = isCompactSize({
+      x: saved.x ?? 0,
+      y: saved.y ?? 0,
+      width: initialWidth,
+      height: initialHeight,
+    })
+      ? 'compact'
+      : 'normal';
+  }
+
   sessionCanvasWindow.on('close', (e) => {
     e.preventDefault();
     sessionCanvasWindow!.hide();
@@ -105,9 +147,30 @@ export function createSessionCanvasWindow(): BrowserWindow {
   const debouncedSaveBounds = (): void => {
     if (saveTimeout) clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
-      if (sessionCanvasWindow && !sessionCanvasWindow.isDestroyed()) {
-        saveBounds(sessionCanvasWindow.getBounds());
+      if (!sessionCanvasWindow || sessionCanvasWindow.isDestroyed()) return;
+      const bounds = sessionCanvasWindow.getBounds();
+      const mode = getPersistedDisplayMode(sessionCanvasWindow);
+
+      if (mode === 'maximized') {
+        saveWindowState({ displayMode: 'maximized' });
+        return;
       }
+
+      if (mode === 'compact' && !isCompactSize(bounds)) {
+        persistedWindowState.displayMode = 'normal';
+        persistedWindowState.normalBounds = bounds;
+      } else if (mode === 'normal') {
+        persistedWindowState.normalBounds = bounds;
+      }
+
+      saveWindowState({
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        displayMode: persistedWindowState.displayMode ?? mode,
+        normalBounds: persistedWindowState.normalBounds,
+      });
     }, 500);
   };
 
@@ -167,13 +230,22 @@ export function isSessionCanvasVisible(): boolean {
 }
 
 export function resetSessionCanvasWindowBounds(): void {
-  if (sessionCanvasWindow && !sessionCanvasWindow.isDestroyed()) {
-    if (sessionCanvasWindow.isMaximized()) {
-      sessionCanvasWindow.unmaximize();
-    }
-    sessionCanvasWindow.setSize(DEFAULT_BOUNDS.width, DEFAULT_BOUNDS.height);
-    sessionCanvasWindow.center();
+  const win = sessionCanvasWindow;
+  if (!win || win.isDestroyed()) return;
+  if (win.isMaximized()) {
+    win.unmaximize();
   }
+  win.setSize(DEFAULT_BOUNDS.width, DEFAULT_BOUNDS.height);
+  win.center();
+  const bounds = win.getBounds();
+  saveWindowState({
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    displayMode: 'normal',
+    normalBounds: bounds,
+  });
 }
 
 export function toggleSessionCanvasFullscreen(): boolean {
@@ -182,9 +254,11 @@ export function toggleSessionCanvasFullscreen(): boolean {
   if (win.isMaximized() || win.isFullScreen()) {
     if (win.isFullScreen()) win.setFullScreen(false);
     if (win.isMaximized()) win.unmaximize();
+    saveWindowState({ displayMode: persistedWindowState.displayMode ?? 'normal' });
     return false;
   }
   win.maximize();
+  saveWindowState({ displayMode: 'maximized' });
   return true;
 }
 
@@ -193,20 +267,54 @@ export function setSessionCanvasCompactMode(compact: boolean): void {
   if (!win || win.isDestroyed()) return;
   if (win.isMaximized()) win.unmaximize();
   if (win.isFullScreen()) win.setFullScreen(false);
-  const size = compact ? COMPACT_BOUNDS : DEFAULT_BOUNDS;
-  win.setSize(size.width, size.height);
-  win.center();
+
+  const current = win.getBounds();
+
+  if (compact) {
+    if (getPersistedDisplayMode(win) !== 'compact') {
+      persistedWindowState.normalBounds = current;
+    }
+    win.setSize(COMPACT_BOUNDS.width, COMPACT_BOUNDS.height);
+    win.center();
+    const bounds = win.getBounds();
+    saveWindowState({
+      x: bounds.x,
+      y: bounds.y,
+      width: COMPACT_BOUNDS.width,
+      height: COMPACT_BOUNDS.height,
+      displayMode: 'compact',
+      normalBounds: persistedWindowState.normalBounds,
+    });
+    return;
+  }
+
+  const restore = persistedWindowState.normalBounds ?? {
+    width: DEFAULT_BOUNDS.width,
+    height: DEFAULT_BOUNDS.height,
+  };
+  win.setBounds({
+    x: restore.x ?? current.x,
+    y: restore.y ?? current.y,
+    width: restore.width || DEFAULT_BOUNDS.width,
+    height: restore.height || DEFAULT_BOUNDS.height,
+  });
+  const bounds = win.getBounds();
+  saveWindowState({
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    displayMode: 'normal',
+    normalBounds: bounds,
+  });
 }
 
 export function getSessionCanvasDisplayMode(): SessionCanvasDisplayMode {
   const win = sessionCanvasWindow;
-  if (!win || win.isDestroyed()) return 'normal';
-  if (win.isMaximized() || win.isFullScreen()) return 'maximized';
-  const bounds = win.getBounds();
-  if (bounds.width <= COMPACT_BOUNDS.width + 8 && bounds.height <= COMPACT_BOUNDS.height + 8) {
-    return 'compact';
+  if (!win || win.isDestroyed()) {
+    return persistedWindowState.displayMode ?? 'normal';
   }
-  return 'normal';
+  return getPersistedDisplayMode(win);
 }
 
 export function setSessionCanvasMainWindowRef(ref: BrowserWindow): void {

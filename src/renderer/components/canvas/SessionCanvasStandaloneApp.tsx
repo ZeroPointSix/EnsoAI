@@ -69,24 +69,22 @@ export function SessionCanvasStandaloneApp() {
     window.electronAPI.sessionCanvasPanel.toggle();
   }, []);
 
-  const handleResetBounds = useCallback(() => {
-    void window.electronAPI.sessionCanvasPanel.resetBounds().then(() => {
-      setDisplayMode('normal');
-    });
+  const syncDisplayMode = useCallback(() => {
+    void window.electronAPI.sessionCanvasPanel.getDisplayMode().then(setDisplayMode);
   }, []);
 
+  const handleResetBounds = useCallback(() => {
+    void window.electronAPI.sessionCanvasPanel.resetBounds().then(syncDisplayMode);
+  }, [syncDisplayMode]);
+
   const handleToggleFullscreen = useCallback(() => {
-    void window.electronAPI.sessionCanvasPanel.toggleFullscreen().then((maximized) => {
-      setDisplayMode(maximized ? 'maximized' : 'normal');
-    });
-  }, []);
+    void window.electronAPI.sessionCanvasPanel.toggleFullscreen().then(syncDisplayMode);
+  }, [syncDisplayMode]);
 
   const handleToggleCompact = useCallback(() => {
     const nextCompact = displayMode !== 'compact';
-    void window.electronAPI.sessionCanvasPanel.setCompactMode(nextCompact).then(() => {
-      setDisplayMode(nextCompact ? 'compact' : 'normal');
-    });
-  }, [displayMode]);
+    void window.electronAPI.sessionCanvasPanel.setCompactMode(nextCompact).then(syncDisplayMode);
+  }, [displayMode, syncDisplayMode]);
 
   const handleMinimizeToTaskbar = useCallback(() => {
     void window.electronAPI.sessionCanvasPanel.minimizeWindow();
@@ -166,7 +164,7 @@ export function SessionCanvasStandaloneApp() {
       </div>
       <div className="min-h-0 flex-1">
         {openSettings ? (
-          <SessionCanvasPromptSettings className="h-full" />
+          <SessionCanvasPromptSettings className="h-full" onBack={() => setOpenSettings(false)} />
         ) : (
           <SessionCanvasPanel
             variant="floating"
