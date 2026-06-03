@@ -12,6 +12,8 @@ import type { TerminalSessionEntry } from '@/stores/terminal';
 import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { resolveSessionCanvasSubtitle } from './sessionCanvasSubtitle';
+import { resolveCanvasAgentDisplayState } from '@/lib/canvasAgentState/resolveCanvasAgentDisplayState';
+import { useCanvasCardDisplayStore } from '@/stores/canvasCardDisplayStore';
 import {
   type CanvasAgentDisplayState,
   CanvasAgentStatusDot,
@@ -28,8 +30,6 @@ export type CanvasCardItem =
       session: Session;
       previewText?: string;
       outputState: OutputState;
-      /** 四色状态灯（仅展示；未传则为 idle） */
-      agentDisplayState?: CanvasAgentDisplayState;
       /** Resolved `pty-N` id for quick input (standalone snapshot or registry) */
       ptyIdHint?: string;
     }
@@ -153,8 +153,19 @@ export function SessionCanvasCard({
   );
 
   const glowState = isFocused ? 'idle' : outputStateToGlow(isAgent ? item.outputState : 'idle');
+
+  const hookDisplayState = useCanvasCardDisplayStore((s) =>
+    isAgent && item.kind === 'agent' ? s.bySessionId[item.session.id] : undefined
+  );
+
   const agentDisplayState: CanvasAgentDisplayState =
-    isAgent && item.kind === 'agent' ? (item.agentDisplayState ?? 'idle') : 'idle';
+    isAgent && item.kind === 'agent'
+      ? resolveCanvasAgentDisplayState({
+          outputState: item.outputState,
+          previewText: item.previewText,
+          hookState: hookDisplayState,
+        })
+      : 'idle';
 
   const body = (
     <div
