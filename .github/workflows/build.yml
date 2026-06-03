@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# Manual workflow_dispatch = preview/test installers (separate from production EnsoAIPlus).
+env:
+  PREVIEW_PRODUCT_NAME: EnsoAIPlus Preview
+  PREVIEW_APP_ID: com.ensoaiplus.preview.app
+
 jobs:
   # 先构建 Vite 产物，共享给所有平台
   build-app:
@@ -123,7 +128,15 @@ jobs:
           rm $RUNNER_TEMP/certificate.p12
 
       - name: Build macOS (${{ matrix.arch }})
-        run: npx electron-builder --mac --${{ matrix.arch }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            npx electron-builder --mac --${{ matrix.arch }} \
+              -c.productName="${{ env.PREVIEW_PRODUCT_NAME }}" \
+              -c.appId=${{ env.PREVIEW_APP_ID }} \
+              -c.mac.extendInfo.CFBundleURLTypes.0.CFBundleURLName="${{ env.PREVIEW_PRODUCT_NAME }}"
+          else
+            npx electron-builder --mac --${{ matrix.arch }}
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -184,14 +197,23 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Windows
-        run: npx electron-builder --win --x64
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            npx electron-builder --win --x64 \
+              -c.productName="${{ env.PREVIEW_PRODUCT_NAME }}" \
+              -c.appId=${{ env.PREVIEW_APP_ID }} \
+              -c.nsis.include=build/installer.preview.nsh
+          else
+            npx electron-builder --win --x64
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows installers
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
+          name: ${{ github.event_name == 'workflow_dispatch' && 'windows-installer-preview' || 'windows-installer' }}
           path: |
             dist/*.exe
             dist/latest.yml
@@ -243,14 +265,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Linux
-        run: npx electron-builder --linux --x64
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            npx electron-builder --linux --x64 \
+              -c.productName="${{ env.PREVIEW_PRODUCT_NAME }}" \
+              -c.appId=${{ env.PREVIEW_APP_ID }} \
+              -c.linux.executableName=ensoaiplus-preview
+          else
+            npx electron-builder --linux --x64
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Linux packages
         uses: actions/upload-artifact@v4
         with:
-          name: linux-packages
+          name: ${{ github.event_name == 'workflow_dispatch' && 'linux-packages-preview' || 'linux-packages' }}
           path: |
             dist/*.AppImage
             dist/*.deb

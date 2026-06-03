@@ -316,7 +316,11 @@ async function init(): Promise<void> {
 
 app.whenReady().then(async () => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.ensoaiplus.app');
+  // Preview CI builds use productName "EnsoAIPlus Preview" + com.ensoaiplus.preview.app
+  const appUserModelId = app.getName().includes('Preview')
+    ? 'com.ensoaiplus.preview.app'
+    : 'com.ensoaiplus.app';
+  electronApp.setAppUserModelId(appUserModelId);
 
   // Allow EnhancedInput temp images to be previewed via local-file:// protocol.
   // NOTE: This is registered here (in the same module as the protocol handler)

@@ -5,7 +5,7 @@
   ; Register URL protocol
   WriteRegStr HKCU "Software\Classes\enso" "" "URL:EnsoAI Protocol"
   WriteRegStr HKCU "Software\Classes\enso" "URL Protocol" ""
-  WriteRegStr HKCU "Software\Classes\enso\shell\open\command" "" '"$INSTDIR\EnsoAI.exe" "%1"'
+  WriteRegStr HKCU "Software\Classes\enso\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
 !macroend
 
 !macro customUnInstall
