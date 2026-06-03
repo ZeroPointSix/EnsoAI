@@ -2,10 +2,11 @@ import type { CanvasAgentDisplayState } from '@/components/canvas/CanvasAgentSta
 import type { OutputState } from '@/stores/agentSessions';
 import { inferDisplayFromPreview } from './inferDisplayFromPreview';
 
+/** completed 必须高于 working，否则 Stop 后预览仍含 Cooked/spinner 时绿灯永不亮 */
 const PRIORITY: Record<CanvasAgentDisplayState, number> = {
   idle: 0,
-  completed: 1,
-  working: 2,
+  working: 1,
+  completed: 2,
   blocked: 3,
 };
 

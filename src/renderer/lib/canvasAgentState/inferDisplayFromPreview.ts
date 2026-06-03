@@ -15,13 +15,14 @@ function hasSpinnerLine(text: string): boolean {
   return false;
 }
 
-function hasBlockedPrompt(lower: string, raw: string): boolean {
+function hasBlockedPrompt(lower: string, _raw: string): boolean {
   return (
     lower.includes('do you want to proceed?') ||
     lower.includes('would you like to proceed?') ||
     lower.includes('waiting for permission') ||
     lower.includes('do you want to allow this connection?') ||
-    (lower.includes('yes') && lower.includes('no') && raw.includes('❯'))
+    lower.includes('tab to amend') ||
+    lower.includes('ctrl+e to explain')
   );
 }
 

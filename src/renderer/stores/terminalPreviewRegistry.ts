@@ -24,3 +24,7 @@ export function registerXtermPreviewReader(sessionId: string, getTerminal: () =>
 export function snapshotTerminalPreview(sessionId: string): string | null {
   return readers.get(sessionId)?.() ?? null;
 }
+
+export function hasTerminalPreviewReader(sessionId: string): boolean {
+  return readers.has(sessionId);
+}

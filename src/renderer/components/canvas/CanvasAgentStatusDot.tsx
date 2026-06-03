@@ -10,7 +10,8 @@ const dotClass: Record<CanvasAgentDisplayState, string> = {
   idle: 'bg-zinc-400 dark:bg-zinc-500',
   working: 'bg-yellow-500 shadow-[0_0_6px_rgba(234,179,8,0.7)]',
   blocked: 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]',
-  completed: 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]',
+  completed:
+    'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.85)] ring-2 ring-green-400/70',
 };
 
 const titleKeys: Record<CanvasAgentDisplayState, string> = {
@@ -37,6 +38,7 @@ export function CanvasAgentStatusDot({ state, className }: CanvasAgentStatusDotP
         'inline-block h-2.5 w-2.5 shrink-0 rounded-full',
         dotClass[state],
         state === 'working' && 'animate-pulse',
+        state === 'completed' && 'animate-pulse duration-[2400ms]',
         state === 'blocked' && 'ring-2 ring-red-500/30',
         className
       )}

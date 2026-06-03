@@ -3,7 +3,8 @@ import { create } from 'zustand';
 import type { CanvasAgentDisplayState } from '@/components/canvas/CanvasAgentStatusDot';
 import { useAgentSessionsStore } from './agentSessions';
 
-const COMPLETED_TTL_MS = 5000;
+/** 任务完成绿灯保持时长（用户配置：1 分钟） */
+const COMPLETED_TTL_MS = 60_000;
 
 function resolveEnsoSessionId(incomingSessionId: string, cwd?: string): string | null {
   const sessions = useAgentSessionsStore.getState().sessions;

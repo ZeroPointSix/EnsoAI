@@ -271,6 +271,10 @@ export function SessionCanvasUnifiedQuickInput({
     }
   }, [continuePrompt, sending, sessionId, ptyExists, t, ptyIdHint]);
 
+  const isEnterKey = useCallback((e: React.KeyboardEvent) => {
+    return e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter';
+  }, []);
+
   const insertNewlineAtCursor = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -328,7 +332,6 @@ export function SessionCanvasUnifiedQuickInput({
         e.stopPropagation();
         textareaRef.current?.focus();
       }}
-      onKeyDownCapture={(e) => e.stopPropagation()}
     >
       {claudeMode && mentionQuery !== null && mentionResults.length > 0 ? (
         <div className="absolute bottom-full left-0 right-0 z-20 mb-1 max-h-[200px] overflow-hidden rounded-md border border-border bg-popover shadow-md">
@@ -496,6 +499,7 @@ export function SessionCanvasUnifiedQuickInput({
           }}
           onKeyDown={(e) => {
             e.stopPropagation();
+
             if (claudeMode && mentionQuery !== null && mentionResults.length > 0) {
               if (e.key === 'ArrowDown') {
                 e.preventDefault();
@@ -509,24 +513,23 @@ export function SessionCanvasUnifiedQuickInput({
                 );
                 return;
               }
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                insertMention(mentionResults[mentionIndex]);
-                return;
-              }
               if (e.key === 'Escape') {
                 e.preventDefault();
                 setMentionQuery(null);
                 return;
               }
+              if (isEnterKey(e) && !e.shiftKey) {
+                e.preventDefault();
+                insertMention(mentionResults[mentionIndex]);
+                return;
+              }
             }
-            if (e.key === 'Enter' && e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              insertNewlineAtCursor();
-              return;
-            }
+
+            if (!isEnterKey(e)) return;
+
+            const composing = composingRef.current || e.nativeEvent.isComposing;
+
             if (
-              e.key === 'Enter' &&
               e.ctrlKey &&
               e.shiftKey &&
               enableContinueReply &&
@@ -536,10 +539,17 @@ export function SessionCanvasUnifiedQuickInput({
               void handleContinue();
               return;
             }
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+
+            if (e.shiftKey) {
+              if (composing) return;
               e.preventDefault();
-              void handleSend();
+              insertNewlineAtCursor();
+              return;
             }
+
+            if (composing) return;
+            e.preventDefault();
+            void handleSend();
           }}
         />
 
