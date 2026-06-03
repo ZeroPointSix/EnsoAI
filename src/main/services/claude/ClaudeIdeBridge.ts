@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { IDE_BRIDGE_NAME } from '@shared/appIdentity';
 import { IPC_CHANNELS } from '@shared/types';
 import { BrowserWindow, ipcMain } from 'electron';
 import { type RawData, type WebSocket, WebSocketServer } from 'ws';
@@ -101,7 +102,7 @@ function writeLockFile({
   port,
   authToken,
   workspaceFolders = [],
-  ideName = 'EnsoAIPlus',
+  ideName = IDE_BRIDGE_NAME,
 }: {
   port: number;
   authToken: string;
@@ -738,7 +739,7 @@ export function updateClaudeWorkspaceFolders(folders: string[]): void {
 }
 
 // Dynamic enable/disable based on settings
-let bridgeOptions: ClaudeIdeBridgeOptions = { ideName: 'EnsoAIPlus' };
+let bridgeOptions: ClaudeIdeBridgeOptions = { ideName: IDE_BRIDGE_NAME };
 
 export async function setClaudeBridgeEnabled(
   enabled: boolean,

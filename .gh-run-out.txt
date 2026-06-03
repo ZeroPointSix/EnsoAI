@@ -1,0 +1,5 @@
+in_progress		refactor(canvas): 会话画板改为侧栏全局覆盖层 (0.2.47)	CI	main	push	26757965813	20s	2026-06-01T13:29:27Z
+completed	success	Build	Build	main	workflow_dispatch	26756335639	14m50s	2026-06-01T12:58:00Z
+completed	success	CI	CI	main	workflow_dispatch	26756327494	2m9s	2026-06-01T12:57:50Z
+completed	success	Build	Build	main	workflow_dispatch	26756324725	21m4s	2026-06-01T12:57:47Z
+completed	success	build: 产品更名为 EnsoAIPlus (0.2.46)	CI	main	push	26756324139	2m12s	2026-06-01T12:57:46Z

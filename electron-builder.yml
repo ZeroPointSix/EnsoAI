@@ -1,5 +1,5 @@
-appId: com.ensoaiplus.app
-productName: EnsoAIPlus
+appId: com.ensoaiplus.dev.app
+productName: EnsoAIPlus Dev
 copyright: Copyright © 2026
 
 directories:
@@ -21,39 +21,28 @@ files:
   - "!node_modules/**/docs/**"
   - "!node_modules/**/example/**"
   - "!node_modules/**/examples/**"
-  # Exclude build tools that shouldn't be in production
   - "!node_modules/lightningcss-*/**"
   - "!node_modules/@tailwindcss/**"
   - "!node_modules/tailwindcss/**"
   - "!node_modules/jiti/**"
-  # Exclude native module build artifacts (source not needed at runtime)
   - "!node_modules/node-pty/src/**"
   - "!node_modules/node-pty/deps/**"
-  # Exclude lucide-react source maps and types
   - "!node_modules/lucide-react/dist/*.mjs.map"
   - "!node_modules/lucide-react/dist/*.d.ts"
   - "!node_modules/lucide-react/dist/*.d.mts"
-  # Exclude lucide-react unused formats (keep esm only)
   - "!node_modules/lucide-react/dist/cjs/**"
   - "!node_modules/lucide-react/dist/umd/**"
-  # Exclude monaco-editor dev and min versions (keep esm only, saves ~42MB)
   - "!node_modules/monaco-editor/dev/**"
   - "!node_modules/monaco-editor/min/**"
-  # Exclude shiki unused themes and languages
   - "!node_modules/shiki/dist/langs/**"
   - "!node_modules/shiki/dist/themes/**"
   - "!node_modules/@shikijs/langs/**"
   - "!node_modules/@shikijs/themes/**"
-  # Exclude AI SDK bundled CLI binaries (we use system-installed CLIs via custom spawn)
-  # @openai/codex vendor: ~326MB of pre-built binaries for all platforms
   - "!node_modules/@openai/codex/vendor/**"
-  # @anthropic-ai/claude-agent-sdk: ~68MB of CLI and WASM files
   - "!node_modules/@anthropic-ai/claude-agent-sdk/vendor/**"
   - "!node_modules/@anthropic-ai/claude-agent-sdk/cli.js"
   - "!node_modules/@anthropic-ai/claude-agent-sdk/*.wasm"
-  # Cloudflared: ~38MB pre-downloaded binary (we download at runtime to userData/bin)
   - "!node_modules/cloudflared/bin/**"
-  # Mermaid and its heavy dependencies (~60MB total) - loaded from CDN at runtime
   - "!node_modules/mermaid/**"
   - "!node_modules/@mermaid-js/**"
   - "!node_modules/cytoscape/**"
@@ -70,7 +59,6 @@ files:
   - "!node_modules/web-tree-sitter/**"
   - "!node_modules/khroma/**"
   - "!node_modules/dompurify/**"
-  # PDF.js (~5MB) - loaded from CDN at runtime
   - "!node_modules/pdfjs-dist/**"
   - "!node_modules/react-pdf/**"
 
@@ -91,12 +79,11 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: true
-  # Register enso:// URL scheme
   extendInfo:
     CFBundleURLTypes:
-      - CFBundleURLName: EnsoAIPlus
+      - CFBundleURLName: EnsoAIPlus Dev
         CFBundleURLSchemes:
-          - enso
+          - enso-dev
 
 dmg:
   sign: true
@@ -110,7 +97,6 @@ dmg:
 
 win:
   target:
-    # NSIS supports delta updates automatically
     - target: nsis
       arch: [x64]
     - target: portable
@@ -124,10 +110,8 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
-  # Enable differential download for NSIS
   differentialPackage: true
-  # Register enso:// URL scheme
-  include: build/installer.nsh
+  include: build/installer.dev.nsh
 
 linux:
   target:
@@ -135,15 +119,9 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
-  executableName: ensoaiplus
-  maintainer: EnsoAIPlus Team <crolin-zhang@users.noreply.github.com>
+  executableName: ensoaiplus-dev
+  maintainer: EnsoAIPlus Dev <crolin-zhang@users.noreply.github.com>
   category: Development
-  # Register enso:// URL scheme
   mimeTypes:
-    - x-scheme-handler/enso
+    - x-scheme-handler/enso-dev
 
-publish:
-  provider: github
-  owner: ZeroPointSix
-  repo: EnsoAI
-  releaseType: draft

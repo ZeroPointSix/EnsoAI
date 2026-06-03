@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { IDE_BRIDGE_NAME } from '@shared/appIdentity';
 import { app } from 'electron';
 
 interface StatusLineConfig {
@@ -222,7 +223,7 @@ async function main() {
   for (const lockfile of lockfiles) {
     try {
       const content = JSON.parse(fs.readFileSync(path.join(IDE_DIR, lockfile), 'utf-8'));
-      if (content.ideName === 'EnsoAIPlus') {
+      if (content.ideName === IDE_BRIDGE_NAME) {
         const port = parseInt(path.basename(lockfile, '.lock'), 10);
         if (Number.isNaN(port)) continue;
         const score = getWorkspaceMatchScore(payloadCwd, content.workspaceFolders);
@@ -518,7 +519,7 @@ async function main() {
     for (const lockfile of lockfiles) {
       try {
         const content = JSON.parse(fs.readFileSync(path.join(IDE_DIR, lockfile), 'utf-8'));
-        if (content.ideName === 'EnsoAIPlus') {
+        if (content.ideName === IDE_BRIDGE_NAME) {
           const port = path.basename(lockfile, '.lock');
           const postData = JSON.stringify(data);
           const req = http.request({

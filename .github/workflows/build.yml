@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - dev
   workflow_dispatch:
 
 permissions:
@@ -191,7 +193,7 @@ jobs:
       - name: Upload Windows installers
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
+          name: windows-installer-dev
           path: |
             dist/*.exe
             dist/latest.yml
@@ -250,7 +252,7 @@ jobs:
       - name: Upload Linux packages
         uses: actions/upload-artifact@v4
         with:
-          name: linux-packages
+          name: linux-packages-dev
           path: |
             dist/*.AppImage
             dist/*.deb

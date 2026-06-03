@@ -2,6 +2,14 @@ import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { pathToFileURL, URL } from 'node:url';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
+import {
+  APP_USER_MODEL_ID,
+  ensoProtocolPrefix,
+  IDE_BRIDGE_NAME,
+  isEnsoDeepLink,
+  URL_SCHEME,
+  USER_DATA_DIR_NAME,
+} from '@shared/appIdentity';
 import { type Locale, normalizeLocale } from '@shared/i18n';
 import { IPC_CHANNELS, type ProxySettings } from '@shared/types';
 import { customProtocolUriToPath, type SupportedFileUrlPlatform } from '@shared/utils/fileUrl';
@@ -74,27 +82,33 @@ function sanitizeProfileName(input: string): string {
   return trimmed.replace(/[^a-zA-Z0-9._-]+/g, '-');
 }
 
-// In dev mode, use an isolated userData dir to avoid clashing with the packaged app.
-// This prevents Chromium/Electron profile locking from causing an "empty" localStorage in later instances.
+// Isolated profile: unpackaged dev uses ENSOAI_PROFILE; packaged Dev uses dedicated userData.
 if (isDev) {
   const profile = sanitizeProfileName(process.env.ENSOAI_PROFILE || '') || 'dev';
   app.setPath('userData', join(app.getPath('appData'), `${app.getName()}-${profile}`));
+} else if (app.isPackaged) {
+  app.setPath('userData', join(app.getPath('appData'), USER_DATA_DIR_NAME));
 }
 
-// Register URL scheme handler (must be done before app is ready)
+// Windows single-instance mutex + toast grouping — MUST be before requestSingleInstanceLock().
+if (app.isPackaged) {
+  electronApp.setAppUserModelId(APP_USER_MODEL_ID);
+}
+
+// Register deep-link scheme (enso-dev on dev branch — not production enso://)
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('enso', process.execPath, [process.argv[1]]);
+    app.setAsDefaultProtocolClient(URL_SCHEME, process.execPath, [process.argv[1]]);
   }
 } else {
-  app.setAsDefaultProtocolClient('enso');
+  app.setAsDefaultProtocolClient(URL_SCHEME);
 }
 
 // Parse URL and extract path
 function parseEnsoUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === 'enso:') {
+    if (parsed.protocol === ensoProtocolPrefix()) {
       const path = parsed.searchParams.get('path');
       if (path) {
         return decodeURIComponent(path);
@@ -114,7 +128,7 @@ interface FocusSessionParams {
 function parseFocusUrl(url: string): FocusSessionParams | null {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === 'enso:') {
+    if (parsed.protocol === ensoProtocolPrefix()) {
       const host = parsed.host;
       const pathname = parsed.pathname;
       // Match //focus or host === 'focus'
@@ -182,7 +196,7 @@ function handleCommandLineArgs(argv: string[]): void {
       }
       return;
     }
-    if (arg.startsWith('enso://')) {
+    if (isEnsoDeepLink(arg)) {
       // Check for focus URL first
       const focusParams = parseFocusUrl(arg);
       if (focusParams) {
@@ -265,6 +279,11 @@ if (process.platform === 'linux') {
 }
 
 async function initAutoUpdater(window: BrowserWindow): Promise<void> {
+  // Dev channel must not pull production release artifacts.
+  if (app.isPackaged) {
+    return;
+  }
+
   // Linux deb/rpm: avoid loading electron-updater (it can trigger GTK crashes on some systems).
   // AppImage uses APPIMAGE env var, where auto-update is expected to work.
   if (process.platform === 'linux' && !process.env.APPIMAGE) {
@@ -299,7 +318,7 @@ async function init(): Promise<void> {
   const logLevel = (ensoSettings?.state?.logLevel as 'error' | 'warn' | 'info' | 'debug') ?? 'info';
   const logRetentionDays = (ensoSettings?.state?.logRetentionDays as number) ?? 7;
   initLogger(loggingEnabled, logLevel, logRetentionDays);
-  log.info('EnsoAIPlus started');
+  log.info(`${IDE_BRIDGE_NAME} started`);
 
   // Check Git installation
   const gitInstalled = await checkGitInstalled();
@@ -315,9 +334,6 @@ async function init(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.ensoaiplus.app');
-
   // Allow EnhancedInput temp images to be previewed via local-file:// protocol.
   // NOTE: This is registered here (in the same module as the protocol handler)
   // to avoid any potential issues with module-level state not being shared.

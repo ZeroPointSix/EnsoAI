@@ -3,7 +3,10 @@ import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { PRODUCT_NAME, URL_SCHEME } from '@shared/appIdentity';
 import { app } from 'electron';
+
+const DEV_EXE_NAME = `${PRODUCT_NAME}.exe`;
 
 const execAsync = promisify(exec);
 
@@ -164,7 +167,7 @@ class CliInstaller {
         return match[1];
       }
       // Fallback for dev mode
-      return '/Applications/EnsoAIPlus.app';
+      return `/Applications/${PRODUCT_NAME}.app`;
     }
     if (isWindows) {
       return app.getPath('exe');
@@ -203,7 +206,7 @@ if pgrep -x "EnsoAI" > /dev/null 2>&1 || pgrep -f "electron.*EnsoAI" > /dev/null
   " 2>/dev/null
 
   # Use open with URL scheme
-  open "enso://open?path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$TARGET_PATH', safe=''))")"
+  open "${URL_SCHEME}://open?path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$TARGET_PATH', safe=''))")"
 else
   # App not running, launch it with the path
   if [ -d "${appPath}" ]; then
@@ -232,11 +235,11 @@ if "%~1"=="" (
 )
 
 :: Check if EnsoAI is running
-tasklist /FI "IMAGENAME eq EnsoAIPlus.exe" 2>NUL | find /I /N "EnsoAIPlus.exe">NUL
+tasklist /FI "IMAGENAME eq ${DEV_EXE_NAME}" 2>NUL | find /I /N "${DEV_EXE_NAME}">NUL
 if %ERRORLEVEL%==0 (
   :: App is running, use URL scheme with PowerShell for proper URL encoding
   for /f "usebackq delims=" %%i in (\`powershell -NoProfile -Command "[uri]::EscapeDataString('%TARGET_PATH%')"\`) do set "ENCODED_PATH=%%i"
-  start "" "enso://open?path=!ENCODED_PATH!"
+  start "" "${URL_SCHEME}://open?path=!ENCODED_PATH!"
 ) else (
   :: App not running, launch with path (use caret to escape special chars, no extra quotes)
   "${exePath}" --open-path=!TARGET_PATH!
@@ -269,8 +272,8 @@ fi
 if pgrep -x "ensoai" > /dev/null 2>&1 || pgrep -f "EnsoAI" > /dev/null 2>&1; then
   # App is running, use xdg-open with URL scheme
   ENCODED_PATH=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$TARGET_PATH', safe=''))")
-  xdg-open "enso://open?path=$ENCODED_PATH" 2>/dev/null || \\
-    gio open "enso://open?path=$ENCODED_PATH" 2>/dev/null
+  xdg-open "${URL_SCHEME}://open?path=$ENCODED_PATH" 2>/dev/null || \\
+    gio open "${URL_SCHEME}://open?path=$ENCODED_PATH" 2>/dev/null
 else
   # App not running, launch it with the path
   if [ -x "${exePath}" ]; then
