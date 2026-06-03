@@ -21,7 +21,9 @@ import {
   computeArrangedPositions,
 } from '@/lib/arrangeSessionCanvasCards';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
+import { useCanvasPtyPreviewFanIn } from '@/hooks/useCanvasPtyPreviewFanIn';
 import { refreshAllCanvasPreviews } from '@/lib/refreshCanvasPreviews';
+import { scheduleCanvasPreviewRefresh } from '@/lib/scheduleCanvasPreviewRefresh';
 import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
@@ -116,12 +118,18 @@ export function SessionCanvasPanel({
   const setCardPosition = useSettingsStore((s) => s.setSessionCanvasCardPosition);
   const setCardSize = useSettingsStore((s) => s.setSessionCanvasCardSize);
 
+  const previewSyncEnabled = syncPreviews && !externalItems;
+  useCanvasPtyPreviewFanIn(previewSyncEnabled);
+
   useEffect(() => {
-    if (!syncPreviews || externalItems) return;
-    refreshAllCanvasPreviews();
+    if (!previewSyncEnabled) return;
+    const cancelBootstrap = scheduleCanvasPreviewRefresh();
     const interval = setInterval(() => refreshAllCanvasPreviews(), 1500);
-    return () => clearInterval(interval);
-  }, [syncPreviews, externalItems]);
+    return () => {
+      cancelBootstrap();
+      clearInterval(interval);
+    };
+  }, [previewSyncEnabled]);
 
   useEffect(() => {
     const el = canvasRef.current;

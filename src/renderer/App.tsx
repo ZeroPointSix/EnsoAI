@@ -88,7 +88,9 @@ import {
 } from './hooks/useWorktree';
 import { useI18n } from './i18n';
 import { buildSessionCanvasSnapshot } from './lib/buildSessionCanvasSnapshot';
+import { useCanvasPtyPreviewFanIn } from './hooks/useCanvasPtyPreviewFanIn';
 import { refreshAllCanvasPreviews } from './lib/refreshCanvasPreviews';
+import { scheduleCanvasPreviewRefresh } from './lib/scheduleCanvasPreviewRefresh';
 import { pushSessionCanvasSnapshotToPanel } from './lib/sessionCanvasSync';
 import { initCanvasCardDisplayListeners } from './stores/canvasCardDisplayStore';
 import { useAgentSessionsStore } from './stores/agentSessions';
@@ -185,6 +187,7 @@ export default function App() {
 
   // Session canvas standalone window (Ctrl+5)
   const [isSessionCanvasPanelOpen, setIsSessionCanvasPanelOpen] = useState(false);
+  useCanvasPtyPreviewFanIn(isSessionCanvasPanelOpen);
   const toggleSessionCanvas = useCallback(() => {
     void window.electronAPI.sessionCanvasPanel.toggle();
   }, []);
@@ -222,6 +225,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isSessionCanvasPanelOpen) return;
+    const cancelBootstrap = scheduleCanvasPreviewRefresh();
     let timer: ReturnType<typeof setTimeout> | null = null;
     const scheduleSync = () => {
       if (timer) clearTimeout(timer);
@@ -237,6 +241,7 @@ export default function App() {
     const unsubAgent = useAgentSessionsStore.subscribe(scheduleSync);
     const unsubTerminal = useTerminalStore.subscribe(scheduleSync);
     return () => {
+      cancelBootstrap();
       if (timer) clearTimeout(timer);
       window.clearInterval(poll);
       unsubAgent();
