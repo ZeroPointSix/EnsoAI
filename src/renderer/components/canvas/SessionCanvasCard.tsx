@@ -1,13 +1,14 @@
 import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
 import { Bot, GripVertical, Sparkles, Terminal } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { Session } from '@/components/chat/SessionBar';
 import { Badge } from '@/components/ui/badge';
 import { GlowCard } from '@/components/ui/glow-card';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import type { OutputState } from '@/stores/agentSessions';
+import { useAgentSessionsStore, type OutputState } from '@/stores/agentSessions';
+import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
 import type { TerminalSessionEntry } from '@/stores/terminal';
 import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
@@ -30,6 +31,8 @@ export type CanvasCardItem =
       session: Session;
       previewText?: string;
       outputState: OutputState;
+      /** 主窗快照同步的展示状态（独立看板） */
+      agentDisplayState?: CanvasAgentDisplayState;
       /** Resolved `pty-N` id for quick input (standalone snapshot or registry) */
       ptyIdHint?: string;
     }
@@ -93,7 +96,19 @@ export function SessionCanvasCard({
   const isAgent = item.kind === 'agent';
   const title = resolveSessionCanvasCardTitle(item, t('Terminal'));
   const subtitle = resolveSessionCanvasSubtitle(item, t('Shell'));
-  const previewText = item.previewText;
+  const liveAgentPreview = useAgentSessionsStore((s) => {
+    if (item.kind !== 'agent') return undefined;
+    const runtime = s.runtimeStates[item.session.id];
+    return getResolvedSessionPreview(
+      'agent',
+      item.session.id,
+      runtime?.previewText,
+      runtime?.previewEscapePending
+    );
+  });
+
+  const previewText =
+    item.kind === 'agent' ? (liveAgentPreview ?? item.previewText) : item.previewText;
   const Icon = isAgent ? Sparkles : Terminal;
 
   const handleCommitRename = useCallback(
@@ -158,14 +173,17 @@ export function SessionCanvasCard({
     isAgent && item.kind === 'agent' ? s.bySessionId[item.session.id] : undefined
   );
 
-  const agentDisplayState: CanvasAgentDisplayState =
-    isAgent && item.kind === 'agent'
-      ? resolveCanvasAgentDisplayState({
-          outputState: item.outputState,
-          previewText: item.previewText,
-          hookState: hookDisplayState,
-        })
-      : 'idle';
+  const snapshotDisplayState =
+    isAgent && item.kind === 'agent' ? item.agentDisplayState : undefined;
+
+  const agentDisplayState: CanvasAgentDisplayState = useMemo(() => {
+    if (!isAgent || item.kind !== 'agent') return 'idle';
+    return resolveCanvasAgentDisplayState({
+      outputState: item.outputState,
+      previewText,
+      hookState: hookDisplayState ?? snapshotDisplayState,
+    });
+  }, [isAgent, item, previewText, hookDisplayState, snapshotDisplayState]);
 
   const body = (
     <div
@@ -190,16 +208,21 @@ export function SessionCanvasCard({
         )}
         <div
           className={cn(
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+            'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
             isAgent ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
             isAgent && canvasAgentIconAccentClass(agentDisplayState)
           )}
         >
           <Icon className="h-4 w-4" />
+          {isAgent ? (
+            <CanvasAgentStatusDot
+              state={agentDisplayState}
+              className="absolute -right-0.5 -top-0.5 h-3 w-3 ring-2 ring-card"
+            />
+          ) : null}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            {isAgent ? <CanvasAgentStatusDot state={agentDisplayState} /> : null}
             {titleNode}
             {!isAgent ? (
               <Badge variant="outline" className="shrink-0 h-5 px-1.5 text-[10px]">

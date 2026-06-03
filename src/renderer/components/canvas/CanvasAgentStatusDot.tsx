@@ -1,8 +1,10 @@
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
+import type { SessionCanvasAgentDisplayState } from '@shared/types/sessionCanvas';
+
 /** 看板 Agent 卡片四色状态（仅展示，由外部传入） */
-export type CanvasAgentDisplayState = 'idle' | 'working' | 'blocked' | 'completed';
+export type CanvasAgentDisplayState = SessionCanvasAgentDisplayState;
 
 const dotClass: Record<CanvasAgentDisplayState, string> = {
   idle: 'bg-zinc-400 dark:bg-zinc-500',

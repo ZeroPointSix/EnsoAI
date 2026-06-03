@@ -2,6 +2,9 @@ export type SessionCanvasCardKind = 'agent' | 'terminal';
 
 export type SessionCanvasOutputState = 'idle' | 'outputting' | 'unread';
 
+/** 看板 Agent 卡片四色状态 */
+export type SessionCanvasAgentDisplayState = 'idle' | 'working' | 'blocked' | 'completed';
+
 export interface SessionCanvasCardSnapshot {
   key: string;
   kind: SessionCanvasCardKind;
@@ -18,6 +21,7 @@ export interface SessionCanvasCardSnapshot {
   customPath?: string;
   previewText?: string;
   outputState?: SessionCanvasOutputState;
+  agentDisplayState?: SessionCanvasAgentDisplayState;
 }
 
 export interface SessionCanvasSnapshot {

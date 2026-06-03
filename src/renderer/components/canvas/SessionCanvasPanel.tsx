@@ -23,7 +23,6 @@ import {
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { refreshAllCanvasPreviews } from '@/lib/refreshCanvasPreviews';
 import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
-import { initCanvasCardDisplayListeners } from '@/stores/canvasCardDisplayStore';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { useSettingsStore } from '@/stores/settings';
@@ -116,8 +115,6 @@ export function SessionCanvasPanel({
   const setTerminalActive = useTerminalStore((s) => s.setActiveSession);
   const setCardPosition = useSettingsStore((s) => s.setSessionCanvasCardPosition);
   const setCardSize = useSettingsStore((s) => s.setSessionCanvasCardSize);
-
-  useEffect(() => initCanvasCardDisplayListeners(), []);
 
   useEffect(() => {
     if (!syncPreviews || externalItems) return;

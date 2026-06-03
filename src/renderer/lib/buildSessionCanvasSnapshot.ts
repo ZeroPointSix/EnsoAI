@@ -7,6 +7,8 @@ import type { OutputState } from '@/stores/agentSessions';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
 import type { TerminalSessionEntry } from '@/stores/terminal';
+import { resolveCanvasAgentDisplayState } from '@/lib/canvasAgentState/resolveCanvasAgentDisplayState';
+import { useCanvasCardDisplayStore } from '@/stores/canvasCardDisplayStore';
 import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { useTerminalStore } from '@/stores/terminal';
 
@@ -17,6 +19,18 @@ function mapOutputState(state: OutputState | undefined): SessionCanvasCardSnapsh
 
 function agentCard(session: Session, outputState: OutputState): SessionCanvasCardSnapshot {
   const runtime = useAgentSessionsStore.getState().runtimeStates[session.id];
+  const previewText = getResolvedSessionPreview(
+    'agent',
+    session.id,
+    runtime?.previewText,
+    runtime?.previewEscapePending
+  );
+  const hookState = useCanvasCardDisplayStore.getState().bySessionId[session.id];
+  const agentDisplayState = resolveCanvasAgentDisplayState({
+    outputState,
+    previewText,
+    hookState,
+  });
   return {
     key: `agent-${session.id}`,
     kind: 'agent',
@@ -31,13 +45,9 @@ function agentCard(session: Session, outputState: OutputState): SessionCanvasCar
     agentId: session.agentId,
     agentCommand: session.agentCommand,
     customPath: session.customPath,
-    previewText: getResolvedSessionPreview(
-      'agent',
-      session.id,
-      runtime?.previewText,
-      runtime?.previewEscapePending
-    ),
+    previewText,
     outputState: mapOutputState(outputState),
+    agentDisplayState,
   };
 }
 

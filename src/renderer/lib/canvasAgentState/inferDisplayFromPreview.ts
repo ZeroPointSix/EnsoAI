@@ -38,6 +38,8 @@ export function inferDisplayFromPreview(previewText: string | undefined): Canvas
     lower.includes('esc to interrupt') ||
     lower.includes('ctrl+c to interrupt') ||
     /\bcooked for \d+s\b/i.test(tail) ||
+    /[*✽✻]?\s*cooked for \d+s/i.test(tail) ||
+    /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(tail) ||
     hasSpinnerLine(tail)
   ) {
     return 'working';

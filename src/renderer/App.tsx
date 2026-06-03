@@ -90,6 +90,7 @@ import { useI18n } from './i18n';
 import { buildSessionCanvasSnapshot } from './lib/buildSessionCanvasSnapshot';
 import { refreshAllCanvasPreviews } from './lib/refreshCanvasPreviews';
 import { pushSessionCanvasSnapshotToPanel } from './lib/sessionCanvasSync';
+import { initCanvasCardDisplayListeners } from './stores/canvasCardDisplayStore';
 import { useAgentSessionsStore } from './stores/agentSessions';
 import { initAgentTasksListener, useAgentTasksStore } from './stores/agentTasks';
 import { initCloneProgressListener } from './stores/cloneTasks';
@@ -202,6 +203,8 @@ export default function App() {
       window.electronAPI.agentTaskPanel.sendSnapshotResponse(tasks);
     });
   }, []);
+
+  useEffect(() => initCanvasCardDisplayListeners(), []);
 
   useEffect(() => {
     return window.electronAPI.sessionCanvasPanel.onVisibilityChanged((visible: boolean) => {

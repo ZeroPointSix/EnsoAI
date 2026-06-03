@@ -271,6 +271,19 @@ export function SessionCanvasUnifiedQuickInput({
     }
   }, [continuePrompt, sending, sessionId, ptyExists, t, ptyIdHint]);
 
+  const insertNewlineAtCursor = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const next = `${value.slice(0, start)}\n${value.slice(end)}`;
+    setValue(next);
+    requestAnimationFrame(() => {
+      ta.selectionStart = start + 1;
+      ta.selectionEnd = start + 1;
+    });
+  }, [value]);
+
   const handleNormalChip = useCallback((content: string) => {
     if (!content.trim()) {
       setValue('');
@@ -311,7 +324,11 @@ export function SessionCanvasUnifiedQuickInput({
         className
       )}
       onClick={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        textareaRef.current?.focus();
+      }}
+      onKeyDownCapture={(e) => e.stopPropagation()}
     >
       {claudeMode && mentionQuery !== null && mentionResults.length > 0 ? (
         <div className="absolute bottom-full left-0 right-0 z-20 mb-1 max-h-[200px] overflow-hidden rounded-md border border-border bg-popover shadow-md">
@@ -502,6 +519,11 @@ export function SessionCanvasUnifiedQuickInput({
                 setMentionQuery(null);
                 return;
               }
+            }
+            if (e.key === 'Enter' && e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              insertNewlineAtCursor();
+              return;
             }
             if (
               e.key === 'Enter' &&

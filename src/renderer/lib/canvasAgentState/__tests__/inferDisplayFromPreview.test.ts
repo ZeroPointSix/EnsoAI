@@ -4,6 +4,7 @@ import { inferDisplayFromPreview } from '../inferDisplayFromPreview';
 describe('inferDisplayFromPreview', () => {
   it('detects Claude working status line', () => {
     expect(inferDisplayFromPreview('✽ Cooked for 12s\n❯ ')).toBe('working');
+    expect(inferDisplayFromPreview('* Cooked for 12s\n❯ ')).toBe('working');
   });
 
   it('detects blocked permission prompt', () => {

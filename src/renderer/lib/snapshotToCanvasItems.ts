@@ -31,6 +31,7 @@ export function snapshotCardsToCanvasItems(cards: SessionCanvasCardSnapshot[]): 
         session,
         previewText: card.previewText,
         outputState: toOutputState(card.outputState),
+        agentDisplayState: card.agentDisplayState,
         ptyIdHint: card.ptyId,
       };
     }
