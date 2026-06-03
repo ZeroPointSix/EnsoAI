@@ -479,6 +479,7 @@ const electronAPI = {
     openFile: (options?: {
       filters?: Array<{ name: string; extensions: string[] }>;
     }): Promise<string | null> => ipcRenderer.invoke(IPC_CHANNELS.DIALOG_OPEN_FILE, options),
+    openFiles: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.DIALOG_OPEN_FILES),
   },
 
   // Context Menu

@@ -45,6 +45,21 @@ export function registerDialogHandlers(): void {
     }
   );
 
+  ipcMain.handle(IPC_CHANNELS.DIALOG_OPEN_FILES, async () => {
+    const window = BrowserWindow.getFocusedWindow();
+    const t = (key: string) => translate(getCurrentLocale(), key);
+    const result = await dialog.showOpenDialog(window!, {
+      properties: ['openFile', 'multiSelections'],
+      title: t('Select file'),
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return [];
+    }
+
+    return result.filePaths;
+  });
+
   // Context Menu
   ipcMain.handle(IPC_CHANNELS.CONTEXT_MENU_SHOW, async (event, items: ContextMenuItem[]) => {
     return new Promise<string | null>((resolve) => {

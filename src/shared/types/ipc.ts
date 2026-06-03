@@ -144,6 +144,7 @@ export const IPC_CHANNELS = {
   // Dialog
   DIALOG_OPEN_DIRECTORY: 'dialog:openDirectory',
   DIALOG_OPEN_FILE: 'dialog:openFile',
+  DIALOG_OPEN_FILES: 'dialog:openFiles',
 
   // Context Menu
   CONTEXT_MENU_SHOW: 'contextMenu:show',

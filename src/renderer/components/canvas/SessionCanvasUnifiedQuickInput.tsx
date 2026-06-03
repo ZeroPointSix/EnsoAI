@@ -1,6 +1,6 @@
 import type { FileSearchResult } from '@shared/types/search';
 import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
-import { Paperclip, Play, Send, Sparkles, X } from 'lucide-react';
+import { Paperclip, Send, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toastManager } from '@/components/ui/toast';
@@ -8,10 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { useSessionCanvasPtyExists } from '@/hooks/useSessionCanvasPtyExists';
 import { useI18n } from '@/i18n';
 import { toLocalFileUrl } from '@/lib/localFileUrl';
-import {
-  buildSessionCanvasEnhanceMessage,
-  getConditionalPromptDescription,
-} from '@/lib/sessionCanvasComposeMessage';
+import { getConditionalPromptDescription } from '@/lib/sessionCanvasComposeMessage';
 import {
   CANVAS_MAX_IMAGES,
   extractMentionQuery,
@@ -55,17 +52,14 @@ export function SessionCanvasUnifiedQuickInput({
   const [mentionResults, setMentionResults] = useState<FileSearchResult[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionListRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
   const { ptyExists, checkingPty } = useSessionCanvasPtyExists(sessionId, true, ptyIdHint);
-  const { composeMessage, clearSupplement, continuePrompt, supplement, setSupplement } =
-    useSessionCanvasSend();
+  const { composeMessage } = useSessionCanvasSend();
 
   const promptsEnabled = useSessionCanvasPromptStore((s) => s.promptsEnabled);
   const prompts = useSessionCanvasPromptStore((s) => s.prompts);
   const setConditionalState = useSessionCanvasPromptStore((s) => s.setConditionalState);
-  const enableContinueReply = useSessionCanvasPromptStore((s) => s.reply.enableContinueReply);
 
   const normalPrompts = selectNormalPrompts(prompts);
   const conditionalPrompts = selectConditionalPrompts(prompts);
@@ -173,7 +167,7 @@ export function SessionCanvasUnifiedQuickInput({
   );
 
   const handleAttachPaths = useCallback(
-    async (paths: string[]) => {
+    (paths: string[]) => {
       for (const path of paths) {
         if (!path) continue;
         if (isImageFilePath(path)) {
@@ -196,38 +190,20 @@ export function SessionCanvasUnifiedQuickInput({
     [imagePaths, insertFilePath, t]
   );
 
-  const handlePickFiles = useCallback(async () => {
-    const path = await window.electronAPI.dialog.openFile();
-    if (path) {
-      await handleAttachPaths([path]);
+  const handleSelectFiles = useCallback(async () => {
+    try {
+      const paths = await window.electronAPI.dialog.openFiles();
+      if (paths.length > 0) {
+        handleAttachPaths(paths);
+      }
+    } catch {
+      toastManager.add({
+        type: 'error',
+        title: t('Select file'),
+        description: t('Failed to open file picker'),
+      });
     }
-  }, [handleAttachPaths]);
-
-  const handleFileInputChange = useCallback(
-    (files: FileList | null) => {
-      if (!files?.length) return;
-      const list = Array.from(files);
-      const imageFiles: File[] = [];
-      const otherPaths: string[] = [];
-
-      for (const file of list) {
-        const filePath = (file as File & { path?: string }).path;
-        if (file.type.startsWith('image/')) {
-          imageFiles.push(file);
-        } else if (filePath) {
-          otherPaths.push(filePath);
-        }
-      }
-
-      if (imageFiles.length > 0) {
-        void addImageFiles(imageFiles);
-      }
-      if (otherPaths.length > 0) {
-        void handleAttachPaths(otherPaths);
-      }
-    },
-    [addImageFiles, handleAttachPaths]
-  );
+  }, [handleAttachPaths, t]);
 
   const deliverMessage = useCallback(
     async (raw: string, paths: string[]) => {
@@ -256,87 +232,46 @@ export function SessionCanvasUnifiedQuickInput({
         setValue('');
         setImagePaths([]);
         setMentionQuery(null);
-        clearSupplement();
         return true;
       } finally {
         sendingRef.current = false;
         setSending(false);
       }
     },
-    [composeMessage, sending, sessionId, ptyExists, t, ptyIdHint, clearSupplement]
+    [composeMessage, sending, sessionId, ptyExists, t, ptyIdHint]
   );
 
   const handleSend = useCallback(async () => {
     await deliverMessage(value, imagePaths);
   }, [deliverMessage, value, imagePaths]);
 
-  const handleSendComposed = useCallback(
-    async (message: string) => {
-      await deliverMessage(message, imagePaths);
-    },
-    [deliverMessage, imagePaths]
-  );
-
-  const handleContinue = useCallback(async () => {
-    if (sendingRef.current || sending || !ptyExists) return;
-    sendingRef.current = true;
-    setSending(true);
-    try {
-      const sent = await sendSessionCanvasQuickInput(sessionId, continuePrompt, [], ptyIdHint);
-      if (!sent) {
-        toastManager.add({
-          type: 'warning',
-          title: t('Session not running'),
-          description: t('Open the session with Ctrl+click to start its terminal first.'),
-        });
-      }
-    } finally {
-      sendingRef.current = false;
-      setSending(false);
+  const handleNormalChip = useCallback((content: string) => {
+    if (!content.trim()) {
+      setValue('');
+      return;
     }
-  }, [continuePrompt, sending, sessionId, ptyExists, t, ptyIdHint]);
-
-  const handleNormalChip = useCallback(
-    (content: string) => {
-      if (!content.trim()) {
-        setSupplement('');
-        return;
-      }
-      const trimmed = supplement.trim();
-      if (!trimmed) {
-        setSupplement(content);
-        return;
-      }
-      if (trimmed.endsWith(content)) return;
-      setSupplement(`${trimmed}\n\n${content}`);
-    },
-    [supplement, setSupplement]
-  );
-
-  const handleEnhance = useCallback(() => {
-    const enhanced = buildSessionCanvasEnhanceMessage(value);
-    if (!enhanced.trim()) return;
-    void handleSendComposed(enhanced);
-  }, [value, handleSendComposed]);
-
-  const handlePlainSend = useCallback(() => {
-    void handleSend();
-  }, [handleSend]);
+    setValue((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return content;
+      if (trimmed.endsWith(content)) return prev;
+      return `${trimmed}\n\n${content}`;
+    });
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, []);
 
   const disabled = sending || checkingPty || !ptyExists;
   const hasConditionalText = conditionalPrompts.some((p) => {
     const template = p.currentState ? p.templateTrue : p.templateFalse;
     return Boolean(template?.trim());
   });
-  const canSend =
-    Boolean(value.trim() || imagePaths.length > 0 || supplement.trim() || hasConditionalText);
+  const canSend = Boolean(value.trim() || imagePaths.length > 0 || hasConditionalText);
 
   const placeholder =
     claudeMode && cwd
-      ? t('Send a Claude prompt… (@ file, paste or attach images)')
+      ? t('Type your prompt here (@ file, paste images)…')
       : kind === 'agent'
-        ? t('Send a prompt or command to this agent…')
-        : t('Send a command to this shell…');
+        ? t('Type your prompt or command here…')
+        : t('Type your command here…');
 
   return (
     <div
@@ -444,26 +379,6 @@ export function SessionCanvasUnifiedQuickInput({
           </div>
         ) : null}
 
-        <div className="shrink-0 space-y-1">
-          <p className="text-[10px] font-medium text-foreground/90">
-            {t('Supplementary note (optional)')}
-          </p>
-          <textarea
-            value={supplement}
-            rows={2}
-            disabled={disabled}
-            placeholder={t('Add supplementary notes here…')}
-            className={cn(
-              'max-h-24 min-h-[40px] w-full resize-y rounded-md border border-border/80',
-              'bg-background/90 px-2.5 py-1.5 font-mono text-[11px] leading-snug',
-              'placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              disabled && 'cursor-not-allowed opacity-60'
-            )}
-            onChange={(e) => setSupplement(e.target.value)}
-            onKeyDown={(e) => e.stopPropagation()}
-          />
-        </div>
-
         {imagePaths.length > 0 ? (
           <div className="flex shrink-0 flex-wrap gap-1">
             {imagePaths.map((path, index) => (
@@ -488,11 +403,11 @@ export function SessionCanvasUnifiedQuickInput({
         <textarea
           ref={textareaRef}
           value={value}
-          rows={3}
+          rows={4}
           disabled={disabled}
           placeholder={placeholder}
           className={cn(
-            'min-h-[72px] max-h-40 w-full shrink-0 resize-y rounded-md border border-border/80',
+            'min-h-[88px] max-h-48 w-full shrink-0 resize-y rounded-md border border-border/80',
             'bg-background/90 px-2.5 py-2 font-mono text-[11px] leading-snug',
             'placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             disabled && 'cursor-not-allowed opacity-60'
@@ -554,72 +469,25 @@ export function SessionCanvasUnifiedQuickInput({
           }}
         />
 
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="*/*"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              handleFileInputChange(e.target.files);
-              e.target.value = '';
-            }}
-          />
+        <div className="flex shrink-0 items-center justify-end gap-2">
           <Button
             type="button"
             size="sm"
             variant="outline"
             className="h-8 gap-1 text-[11px]"
             disabled={disabled}
-            title={t('Attach file')}
-            onClick={() => fileInputRef.current?.click()}
+            title={t('Select file')}
+            onClick={() => void handleSelectFiles()}
           >
             <Paperclip className="h-3.5 w-3.5" />
-            {t('Attach file')}
+            {t('Select file')}
           </Button>
-          {claudeMode ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="h-8 text-[11px]"
-              disabled={disabled}
-              onClick={() => void handlePickFiles()}
-            >
-              {t('Browse…')}
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="h-8 gap-1 text-[11px]"
-            disabled={disabled || !value.trim()}
-            onClick={() => void handleEnhance()}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            {t('Enhance')}
-          </Button>
-          {enableContinueReply ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1 text-[11px]"
-              disabled={disabled}
-              onClick={() => void handleContinue()}
-            >
-              <Play className="h-3.5 w-3.5" />
-              {t('Continue')}
-            </Button>
-          ) : null}
           <Button
             type="button"
             size="sm"
             className="h-8 gap-1 text-[11px]"
             disabled={disabled || !canSend}
-            onClick={() => void handlePlainSend()}
+            onClick={() => void handleSend()}
           >
             <Send className="h-3.5 w-3.5" />
             {t('Send')}
