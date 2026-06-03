@@ -1,17 +1,25 @@
 import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
 import { Bot, GripVertical, Sparkles, Terminal } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { Session } from '@/components/chat/SessionBar';
 import { Badge } from '@/components/ui/badge';
 import { GlowCard } from '@/components/ui/glow-card';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import type { OutputState } from '@/stores/agentSessions';
+import { useAgentSessionsStore, type OutputState } from '@/stores/agentSessions';
+import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
 import type { TerminalSessionEntry } from '@/stores/terminal';
 import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { resolveSessionCanvasSubtitle } from './sessionCanvasSubtitle';
+import { resolveCanvasAgentDisplayState } from '@/lib/canvasAgentState/resolveCanvasAgentDisplayState';
+import { useCanvasCardDisplayStore } from '@/stores/canvasCardDisplayStore';
+import {
+  type CanvasAgentDisplayState,
+  CanvasAgentStatusDot,
+  canvasAgentIconAccentClass,
+} from './CanvasAgentStatusDot';
 import { SessionCanvasPreview } from './SessionCanvasPreview';
 import { SessionCanvasQuickInput } from './SessionCanvasQuickInput';
 import { getSessionCanvasCardKey, useSessionCanvasCardResize } from './useSessionCanvasCardResize';
@@ -23,6 +31,8 @@ export type CanvasCardItem =
       session: Session;
       previewText?: string;
       outputState: OutputState;
+      /** 主窗快照同步的展示状态（独立看板） */
+      agentDisplayState?: CanvasAgentDisplayState;
       /** Resolved `pty-N` id for quick input (standalone snapshot or registry) */
       ptyIdHint?: string;
     }
@@ -59,30 +69,6 @@ function outputStateToGlow(state: OutputState): 'idle' | 'running' | 'waiting_in
   }
 }
 
-function StatusBadge({ outputState }: { outputState: OutputState }) {
-  const { t } = useI18n();
-  if (outputState === 'idle') return null;
-
-  const variant =
-    outputState === 'outputting'
-      ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-      : 'bg-blue-500/15 text-blue-600 dark:text-blue-400';
-
-  const label = outputState === 'outputting' ? t('Agent running') : t('New output');
-
-  return (
-    <span
-      className={cn(
-        'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none',
-        variant,
-        outputState === 'outputting' && 'animate-pulse'
-      )}
-    >
-      {label}
-    </span>
-  );
-}
-
 export function SessionCanvasCard({
   item,
   index,
@@ -110,7 +96,19 @@ export function SessionCanvasCard({
   const isAgent = item.kind === 'agent';
   const title = resolveSessionCanvasCardTitle(item, t('Terminal'));
   const subtitle = resolveSessionCanvasSubtitle(item, t('Shell'));
-  const previewText = item.previewText;
+  const liveAgentPreview = useAgentSessionsStore((s) => {
+    if (item.kind !== 'agent') return undefined;
+    const runtime = s.runtimeStates[item.session.id];
+    return getResolvedSessionPreview(
+      'agent',
+      item.session.id,
+      runtime?.previewText,
+      runtime?.previewEscapePending
+    );
+  });
+
+  const previewText =
+    item.kind === 'agent' ? (liveAgentPreview ?? item.previewText) : item.previewText;
   const Icon = isAgent ? Sparkles : Terminal;
 
   const handleCommitRename = useCallback(
@@ -171,6 +169,22 @@ export function SessionCanvasCard({
 
   const glowState = isFocused ? 'idle' : outputStateToGlow(isAgent ? item.outputState : 'idle');
 
+  const hookDisplayState = useCanvasCardDisplayStore((s) =>
+    isAgent && item.kind === 'agent' ? s.bySessionId[item.session.id] : undefined
+  );
+
+  const snapshotDisplayState =
+    isAgent && item.kind === 'agent' ? item.agentDisplayState : undefined;
+
+  const agentDisplayState: CanvasAgentDisplayState = useMemo(() => {
+    if (!isAgent || item.kind !== 'agent') return 'idle';
+    return resolveCanvasAgentDisplayState({
+      outputState: item.outputState,
+      previewText,
+      hookState: hookDisplayState ?? snapshotDisplayState,
+    });
+  }, [isAgent, item, previewText, hookDisplayState, snapshotDisplayState]);
+
   const body = (
     <div
       className={cn('flex h-full min-h-0 flex-col gap-2 p-3 text-left', isFocused && 'overflow-hidden')}
@@ -194,22 +208,27 @@ export function SessionCanvasCard({
         )}
         <div
           className={cn(
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-            isAgent ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+            'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+            isAgent ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+            isAgent && canvasAgentIconAccentClass(agentDisplayState)
           )}
         >
           <Icon className="h-4 w-4" />
+          {isAgent ? (
+            <CanvasAgentStatusDot
+              state={agentDisplayState}
+              className="absolute -right-0.5 -top-0.5 h-3 w-3 ring-2 ring-card"
+            />
+          ) : null}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             {titleNode}
-            {isAgent ? (
-              <StatusBadge outputState={item.outputState} />
-            ) : (
+            {!isAgent ? (
               <Badge variant="outline" className="shrink-0 h-5 px-1.5 text-[10px]">
                 {t('Shell')}
               </Badge>
-            )}
+            ) : null}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground" title={subtitle}>
             {subtitle}

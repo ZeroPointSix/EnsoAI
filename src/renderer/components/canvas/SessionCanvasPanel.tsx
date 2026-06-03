@@ -119,6 +119,8 @@ export function SessionCanvasPanel({
   useEffect(() => {
     if (!syncPreviews || externalItems) return;
     refreshAllCanvasPreviews();
+    const interval = setInterval(() => refreshAllCanvasPreviews(), 1500);
+    return () => clearInterval(interval);
   }, [syncPreviews, externalItems]);
 
   useEffect(() => {

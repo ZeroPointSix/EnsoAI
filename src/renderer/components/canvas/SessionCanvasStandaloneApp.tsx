@@ -35,6 +35,15 @@ export function SessionCanvasStandaloneApp() {
   useEffect(() => {
     window.electronAPI.sessionCanvasPanel.getSnapshot();
     void window.electronAPI.sessionCanvasPanel.getDisplayMode().then(setDisplayMode);
+    const poll = window.setInterval(() => {
+      window.electronAPI.sessionCanvasPanel.getSnapshot();
+    }, 1500);
+    return () => {
+      window.clearInterval(poll);
+    };
+  }, []);
+
+  useEffect(() => {
     return window.electronAPI.sessionCanvasPanel.onSnapshotResponse((data) => {
       applySnapshot(data);
     });
