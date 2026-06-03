@@ -77,8 +77,13 @@ export function useWorktreeSelection(
     [queryClient, currentWorktreePathRef]
   );
 
+  type SelectWorktreeOptions = {
+    /** Defer git fetch/invalidation so UI can switch first (e.g. session canvas Ctrl+click). */
+    deferGitRefresh?: boolean;
+  };
+
   const handleSelectWorktree = useCallback(
-    async (worktree: GitWorktree, nextRepoPath?: string) => {
+    async (worktree: GitWorktree, nextRepoPath?: string, options?: SelectWorktreeOptions) => {
       if (editorSettings.autoSave === 'off') {
         const editorState = useEditorStore.getState();
         const dirtyTabs = editorState.tabs.filter((tab) => tab.isDirty);
@@ -144,8 +149,11 @@ export function useWorktreeSelection(
         !savedTabValue || (savedTabValue as string) === 'canvas' ? 'chat' : savedTabValue;
       setActiveTab(savedTab);
 
-      // Refresh git data for the new worktree
-      refreshGitData(worktree.path);
+      if (options?.deferGitRefresh) {
+        queueMicrotask(() => refreshGitData(worktree.path));
+      } else {
+        refreshGitData(worktree.path);
+      }
     },
     [
       activeWorktree,

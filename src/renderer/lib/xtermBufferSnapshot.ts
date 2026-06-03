@@ -1,8 +1,9 @@
 import type { Terminal } from '@xterm/xterm';
+import {
+  resolveCanvasPreviewMaxChars,
+  resolveCanvasPreviewMaxLines,
+} from '@/lib/previewLimits';
 import { stripTerminalOutput } from '@/lib/terminalPreview';
-
-const SNAPSHOT_MAX_LINES = 120;
-const SNAPSHOT_MAX_CHARS = 32_000;
 
 function readBufferLines(
   buffer: { length: number; getLine: (index: number) => { translateToString: (trim?: boolean) => string } | undefined },
@@ -23,14 +24,14 @@ function readBufferLines(
   return lines;
 }
 
-function trimSnapshotText(text: string): string {
+function trimSnapshotText(text: string, maxLines: number, maxChars: number): string {
   let next = text;
-  if (next.length > SNAPSHOT_MAX_CHARS) {
-    next = next.slice(-SNAPSHOT_MAX_CHARS);
+  if (next.length > maxChars) {
+    next = next.slice(-maxChars);
   }
   const lineParts = next.split('\n');
-  if (lineParts.length > SNAPSHOT_MAX_LINES) {
-    next = lineParts.slice(-SNAPSHOT_MAX_LINES).join('\n');
+  if (lineParts.length > maxLines) {
+    next = lineParts.slice(-maxLines).join('\n');
   }
   return next.trimEnd();
 }
@@ -39,7 +40,11 @@ function trimSnapshotText(text: string): string {
  * Read terminal screen for canvas preview (OpenCove uses SerializeAddon on a presentation session).
  * When the active buffer is alternate (TUI), also include normal scrollback so final output is not lost.
  */
-export function readXtermBufferSnapshot(terminal: Terminal, maxLines = SNAPSHOT_MAX_LINES): string {
+export function readXtermBufferSnapshot(
+  terminal: Terminal,
+  maxLines = resolveCanvasPreviewMaxLines()
+): string {
+  const maxChars = resolveCanvasPreviewMaxChars();
   const active = terminal.buffer.active;
   const normal = terminal.buffer.normal;
   const activeType = active.type;
@@ -54,6 +59,5 @@ export function readXtermBufferSnapshot(terminal: Terminal, maxLines = SNAPSHOT_
   parts.push(...readBufferLines(active, maxLines));
 
   const joined = stripTerminalOutput(parts.join('\n'));
-  const trimmed = trimSnapshotText(joined);
-  return trimmed;
+  return trimSnapshotText(joined, maxLines, maxChars);
 }

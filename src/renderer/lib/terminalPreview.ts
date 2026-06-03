@@ -14,8 +14,15 @@ const C0_EXCEPT_NEWLINE_REGEX = /[\u0000-\u0008\u000b\u000c\u000e-\u001a\u007f]/
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ESC starter at end of chunk
 const ESC_TAIL_REGEX = /(?:\u001b|\u009b)[\s\S]*$/;
 
-const PREVIEW_MAX_CHARS = 32_000;
-const PREVIEW_MAX_LINES = 80;
+import { resolveCanvasPreviewMaxChars, resolveCanvasPreviewMaxLines } from '@/lib/previewLimits';
+
+function getPreviewMaxLines(): number {
+  return resolveCanvasPreviewMaxLines();
+}
+
+function getPreviewMaxChars(): number {
+  return resolveCanvasPreviewMaxChars();
+}
 
 /** Strip ANSI/OSC and normalize PTY output for plain-text preview. */
 export function stripTerminalOutput(text: string): string {
@@ -75,11 +82,13 @@ function safeSliceEnd(text: string, maxChars: number): string {
 function appendStrippedText(current: string | undefined, chunk: string): string {
   if (!chunk) return current ?? '';
   let next = stripTerminalOutput((current ?? '') + chunk);
-  if (next.length > PREVIEW_MAX_CHARS) {
-    next = safeSliceEnd(next, PREVIEW_MAX_CHARS);
+  const maxChars = getPreviewMaxChars();
+  const maxLines = getPreviewMaxLines();
+  if (next.length > maxChars) {
+    next = safeSliceEnd(next, maxChars);
   }
   const lines = next.split('\n');
-  return lines.slice(-PREVIEW_MAX_LINES).join('\n');
+  return lines.slice(-maxLines).join('\n');
 }
 
 export interface TerminalPreviewChunkResult {

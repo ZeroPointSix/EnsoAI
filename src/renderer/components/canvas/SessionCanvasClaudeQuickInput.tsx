@@ -14,6 +14,8 @@ import {
 } from '@/lib/sessionCanvasClaudeInputUtils';
 import { sendSessionCanvasQuickInput } from '@/lib/sessionCanvasQuickSend';
 import { cn } from '@/lib/utils';
+import { SessionCanvasSendExtras } from './SessionCanvasSendExtras';
+import { useSessionCanvasSend } from './SessionCanvasSendContext';
 
 interface SessionCanvasClaudeQuickInputProps {
   sessionId: string;
@@ -41,6 +43,7 @@ export function SessionCanvasClaudeQuickInput({
   const mentionListRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
   const { ptyExists, checkingPty } = useSessionCanvasPtyExists(sessionId, true, ptyIdHint);
+  const { composeMessage, clearSupplement, continuePrompt } = useSessionCanvasSend();
 
   useEffect(() => {
     if (!ptyExists || checkingPty) return;
@@ -121,37 +124,56 @@ export function SessionCanvasClaudeQuickInput({
     [imagePaths, t]
   );
 
-  const handleSend = useCallback(async () => {
-    const trimmed = value.trim();
-    if (
-      (!trimmed && imagePaths.length === 0) ||
-      sendingRef.current ||
-      sending ||
-      !ptyExists
-    ) {
-      return;
-    }
-
-    sendingRef.current = true;
-    setSending(true);
-    try {
-      const sent = await sendSessionCanvasQuickInput(sessionId, trimmed, imagePaths, ptyIdHint);
-      if (!sent) {
-        toastManager.add({
-          type: 'warning',
-          title: t('Session not running'),
-          description: t('Open the session with Ctrl+click to start its terminal first.'),
-        });
+  const deliverMessage = useCallback(
+    async (raw: string, paths: string[]) => {
+      const message = composeMessage(raw);
+      if (
+        (!message.trim() && paths.length === 0) ||
+        sendingRef.current ||
+        sending ||
+        !ptyExists
+      ) {
         return;
       }
-      setValue('');
-      setImagePaths([]);
-      setMentionQuery(null);
-    } finally {
-      sendingRef.current = false;
-      setSending(false);
-    }
-  }, [value, imagePaths, sending, sessionId, ptyExists, t, ptyIdHint]);
+
+      sendingRef.current = true;
+      setSending(true);
+      try {
+        const sent = await sendSessionCanvasQuickInput(sessionId, message, paths, ptyIdHint);
+        if (!sent) {
+          toastManager.add({
+            type: 'warning',
+            title: t('Session not running'),
+            description: t('Open the session with Ctrl+click to start its terminal first.'),
+          });
+          return;
+        }
+        setValue('');
+        setImagePaths([]);
+        setMentionQuery(null);
+        clearSupplement();
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
+      }
+    },
+    [composeMessage, imagePaths, sending, sessionId, ptyExists, t, ptyIdHint, clearSupplement]
+  );
+
+  const handleSend = useCallback(async () => {
+    await deliverMessage(value, imagePaths);
+  }, [deliverMessage, value, imagePaths]);
+
+  const handleSendComposed = useCallback(
+    async (message: string) => {
+      await deliverMessage(message, imagePaths);
+    },
+    [deliverMessage, imagePaths]
+  );
+
+  const handleContinue = useCallback(async () => {
+    await deliverMessage(continuePrompt, []);
+  }, [deliverMessage, continuePrompt]);
 
   const disabled = sending || checkingPty || !ptyExists;
   const canSend = Boolean(value.trim() || imagePaths.length > 0);
@@ -199,6 +221,14 @@ export function SessionCanvasClaudeQuickInput({
           {t('Terminal not running — Ctrl+click to open this session first.')}
         </p>
       ) : null}
+
+      <SessionCanvasSendExtras
+        disabled={disabled}
+        mainBody={value}
+        canSendMain={canSend}
+        onSend={handleSendComposed}
+        onContinue={() => void handleContinue()}
+      />
 
       {imagePaths.length > 0 ? (
         <div className="flex flex-wrap gap-1">

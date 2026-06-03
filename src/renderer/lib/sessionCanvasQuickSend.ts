@@ -1,6 +1,10 @@
 import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 
+function focusSessionTerminal(sessionId: string): void {
+  useTerminalWriteStore.getState().focus(sessionId);
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -85,6 +89,9 @@ export async function sendSessionCanvasQuickInput(
   try {
     const message = buildPayload(trimmed, imagePaths);
     await writeChunks(sessionId, ptyId ?? sessionId, writer, message);
+    if (writer) {
+      focusSessionTerminal(sessionId);
+    }
     return true;
   } finally {
     inFlightBySession.delete(sessionId);

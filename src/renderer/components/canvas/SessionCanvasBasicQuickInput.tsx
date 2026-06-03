@@ -7,6 +7,8 @@ import { useSessionCanvasPtyExists } from '@/hooks/useSessionCanvasPtyExists';
 import { useI18n } from '@/i18n';
 import { sendSessionCanvasQuickInput } from '@/lib/sessionCanvasQuickSend';
 import { cn } from '@/lib/utils';
+import { SessionCanvasSendExtras } from './SessionCanvasSendExtras';
+import { useSessionCanvasSend } from './SessionCanvasSendContext';
 
 interface SessionCanvasBasicQuickInputProps {
   sessionId: string;
@@ -27,6 +29,7 @@ export function SessionCanvasBasicQuickInput({
   const sendingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { ptyExists, checkingPty } = useSessionCanvasPtyExists(sessionId, true, ptyIdHint);
+  const { composeMessage, clearSupplement, continuePrompt } = useSessionCanvasSend();
 
   useEffect(() => {
     if (!ptyExists || checkingPty) return;
@@ -36,28 +39,37 @@ export function SessionCanvasBasicQuickInput({
     return () => cancelAnimationFrame(frame);
   }, [sessionId, ptyExists, checkingPty]);
 
-  const handleSend = useCallback(async () => {
-    const trimmed = value.trim();
-    if (!trimmed || sendingRef.current || sending || !ptyExists) return;
+  const deliverMessage = useCallback(
+    async (raw: string) => {
+      const message = composeMessage(raw);
+      if (!message.trim() || sendingRef.current || sending || !ptyExists) return false;
 
-    sendingRef.current = true;
-    setSending(true);
-    try {
-      const sent = await sendSessionCanvasQuickInput(sessionId, trimmed, [], ptyIdHint);
-      if (!sent) {
-        toastManager.add({
-          type: 'warning',
-          title: t('Session not running'),
-          description: t('Open the session with Ctrl+click to start its terminal first.'),
-        });
-        return;
+      sendingRef.current = true;
+      setSending(true);
+      try {
+        const sent = await sendSessionCanvasQuickInput(sessionId, message, [], ptyIdHint);
+        if (!sent) {
+          toastManager.add({
+            type: 'warning',
+            title: t('Session not running'),
+            description: t('Open the session with Ctrl+click to start its terminal first.'),
+          });
+          return false;
+        }
+        setValue('');
+        clearSupplement();
+        return true;
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
       }
-      setValue('');
-    } finally {
-      sendingRef.current = false;
-      setSending(false);
-    }
-  }, [value, sending, sessionId, ptyExists, t, ptyIdHint]);
+    },
+    [composeMessage, sending, sessionId, ptyExists, t, ptyIdHint, clearSupplement]
+  );
+
+  const handleSend = useCallback(async () => {
+    await deliverMessage(value);
+  }, [deliverMessage, value]);
 
   const placeholder =
     kind === 'agent'
@@ -65,6 +77,50 @@ export function SessionCanvasBasicQuickInput({
       : t('Send a command to this shell…');
 
   const disabled = sending || checkingPty || !ptyExists;
+
+  const handleSendComposed = useCallback(
+    async (message: string) => {
+      if (!message.trim() || sendingRef.current || sending || !ptyExists) return;
+      sendingRef.current = true;
+      setSending(true);
+      try {
+        const sent = await sendSessionCanvasQuickInput(sessionId, message, [], ptyIdHint);
+        if (!sent) {
+          toastManager.add({
+            type: 'warning',
+            title: t('Session not running'),
+            description: t('Open the session with Ctrl+click to start its terminal first.'),
+          });
+          return;
+        }
+        setValue('');
+        clearSupplement();
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
+      }
+    },
+    [sessionId, ptyIdHint, t, clearSupplement, sending, ptyExists]
+  );
+
+  const handleContinue = useCallback(async () => {
+    if (sendingRef.current || sending || !ptyExists) return;
+    sendingRef.current = true;
+    setSending(true);
+    try {
+      const sent = await sendSessionCanvasQuickInput(sessionId, continuePrompt, [], ptyIdHint);
+      if (!sent) {
+        toastManager.add({
+          type: 'warning',
+          title: t('Session not running'),
+          description: t('Open the session with Ctrl+click to start its terminal first.'),
+        });
+      }
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }, [continuePrompt, sending, sessionId, ptyExists, t, ptyIdHint]);
 
   return (
     <div
@@ -77,6 +133,15 @@ export function SessionCanvasBasicQuickInput({
           {t('Terminal not running — Ctrl+click to open this session first.')}
         </p>
       ) : null}
+
+      <SessionCanvasSendExtras
+        disabled={disabled}
+        mainBody={value}
+        canSendMain={Boolean(value.trim())}
+        onSend={handleSendComposed}
+        onContinue={() => void handleContinue()}
+      />
+
       <div className="flex items-end gap-1.5">
         <textarea
           ref={textareaRef}

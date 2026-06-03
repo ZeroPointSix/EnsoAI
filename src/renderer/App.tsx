@@ -79,6 +79,7 @@ import { useWebInspector } from './hooks/useWebInspector';
 import {
   useWorktreeCreate,
   useWorktreeList,
+  useWorktreeListMultiple,
   useWorktreeMerge,
   useWorktreeMergeAbort,
   useWorktreeMergeContinue,
@@ -445,6 +446,9 @@ export default function App() {
     refetch,
   } = useWorktreeList(worktreeRepoPath);
 
+  const allRepoPaths = useMemo(() => repositories.map((repo) => repo.path), [repositories]);
+  const { worktreesMap: allRepoWorktreesMap } = useWorktreeListMultiple(allRepoPaths);
+
   // Get branches for selected repo
   const { data: branches = [], refetch: refetchBranches } = useGitBranches(worktreeRepoPath);
 
@@ -692,47 +696,110 @@ export default function App() {
     ]
   );
 
-  const handleSwitchWorktreePath = useCallback(
-    async (worktreePath: string) => {
-      const tempMatch = tempWorkspaces.find((item) => item.path === worktreePath);
-      if (tempMatch) {
-        await handleSelectWorktree({ path: tempMatch.path } as GitWorktree, TEMP_REPO_ID);
+  const applyWorktreeSwitch = useCallback(
+    (
+      found: GitWorktree,
+      repoPath: string,
+      options?: { deferGitRefresh?: boolean; skipSelectWorktree?: boolean }
+    ) => {
+      if (options?.skipSelectWorktree) {
+        if (repoPath !== selectedRepo) {
+          setSelectedRepo(repoPath);
+        }
+        setActiveWorktree(found);
+        const savedTab = worktreeTabMap[found.path] || 'chat';
+        setActiveTab(savedTab);
+        if (options.deferGitRefresh) {
+          queueMicrotask(() => refreshGitData(found.path));
+        } else {
+          refreshGitData(found.path);
+        }
         return;
       }
-
-      const worktree = worktrees.find((wt) => wt.path === worktreePath);
-      if (worktree) {
-        handleSelectWorktree(worktree);
-        return;
-      }
-
-      for (const repo of repositories) {
-        try {
-          const repoWorktrees = await window.electronAPI.worktree.list(repo.path);
-          const found = repoWorktrees.find((wt) => wt.path === worktreePath);
-          if (found) {
-            setSelectedRepo(repo.path);
-            setActiveWorktree(found);
-            const savedTab = worktreeTabMap[found.path] || 'chat';
-            setActiveTab(savedTab);
-
-            // Refresh git data for the switched worktree
-            refreshGitData(found.path);
-            return;
-          }
-        } catch {}
-      }
+      void handleSelectWorktree(found, repoPath, {
+        deferGitRefresh: options?.deferGitRefresh,
+      });
     },
     [
-      tempWorkspaces,
-      worktrees,
-      repositories,
-      worktreeTabMap,
       handleSelectWorktree,
       refreshGitData,
+      selectedRepo,
       setActiveTab,
       setActiveWorktree,
       setSelectedRepo,
+      worktreeTabMap,
+    ]
+  );
+
+  const resolveWorktreeByPath = useCallback(
+    (worktreePath: string): { worktree: GitWorktree; repoPath: string } | null => {
+      const tempMatch = tempWorkspaces.find((item) => item.path === worktreePath);
+      if (tempMatch) {
+        return {
+          worktree: { path: tempMatch.path } as GitWorktree,
+          repoPath: TEMP_REPO_ID,
+        };
+      }
+
+      const inCurrentRepo = worktrees.find((wt) => wt.path === worktreePath);
+      if (inCurrentRepo && selectedRepo) {
+        return { worktree: inCurrentRepo, repoPath: selectedRepo };
+      }
+
+      for (const repo of repositories) {
+        const cached = allRepoWorktreesMap[repo.path];
+        if (!cached) continue;
+        const found = cached.find((wt) => wt.path === worktreePath);
+        if (found) {
+          return { worktree: found, repoPath: repo.path };
+        }
+      }
+
+      return null;
+    },
+    [tempWorkspaces, worktrees, repositories, allRepoWorktreesMap, selectedRepo]
+  );
+
+  const handleSwitchWorktreePath = useCallback(
+    async (worktreePath: string, options?: { fast?: boolean }) => {
+      const deferGitRefresh = options?.fast ?? false;
+
+      const resolved = resolveWorktreeByPath(worktreePath);
+      if (resolved) {
+        const sameWorktree = activeWorktree?.path === worktreePath;
+        if (sameWorktree) {
+          return;
+        }
+        applyWorktreeSwitch(resolved.worktree, resolved.repoPath, {
+          deferGitRefresh,
+        });
+        return;
+      }
+
+      const results = await Promise.all(
+        repositories.map(async (repo) => {
+          try {
+            const repoWorktrees = await window.electronAPI.worktree.list(repo.path);
+            const found = repoWorktrees.find((wt) => wt.path === worktreePath);
+            return found ? { worktree: found, repoPath: repo.path } : null;
+          } catch {
+            return null;
+          }
+        })
+      );
+      const hit = results.find((item) => item !== null);
+      if (hit) {
+        applyWorktreeSwitch(hit.worktree, hit.repoPath, {
+          deferGitRefresh,
+          skipSelectWorktree: true,
+        });
+      }
+    },
+    [
+      activeWorktree?.path,
+      applyWorktreeSwitch,
+      repositories,
+      resolveWorktreeByPath,
     ]
   );
 
@@ -817,7 +884,10 @@ export default function App() {
 
   const handleSessionCanvasFocus = useCallback(
     async (params: SessionCanvasFocusParams) => {
-      await handleSwitchWorktreePath(params.cwd);
+      const sameWorktree = activeWorktree?.path === params.cwd;
+      if (!sameWorktree) {
+        await handleSwitchWorktreePath(params.cwd, { fast: true });
+      }
       if (params.kind === 'agent') {
         useAgentSessionsStore.getState().setActiveId(params.repoPath, params.cwd, params.sessionId);
         useAgentSessionsStore.getState().markSessionActive(params.sessionId);
@@ -827,7 +897,7 @@ export default function App() {
         handleTabChange('terminal');
       }
     },
-    [handleSwitchWorktreePath, handleTabChange]
+    [activeWorktree?.path, handleSwitchWorktreePath, handleTabChange]
   );
 
   useEffect(() => {

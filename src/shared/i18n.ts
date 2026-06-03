@@ -434,6 +434,14 @@ export const zhTranslations: Record<string, string> = {
     '发送 Claude 提示…（支持 @ 文件与图片）',
   'Enter to send · Shift+Enter for newline · @ to mention files':
     'Enter 发送 · Shift+Enter 换行 · @ 引用文件',
+  'Supplementary note (optional)': '补充说明（可选）',
+  'Context append': '上下文追加',
+  'Add supplementary notes here…': '您可以在这里添加补充说明…',
+  'Tip: paste images in the prompt box below (Ctrl+V)':
+    '提示：可以在下方主输入框中粘贴图片 (Ctrl+V)',
+  Enhance: '增强',
+  Continue: '继续',
+  'Scroll to bottom': '滚到底部',
   'Attach image': '附加图片',
   'Agent running': '运行中',
   'New output': '有新输出',
