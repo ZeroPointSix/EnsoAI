@@ -290,6 +290,7 @@ export const IPC_CHANNELS = {
   SESSION_CANVAS_TOGGLE_FULLSCREEN: 'session-canvas:panel:toggleFullscreen',
   SESSION_CANVAS_SET_COMPACT: 'session-canvas:panel:setCompact',
   SESSION_CANVAS_GET_DISPLAY_MODE: 'session-canvas:panel:getDisplayMode',
+  SESSION_CANVAS_WINDOW_MINIMIZE: 'session-canvas:window:minimize',
   SESSION_CANVAS_RENAME_SESSION: 'session-canvas:renameSession',
 
   // Logging

@@ -1,5 +1,5 @@
 import type { SessionCanvasFocusParams, SessionCanvasSnapshot } from '@shared/types/sessionCanvas';
-import { LayoutGrid, Maximize2, Minimize2, RotateCcw, Settings, X } from 'lucide-react';
+import { LayoutGrid, Maximize2, Minus, RotateCcw, Settings, Shrink, X } from 'lucide-react';
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import { getAgentTaskPanelHeaderClassName, isMacPlatform } from '@/components/agent-tasks/agentTaskPanelTitleBar';
 import { Button } from '@/components/ui/button';
@@ -88,6 +88,10 @@ export function SessionCanvasStandaloneApp() {
     });
   }, [displayMode]);
 
+  const handleMinimizeToTaskbar = useCallback(() => {
+    void window.electronAPI.sessionCanvasPanel.minimizeWindow();
+  }, []);
+
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <div className={getAgentTaskPanelHeaderClassName(platform)} style={dragRegionStyle}>
@@ -114,11 +118,20 @@ export function SessionCanvasStandaloneApp() {
           <Button
             variant="ghost"
             size="icon"
+            onClick={handleMinimizeToTaskbar}
+            className="h-7 w-7"
+            title={t('Minimize to taskbar')}
+          >
+            <Minus className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleToggleCompact}
             className="h-7 w-7"
             title={displayMode === 'compact' ? t('Normal window') : t('Compact window')}
           >
-            <Minimize2 className="h-3.5 w-3.5" />
+            <Shrink className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"

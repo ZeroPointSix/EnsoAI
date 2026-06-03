@@ -17,6 +17,7 @@ export type SessionCanvasPanelBridge = {
   toggleFullscreen: () => Promise<boolean>;
   setCompactMode: (compact: boolean) => Promise<void>;
   getDisplayMode: () => Promise<'compact' | 'normal' | 'maximized'>;
+  minimizeWindow: () => Promise<void>;
   onVisibilityChanged: (callback: (visible: boolean) => void) => (() => void);
   onGetSnapshot: (callback: () => void) => (() => void);
   sendSnapshotResponse: (snapshot: SessionCanvasSnapshot) => void;

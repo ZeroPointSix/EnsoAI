@@ -435,6 +435,10 @@ export const zhTranslations: Record<string, string> = {
   'Enter to send · Shift+Enter for newline · @ to mention files':
     'Enter 发送 · Shift+Enter 换行 · @ 引用文件',
   'Supplementary note (optional)': '补充说明（可选）',
+  'Quick templates': '快捷模板',
+  'Attach file': '附加文件',
+  'Browse…': '浏览…',
+  'Minimize to taskbar': '最小化到任务栏',
   'Context append': '上下文追加',
   'Add supplementary notes here…': '您可以在这里添加补充说明…',
   'Tip: paste images in the prompt box below (Ctrl+V)':

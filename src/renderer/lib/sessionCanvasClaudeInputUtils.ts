@@ -13,6 +13,22 @@ export function extractMentionQuery(text: string, cursorPos: number): string | n
   return null;
 }
 
+export function isImageFilePath(path: string): boolean {
+  return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(path);
+}
+
+export function insertPathAtCursor(
+  content: string,
+  cursor: number,
+  filePath: string,
+  options?: { useAtPrefix?: boolean }
+): { nextContent: string; nextCursor: number } {
+  const escaped = filePath.includes(' ') ? `"${filePath}"` : filePath;
+  const insertion = options?.useAtPrefix ? `@${escaped} ` : `${escaped} `;
+  const nextContent = content.slice(0, cursor) + insertion + content.slice(cursor);
+  return { nextContent, nextCursor: cursor + insertion.length };
+}
+
 export function insertMentionAtCursor(
   content: string,
   cursor: number,

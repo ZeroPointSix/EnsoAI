@@ -227,19 +227,21 @@ export function SessionCanvasCard({
         text={previewText}
         placeholder={t('No output yet — open this session to stream preview')}
         isActive={isActive}
-        className={isFocused ? 'min-h-0 flex-1' : undefined}
+        className={isFocused ? 'min-h-0 flex-1 overflow-y-auto' : undefined}
       />
 
       {isFocused ? (
-        <div className="shrink-0">
-          <SessionCanvasQuickInput
-            sessionId={item.session.id}
-            kind={item.kind}
-            agentId={isAgent ? item.session.agentId : undefined}
-            cwd={item.session.cwd}
-            ptyIdHint={item.ptyIdHint}
-          />
-          <p className="mt-1 text-[10px] text-muted-foreground">
+        <div className="flex min-h-0 max-h-[48%] shrink-0 flex-col gap-1 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <SessionCanvasQuickInput
+              sessionId={item.session.id}
+              kind={item.kind}
+              agentId={isAgent ? item.session.agentId : undefined}
+              cwd={item.session.cwd}
+              ptyIdHint={item.ptyIdHint}
+            />
+          </div>
+          <p className="shrink-0 text-[10px] text-muted-foreground">
             {t('Ctrl+click to jump to session · Esc to close')}
           </p>
         </div>

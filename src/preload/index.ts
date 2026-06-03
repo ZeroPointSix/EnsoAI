@@ -776,6 +776,8 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_SET_COMPACT, compact),
     getDisplayMode: (): Promise<'compact' | 'normal' | 'maximized'> =>
       ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_GET_DISPLAY_MODE),
+    minimizeWindow: (): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_WINDOW_MINIMIZE),
     onVisibilityChanged: (callback: (visible: boolean) => void): (() => void) => {
       const handler = (_: unknown, visible: boolean) => callback(visible);
       ipcRenderer.on(IPC_CHANNELS.SESSION_CANVAS_PANEL_VISIBILITY_CHANGED, handler);

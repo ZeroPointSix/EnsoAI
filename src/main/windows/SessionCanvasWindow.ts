@@ -5,8 +5,6 @@ import { app, BrowserWindow } from 'electron';
 
 let sessionCanvasWindow: BrowserWindow | null = null;
 let mainWindowRef: BrowserWindow | null = null;
-let mainWindowCloseHooked = false;
-
 function teardownSessionCanvasWindow(win: BrowserWindow): void {
   try {
     if (win.isFullScreen()) {
@@ -90,10 +88,6 @@ export function createSessionCanvasWindow(): BrowserWindow {
     windowOptions.frame = false;
   }
 
-  if (mainWindowRef && !mainWindowRef.isDestroyed()) {
-    windowOptions.parent = mainWindowRef;
-  }
-
   sessionCanvasWindow = new BrowserWindow(windowOptions);
 
   sessionCanvasWindow.on('close', (e) => {
@@ -141,6 +135,13 @@ export function showSessionCanvasWindow(): BrowserWindow {
 export function hideSessionCanvasWindow(): void {
   if (sessionCanvasWindow && !sessionCanvasWindow.isDestroyed()) {
     sessionCanvasWindow.hide();
+  }
+}
+
+export function minimizeSessionCanvasWindow(): void {
+  const win = sessionCanvasWindow;
+  if (win && !win.isDestroyed()) {
+    win.minimize();
   }
 }
 
@@ -210,13 +211,4 @@ export function getSessionCanvasDisplayMode(): SessionCanvasDisplayMode {
 
 export function setSessionCanvasMainWindowRef(ref: BrowserWindow): void {
   mainWindowRef = ref;
-
-  if (mainWindowCloseHooked || ref.isDestroyed()) {
-    return;
-  }
-
-  mainWindowCloseHooked = true;
-  ref.on('close', () => {
-    destroySessionCanvasWindow();
-  });
 }

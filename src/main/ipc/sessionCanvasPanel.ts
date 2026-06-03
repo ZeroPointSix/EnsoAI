@@ -11,6 +11,7 @@ import {
   hideSessionCanvasWindow,
   isSessionCanvasVisible,
   getSessionCanvasDisplayMode,
+  minimizeSessionCanvasWindow,
   resetSessionCanvasWindowBounds,
   setSessionCanvasCompactMode,
   setSessionCanvasMainWindowRef,
@@ -70,6 +71,10 @@ export function registerSessionCanvasPanelHandlers(mainWindow: BrowserWindow): v
 
   ipcMain.handle(IPC_CHANNELS.SESSION_CANVAS_GET_DISPLAY_MODE, () => {
     return getSessionCanvasDisplayMode();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SESSION_CANVAS_WINDOW_MINIMIZE, () => {
+    minimizeSessionCanvasWindow();
   });
 
   ipcMain.on(

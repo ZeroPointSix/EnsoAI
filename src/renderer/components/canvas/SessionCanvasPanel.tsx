@@ -427,7 +427,7 @@ export function SessionCanvasPanel({
 
         {focusedItem ? (
           <div
-            className="absolute inset-0 z-40 flex items-center justify-center overflow-hidden bg-black/55 p-3"
+            className="absolute inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/55 p-3"
             onClick={() => setFocusedCardKey(null)}
             onContextMenu={(e) => e.preventDefault()}
           >
