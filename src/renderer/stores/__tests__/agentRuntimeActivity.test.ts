@@ -21,9 +21,59 @@ describe('agentRuntimeActivity', () => {
       },
     });
 
-    useAgentRuntimeActivityStore.getState().reportOutput(sessionId);
+    useAgentRuntimeActivityStore.getState().reportOutput(sessionId, 64);
 
     expect(useAgentRuntimeActivityStore.getState().getPhase(sessionId)).toBe('running');
+  });
+
+  it('ignores small output while idle (stays gray)', () => {
+    const sessionId = 'session-idle';
+    useAgentRuntimeActivityStore.getState().reportOutput(sessionId, 16);
+    expect(useAgentRuntimeActivityStore.getState().getPhase(sessionId)).toBe('idle');
+  });
+
+  it('does not refresh lastOutputAt on small chunks while running', () => {
+    const sessionId = 'session-small';
+    const now = 50_000;
+    useAgentRuntimeActivityStore.setState({
+      activities: {
+        [sessionId]: {
+          phase: 'running',
+          lastOutputAt: now - 10_000,
+          lastCpuActiveAt: now - 10_000,
+          lastStartedAt: now - 20_000,
+          lastCompletedAt: 0,
+          source: 'output',
+        },
+      },
+    });
+
+    useAgentRuntimeActivityStore.getState().reportOutput(sessionId, 8);
+
+    expect(useAgentRuntimeActivityStore.getState().activities[sessionId]?.lastOutputAt).toBe(
+      now - 10_000
+    );
+  });
+
+  it('completes running when lastCpuActiveAt is 0 and output is idle', () => {
+    const sessionId = 'session-no-cpu';
+    const now = 100_000;
+    useAgentRuntimeActivityStore.setState({
+      activities: {
+        [sessionId]: {
+          phase: 'running',
+          lastOutputAt: now - 6_000,
+          lastCpuActiveAt: 0,
+          lastStartedAt: now - 20_000,
+          lastCompletedAt: 0,
+          source: 'output',
+        },
+      },
+    });
+
+    useAgentRuntimeActivityStore.getState().tickIdleCheck(now);
+
+    expect(useAgentRuntimeActivityStore.getState().getPhase(sessionId)).toBe('completed');
   });
 
   it('keeps completed when only cpu is reported (green hold)', () => {

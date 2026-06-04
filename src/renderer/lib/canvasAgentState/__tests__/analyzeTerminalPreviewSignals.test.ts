@@ -3,6 +3,7 @@ import {
   detectNumberedChoiceMenu,
   detectRedAnsiInRaw,
   inferPreviewInterruptSignal,
+  isClaudeIdleChrome,
 } from '../analyzeTerminalPreviewSignals';
 
 describe('analyzeTerminalPreviewSignals', () => {
@@ -42,5 +43,27 @@ describe('analyzeTerminalPreviewSignals', () => {
       strippedTail: '* Crunched for 15s\n❯ ',
     });
     expect(signal.kind).toBe('none');
+  });
+
+  it('ignores Claude idle chrome footer', () => {
+    const idle = '? for shortcuts · ← for agents';
+    expect(isClaudeIdleChrome(idle)).toBe(true);
+    const signal = inferPreviewInterruptSignal({ strippedTail: idle });
+    expect(signal.kind).toBe('none');
+    expect(signal.reason).toBe('none');
+  });
+
+  it('does not flag numbered pattern without menu context or red ANSI', () => {
+    const text = '1. alpha\n2. beta\n3. gamma';
+    expect(detectNumberedChoiceMenu(text)).toBe(true);
+    const signal = inferPreviewInterruptSignal({ strippedTail: text });
+    expect(signal.kind).toBe('none');
+  });
+
+  it('flags numbered menu with menu context', () => {
+    const text = 'Choose:\n1. Yes\n2. No\n3. Always';
+    const signal = inferPreviewInterruptSignal({ strippedTail: text });
+    expect(signal.kind).toBe('blocked');
+    expect(signal.reason).toBe('numbered_menu');
   });
 });

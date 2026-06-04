@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
-import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
+import {
+  MIN_OUTPUT_ACTIVITY_BYTES,
+  useAgentRuntimeActivityStore,
+} from '@/stores/agentRuntimeActivity';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
 import type { CanvasAgentDisplayState } from '@/components/canvas/CanvasAgentStatusDot';
 import { normalizePath } from '@shared/utils/path';
@@ -29,7 +32,10 @@ function resolveEnsoSessionId(incomingSessionId: string, cwd?: string): string |
 }
 
 /** 绿态下终端碎片输出（光标/进度条）不拉回黄 */
-const MIN_OUTPUT_WAKE_BYTES = 32;
+const MIN_COMPLETED_WAKE_BYTES = MIN_OUTPUT_ACTIVITY_BYTES;
+
+/** 灰态下单次 PTY 输出达到该字节数才 idle → running */
+const MIN_IDLE_WAKE_BYTES = 64;
 
 /**
  * 统一 Agent Runtime Activity Monitor。
@@ -139,23 +145,38 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
         if (ptyId !== id) continue;
         if (agentIds.has(sessionId)) {
           const phase = useAgentRuntimeActivityStore.getState().getPhase(sessionId);
-          if (phase === 'completed' && data.length < MIN_OUTPUT_WAKE_BYTES) {
+          const bytes = data.length;
+          if (phase === 'idle' && bytes < MIN_IDLE_WAKE_BYTES) {
+            sessionCanvasLogThrottled(
+              `monitor-ondata-skip-idle-${sessionId}`,
+              3000,
+              'Monitor',
+              'onData skipped (idle, small chunk)',
+              { sessionId: shortSessionId(sessionId), bytes, minBytes: MIN_IDLE_WAKE_BYTES }
+            );
+            break;
+          }
+          if (phase === 'completed' && bytes < MIN_COMPLETED_WAKE_BYTES) {
             sessionCanvasLogThrottled(
               `monitor-ondata-skip-${sessionId}`,
               3000,
               'Monitor',
               'onData skipped (completed-hold, small chunk)',
-              { sessionId: shortSessionId(sessionId), bytes: data.length, minBytes: MIN_OUTPUT_WAKE_BYTES }
+              {
+                sessionId: shortSessionId(sessionId),
+                bytes,
+                minBytes: MIN_COMPLETED_WAKE_BYTES,
+              }
             );
             break;
           }
-          reportOutput(sessionId);
+          reportOutput(sessionId, bytes);
           sessionCanvasLogThrottled(
             `monitor-ondata-${sessionId}`,
             3000,
             'Monitor',
             'terminal.onData → reportOutput',
-            { sessionId: shortSessionId(sessionId), ptyId, bytes: data.length, phase }
+            { sessionId: shortSessionId(sessionId), ptyId, bytes, phase }
           );
         }
         break;

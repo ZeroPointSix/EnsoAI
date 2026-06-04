@@ -78,8 +78,29 @@ const ASK_TEXT_PATTERNS: RegExp[] = [
   /请选择一个/,
 ];
 
+/** Claude TUI 空闲底栏（含 ? / ← 提示），勿当编号菜单 */
+const CLAUDE_IDLE_CHROME =
+  /\? for shortcuts|← for agents|for shortcuts ·|shortcuts · ←/i;
+
 /** 行首编号选项：1. / 2) / ❯ 1 等 */
 const OPTION_LINE = /^(?:❯\s*)?([1-9])[.)]\s*\S/;
+
+/** 菜单/授权上下文（numbered_menu 需配合其一，或红色 ANSI） */
+const MENU_CONTEXT_PATTERNS: RegExp[] = [
+  /choose|select|option|pick|menu/i,
+  /是否|请选择|请选择一个|授权|允许/,
+  ...PERMISSION_TEXT_PATTERNS,
+  ...ASK_TEXT_PATTERNS,
+];
+
+export function isClaudeIdleChrome(strippedTail: string | undefined): boolean {
+  if (!strippedTail?.trim()) return false;
+  return CLAUDE_IDLE_CHROME.test(strippedTail.slice(-800));
+}
+
+function hasMenuContext(strippedTail: string): boolean {
+  return matchAny(strippedTail.slice(-2500).toLowerCase(), MENU_CONTEXT_PATTERNS);
+}
 
 /** 仅包含单个数字 1–3 的行（用户描述的「连续 123」） */
 const SOLO_DIGIT_LINE = /^[1-3]$/;
@@ -93,6 +114,7 @@ export function detectRedAnsiInRaw(rawTail: string | undefined): boolean {
 /** 检测 1/2/3 连续编号菜单（授权、Ask 常见） */
 export function detectNumberedChoiceMenu(strippedTail: string | undefined): boolean {
   if (!strippedTail?.trim()) return false;
+  if (isClaudeIdleChrome(strippedTail)) return false;
   const lines = strippedTail
     .slice(-2500)
     .split('\n')
@@ -159,9 +181,23 @@ export function inferPreviewInterruptSignal(input: {
   strippedTail?: string;
 }): PreviewInterruptSignal {
   const stripped = input.strippedTail?.slice(-4000) ?? '';
+  if (isClaudeIdleChrome(stripped)) {
+    return {
+      kind: 'none',
+      reason: 'none',
+      flags: {
+        ansiRed: false,
+        numberedMenu: false,
+        permissionText: false,
+        askText: false,
+        errorText: false,
+      },
+    };
+  }
   const lower = stripped.toLowerCase();
   const ansiRed = detectRedAnsiInRaw(input.rawTail);
-  const numberedMenu = detectNumberedChoiceMenu(stripped);
+  const numberedPattern = detectNumberedChoiceMenu(stripped);
+  const numberedMenu = numberedPattern && (ansiRed || hasMenuContext(stripped));
   const permissionText = matchAny(lower, PERMISSION_TEXT_PATTERNS);
   const askText = matchAny(lower, ASK_TEXT_PATTERNS);
   const errorText = matchAny(stripped, ERROR_TEXT_PATTERNS);

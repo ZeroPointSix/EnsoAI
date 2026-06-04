@@ -261,28 +261,35 @@ export function SessionCanvasCard({
     !isFocused &&
     (item.outputState !== 'idle' || agentDisplayState !== 'idle');
 
+  const dragHandle = dragEnabled ? (
+    <button
+      type="button"
+      data-canvas-drag-handle
+      aria-label={t('Drag card')}
+      className={cn(
+        'no-drag absolute left-1 top-3 z-30 flex h-7 w-5 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground active:cursor-grabbing',
+        isDragging && 'cursor-grabbing'
+      )}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleDragPointerDown(e);
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <GripVertical className="h-4 w-4" />
+    </button>
+  ) : null;
+
   const body = (
     <div
-      className={cn('flex h-full min-h-0 flex-col gap-2 p-3 text-left', isFocused && 'overflow-hidden')}
+      className={cn(
+        'flex h-full min-h-0 flex-col gap-2 p-3 text-left',
+        dragEnabled && 'pl-5',
+        isFocused && 'overflow-hidden'
+      )}
     >
       <div className="flex min-w-0 items-start gap-2">
-        {dragEnabled ? (
-          <button
-            type="button"
-            data-canvas-drag-handle
-            aria-label={t('Drag card')}
-            className={cn(
-              'no-drag mt-0.5 flex h-7 w-5 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground active:cursor-grabbing',
-              isDragging && 'cursor-grabbing'
-            )}
-            onPointerDown={handleDragPointerDown}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-        ) : (
-          <span className="mt-0.5 h-7 w-5 shrink-0" />
-        )}
         <div
           className={cn(
             'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
@@ -421,21 +428,25 @@ export function SessionCanvasCard({
 
   if (showAgentGlow) {
     return (
-      <div className="no-drag" style={positionedStyle} {...shellHandlers} {...shellInteractiveProps}>
-        <GlowCard as="div" state={glowState} className={cn('no-drag', shellClass)}>
-          {body}
-          {resizeHandle}
+      <div className="no-drag relative" style={positionedStyle}>
+        {dragHandle}
+        <GlowCard as="div" state={glowState} className={cn('no-drag h-full', shellClass)}>
+          <div className="h-full" {...shellHandlers} {...shellInteractiveProps}>
+            {body}
+            {resizeHandle}
+          </div>
         </GlowCard>
       </div>
     );
   }
 
   return (
-    <div className="no-drag" style={positionedStyle}>
-      <div className={cn('no-drag', shellClass)} {...shellHandlers} {...shellInteractiveProps}>
+    <div className="no-drag relative" style={positionedStyle}>
+      {dragHandle}
+      <div className={cn('no-drag h-full', shellClass)} {...shellHandlers} {...shellInteractiveProps}>
         {body}
+        {resizeHandle}
       </div>
-      {resizeHandle}
     </div>
   );
 }

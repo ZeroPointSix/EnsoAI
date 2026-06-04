@@ -42,6 +42,9 @@ const IDLE_THRESHOLD_MS = 5_000;
 /** 绿态保持：completed 阶段不因 PTY CPU 轮询回到 running（仅 output / hook 可打破） */
 export const COMPLETED_HOLD_IGNORE_CPU = true;
 
+/** 仅当单次输出达到该字节数才刷新 lastOutputAt（避免光标闪烁阻止黄→绿） */
+export const MIN_OUTPUT_ACTIVITY_BYTES = 32;
+
 function isOutputIdle(activity: AgentRuntimeActivity, now: number): boolean {
   if (activity.lastOutputAt <= 0) {
     return true;
@@ -72,8 +75,8 @@ interface AgentRuntimeActivityState {
   /** PTY 进程活跃 → running */
   reportCpuActive: (sessionId: string) => void;
 
-  /** 终端收到输出 → running（仅当当前不是 blocked 时） */
-  reportOutput: (sessionId: string) => void;
+  /** 终端收到输出 → running（byteLength 用于阈值：idle 唤醒 / lastOutputAt 刷新） */
+  reportOutput: (sessionId: string, byteLength?: number) => void;
 
   /** Hook 语义事件：running */
   reportHookRunning: (sessionId: string) => void;
@@ -184,21 +187,26 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
     });
   },
 
-  reportOutput: (sessionId) => {
+  reportOutput: (sessionId, byteLength = 0) => {
     const now = Date.now();
+    const countsAsOutput = byteLength >= MIN_OUTPUT_ACTIVITY_BYTES;
     set((prev) => {
       const current = prev.activities[sessionId] ?? defaultActivity();
       if (current.phase === 'blocked') {
+        if (!countsAsOutput) return prev;
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastOutputAt: now } } };
       }
       if (current.phase === 'completed') {
+        if (!countsAsOutput) return prev;
         const next = promoteCompletedToRunning(sessionId, current, now, 'output');
         logPhaseIfChanged(sessionId, 'completed', 'running', 'output');
         return { activities: { ...prev.activities, [sessionId]: next } };
       }
       if (current.phase === 'running') {
+        if (!countsAsOutput) return prev;
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastOutputAt: now } } };
       }
+      if (!countsAsOutput) return prev;
       const next: AgentRuntimeActivity = {
         ...current,
         phase: 'running',
@@ -325,9 +333,12 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
     const updates: Record<string, AgentRuntimeActivity> = {};
     for (const [sessionId, activity] of Object.entries(activities)) {
       if (activity.phase !== 'running') continue;
-      const elapsedSinceCpu = now - activity.lastCpuActiveAt;
+      const cpuIdle =
+        activity.lastCpuActiveAt <= 0
+          ? true
+          : now - activity.lastCpuActiveAt > IDLE_THRESHOLD_MS;
       const outputIdle = isOutputIdle(activity, now);
-      if (elapsedSinceCpu > IDLE_THRESHOLD_MS && outputIdle) {
+      if (cpuIdle && outputIdle) {
         if (activity.lastStartedAt > 0) {
           updates[sessionId] = {
             ...activity,
@@ -336,7 +347,8 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
             source: 'inferred',
           };
           logPhaseIfChanged(sessionId, 'running', 'completed', 'tickIdleCheck', {
-            elapsedSinceCpu,
+            cpuIdle,
+            lastCpuActiveAt: activity.lastCpuActiveAt,
             idleThresholdMs: IDLE_THRESHOLD_MS,
           });
           clearCompletedTimer(sessionId);
