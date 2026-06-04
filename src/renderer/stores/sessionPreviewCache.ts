@@ -75,7 +75,7 @@ export function getResolvedSessionPreview(
   const cached = getCachedSessionPreview(kind, sessionId);
   if (runtime?.trim() && cached?.trim()) {
     const merged = mergePreviewSnapshot(cached, runtime);
-    return resolveCanvasCardPreviewText(merged, cached) || undefined;
+    return resolveCanvasCardPreviewText(merged, cached ?? runtime) || undefined;
   }
   return resolveCanvasCardPreviewText(runtime, cached);
 }

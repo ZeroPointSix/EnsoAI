@@ -30,4 +30,16 @@ describe('resolveCanvasCardPreviewText', () => {
   it('returns undefined when only welcome chrome exists', () => {
     expect(resolveCanvasCardPreviewText('? for shortcuts', undefined)).toBeUndefined();
   });
+
+  it('treats stripped shortcut chrome as low signal', () => {
+    expect(
+      isLowSignalCanvasPreview('---------------------------------?forshortcuts...-foragents-high-/effort')
+    ).toBe(true);
+  });
+
+  it('prefers longer conversation over shortcut chrome', () => {
+    const stream = 'Self introduction\nThought for 9s\n你好，我是 Claude';
+    const chrome = '?forshortcuts...-foragents';
+    expect(resolveCanvasCardPreviewText(stream, chrome)).toBe(stream);
+  });
 });

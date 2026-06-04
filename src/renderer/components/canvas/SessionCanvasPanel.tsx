@@ -285,17 +285,16 @@ export function SessionCanvasPanel({
     setContextMenu({ x: event.clientX, y: event.clientY, item });
   }, []);
 
-  const canvasMinHeight = useMemo(() => {
-    if (focusedCardKey) {
-      return Math.max(360, canvasSize.height);
-    }
-    return computeArrangedCanvasHeight(
-      filteredItems.length,
-      canvasSize.width,
-      CANVAS_CARD_DEFAULT_WIDTH,
-      CANVAS_CARD_DEFAULT_HEIGHT
-    );
-  }, [filteredItems.length, canvasSize.width, canvasSize.height, focusedCardKey]);
+  const canvasMinHeight = useMemo(
+    () =>
+      computeArrangedCanvasHeight(
+        filteredItems.length,
+        canvasSize.width,
+        CANVAS_CARD_DEFAULT_WIDTH,
+        CANVAS_CARD_DEFAULT_HEIGHT
+      ),
+    [filteredItems.length, canvasSize.width]
+  );
 
   const isFloating = variant === 'floating';
 
@@ -444,13 +443,15 @@ export function SessionCanvasPanel({
 
         {focusedItem ? (
           <div
-            className="absolute inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/55 p-3"
-            onClick={() => setFocusedCardKey(null)}
+            className="absolute inset-0 z-40 overflow-y-auto overscroll-y-contain bg-black/55 p-3"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setFocusedCardKey(null);
+            }}
             onContextMenu={(e) => e.preventDefault()}
           >
             <div
-              className="relative flex max-h-full max-w-full min-h-0 min-w-0 overflow-hidden"
-              style={{ width: focusSize.width, height: focusSize.height }}
+              className="relative mx-auto flex min-h-0 max-w-full flex-col"
+              style={{ width: focusSize.width, maxHeight: focusSize.height }}
               onClick={(e) => e.stopPropagation()}
             >
               <SessionCanvasCard

@@ -37,6 +37,14 @@ export function isLowSignalCanvasPreview(text: string | undefined): boolean {
     return true;
   }
 
+  const compact = trimmed.replace(/\s+/g, '').toLowerCase();
+  if (
+    compact.length < 400 &&
+    (/forshortcuts/i.test(compact) || /foragents/i.test(compact))
+  ) {
+    return true;
+  }
+
   return false;
 }
 
@@ -45,12 +53,8 @@ export function resolveCanvasCardPreviewText(
   runtime?: string,
   cached?: string
 ): string | undefined {
-  const r = runtime?.trim();
-  const c = cached?.trim();
-
-  const rOk = r && !isLowSignalCanvasPreview(r);
-  const cOk = c && !isLowSignalCanvasPreview(c);
-  if (rOk) return r;
-  if (cOk) return c;
-  return undefined;
+  const candidates = [runtime?.trim(), cached?.trim()].filter(Boolean) as string[];
+  const good = candidates.filter((text) => !isLowSignalCanvasPreview(text));
+  if (good.length === 0) return undefined;
+  return good.sort((a, b) => b.length - a.length)[0];
 }
