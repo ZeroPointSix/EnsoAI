@@ -312,7 +312,7 @@ export function SessionCanvasUnifiedQuickInput({
 
   const hasPromptChrome =
     promptsEnabled && (normalPrompts.length > 0 || conditionalPrompts.length > 0);
-  const useInputPanel = hasPromptChrome || imagePaths.length > 0;
+  const useInputPanel = expanded || hasPromptChrome || imagePaths.length > 0;
 
   useEffect(() => {
     sessionCanvasLog('QuickInput', 'layout', {

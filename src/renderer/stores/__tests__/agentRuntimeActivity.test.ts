@@ -28,14 +28,14 @@ describe('agentRuntimeActivity', () => {
 
   it('transitions running → completed after cpu and output idle', () => {
     const sessionId = 'session-b';
-    const now = 10_000;
+    const now = 100_000;
     useAgentRuntimeActivityStore.setState({
       activities: {
         [sessionId]: {
           phase: 'running',
-          lastOutputAt: now - 2_000,
-          lastCpuActiveAt: now - 2_000,
-          lastStartedAt: now - 5_000,
+          lastOutputAt: now - 6_000,
+          lastCpuActiveAt: now - 6_000,
+          lastStartedAt: now - 20_000,
           lastCompletedAt: 0,
           source: 'pty',
         },

@@ -9,6 +9,7 @@ import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
 import type { TerminalSessionEntry } from '@/stores/terminal';
 import { resolveCanvasAgentDisplayState } from '@/lib/canvasAgentState/resolveCanvasAgentDisplayState';
+import { inferBlockedFromPreview } from '@/lib/canvasAgentState/inferDisplayFromPreview';
 import { useCanvasCardDisplayStore } from '@/stores/canvasCardDisplayStore';
 import {
   type AgentRuntimeActivity,
@@ -39,7 +40,11 @@ function runtimePhaseToAgentDisplayState(
   }
 }
 
-export type SnapshotDisplayResolveBranch = 'hookBlocked' | 'activity' | 'fallback';
+export type SnapshotDisplayResolveBranch =
+  | 'hookBlocked'
+  | 'previewBlocked'
+  | 'activity'
+  | 'fallback';
 
 /** 快照用 Agent 四色状态：Hook blocked > runtime activity > 旧 outputState 回退 */
 export function resolveAgentDisplayStateForSnapshot(input: {
@@ -57,8 +62,15 @@ export function resolveAgentDisplayStateWithBranch(input: {
   outputState: OutputState;
   previewText?: string;
 }): { state: SessionCanvasAgentDisplayState; branch: SnapshotDisplayResolveBranch; activityPhase?: AgentRuntimePhase } {
-  if (input.hookState === 'blocked') {
-    return { state: 'blocked', branch: 'hookBlocked' };
+  if (input.hookState === 'blocked' || input.activity?.phase === 'blocked') {
+    return { state: 'blocked', branch: 'hookBlocked', activityPhase: input.activity?.phase };
+  }
+  if (inferBlockedFromPreview(input.previewText)) {
+    return {
+      state: 'blocked',
+      branch: 'previewBlocked',
+      activityPhase: input.activity?.phase,
+    };
   }
   if (input.activity) {
     return {

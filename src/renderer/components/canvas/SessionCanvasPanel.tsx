@@ -477,10 +477,10 @@ export function SessionCanvasPanel({
 
         {focusedItem ? (
           <div
-            className="pointer-events-none absolute inset-0 z-40 overflow-y-auto overscroll-y-contain bg-black/55 p-3"
+            className="absolute inset-0 z-40 overflow-y-auto overscroll-y-contain bg-black/55 p-3"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
-                sessionCanvasLog('Focus', 'backdrop click (may not fire if pointer-events-none)');
+                sessionCanvasLog('Focus', 'backdrop click → clear focus');
                 setFocusedCardKey(null);
               }
             }}

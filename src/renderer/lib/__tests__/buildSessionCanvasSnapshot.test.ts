@@ -39,6 +39,16 @@ describe('resolveAgentDisplayStateForSnapshot', () => {
     ).toBe('working');
   });
 
+  it('infers blocked from preview even when activity is running', () => {
+    expect(
+      resolveAgentDisplayStateForSnapshot({
+        activity: baseActivity('running'),
+        outputState: 'idle',
+        previewText: 'Do you want to proceed?',
+      })
+    ).toBe('blocked');
+  });
+
   it('maps completed phase to completed', () => {
     expect(
       resolveAgentDisplayStateForSnapshot({

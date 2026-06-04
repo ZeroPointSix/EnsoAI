@@ -31,7 +31,10 @@ export interface AgentRuntimeActivity {
 const COMPLETED_TTL_MS = 60_000;
 
 /** CPU/输出空闲判定：无活跃信号超过该时长 → completed（看板黄→绿） */
-const IDLE_THRESHOLD_MS = 1_200;
+const IDLE_THRESHOLD_MS = 5_000;
+
+/** 绿态后短时 CPU 抖动不再立刻拉回黄（避免黄绿闪烁） */
+const COMPLETED_REARM_MS = 4_000;
 
 function isOutputIdle(activity: AgentRuntimeActivity, now: number): boolean {
   if (activity.lastOutputAt <= 0) {
@@ -131,6 +134,14 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastCpuActiveAt: now } } };
       }
       if (current.phase === 'completed') {
+        if (current.lastCompletedAt > 0 && now - current.lastCompletedAt < COMPLETED_REARM_MS) {
+          return {
+            activities: {
+              ...prev.activities,
+              [sessionId]: { ...current, lastCpuActiveAt: now },
+            },
+          };
+        }
         const next = promoteCompletedToRunning(sessionId, current, now, 'pty');
         logPhaseIfChanged(sessionId, 'completed', 'running', 'cpu');
         return { activities: { ...prev.activities, [sessionId]: next } };
@@ -181,6 +192,9 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
     const now = Date.now();
     set((prev) => {
       const current = prev.activities[sessionId] ?? defaultActivity();
+      if (current.phase === 'blocked') {
+        return prev;
+      }
       clearCompletedTimer(sessionId);
       const next: AgentRuntimeActivity = {
         ...current,
