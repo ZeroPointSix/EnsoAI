@@ -1,21 +1,12 @@
 import type { CanvasAgentDisplayState } from '@/components/canvas/CanvasAgentStatusDot';
 
-const SPINNER_CHARS = '·✱✲✳✴✵✶✷✸✹✺✻✼✽✾✿❀❁❂❃❇❈❉❊❋✢✣✤✥✦✧✨⊛⊕⊙◉◎◍⁂⁕※⍟☼★☆✽';
+/** 仅从预览文本识别「需用户确认」类 blocked（对齐 OpenCove：状态不靠预览猜 working） */
+export function inferBlockedFromPreview(previewText: string | undefined): boolean {
+  if (!previewText?.trim()) return false;
 
-function hasSpinnerLine(text: string): boolean {
-  for (const line of text.split('\n')) {
-    const trimmed = line.trim();
-    const first = trimmed.charAt(0);
-    if (!first || !SPINNER_CHARS.includes(first)) continue;
-    const rest = trimmed.slice(1);
-    if (rest.startsWith(' ') && rest.includes('…') && /\d|for|ing|process/i.test(rest)) {
-      return true;
-    }
-  }
-  return false;
-}
+  const tail = previewText.slice(-4000);
+  const lower = tail.toLowerCase();
 
-function hasBlockedPrompt(lower: string, _raw: string): boolean {
   return (
     lower.includes('do you want to proceed?') ||
     lower.includes('would you like to proceed?') ||
@@ -26,29 +17,9 @@ function hasBlockedPrompt(lower: string, _raw: string): boolean {
   );
 }
 
-/** 从看板 preview 尾部推断 Agent 展示状态（Claude Code 为主） */
-export function inferDisplayFromPreview(previewText: string | undefined): CanvasAgentDisplayState | null {
-  if (!previewText?.trim()) return null;
-
-  const tail = previewText.slice(-4000);
-  const lower = tail.toLowerCase();
-
-  if (hasBlockedPrompt(lower, tail)) return 'blocked';
-
-  // Claude 空闲提示符旁常有 esc to interrupt — 表示等待输入，不是执行中
-  if (/^❯\s*$/m.test(tail.trimEnd()) || /\n❯\s*$/m.test(tail)) {
-    return null;
-  }
-
-  // 「Cooked/Crunched/Thought for Ns」是已结束的阶段行，留在 scrollback 里不能算仍在跑
-  if (
-    /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(tail) ||
-    hasSpinnerLine(tail) ||
-    /\bbloviat(?:ing)?\b/i.test(tail) ||
-    /\bbloviat(?:ing)?(?:\s+for\s+\d+s)?\s*…/i.test(tail)
-  ) {
-    return 'working';
-  }
-
-  return null;
+/** @deprecated 仅保留 blocked；working/idle 由 outputState + Hook 驱动 */
+export function inferDisplayFromPreview(
+  previewText: string | undefined
+): CanvasAgentDisplayState | null {
+  return inferBlockedFromPreview(previewText) ? 'blocked' : null;
 }

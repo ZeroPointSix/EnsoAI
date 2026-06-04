@@ -1,20 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { inferDisplayFromPreview } from '../inferDisplayFromPreview';
+import { inferBlockedFromPreview, inferDisplayFromPreview } from '../inferDisplayFromPreview';
 
-describe('inferDisplayFromPreview', () => {
-  it('does not treat finished phase lines or idle prompt as working', () => {
-    expect(inferDisplayFromPreview('✽ Cooked for 12s\n❯ ')).toBeNull();
-    expect(inferDisplayFromPreview('* Crunched for 15s\nesc to interrupt\n❯ ')).toBeNull();
-  });
-
-  it('detects in-progress Claude status', () => {
-    expect(inferDisplayFromPreview('✽ Bloviating…\n')).toBe('working');
-    expect(inferDisplayFromPreview('⠋ Thinking…')).toBe('working');
-  });
-
+describe('inferBlockedFromPreview', () => {
   it('detects blocked permission prompt', () => {
     const text = 'Do you want to proceed?\n❯ Yes\n  No';
-    expect(inferDisplayFromPreview(text)).toBe('blocked');
+    expect(inferBlockedFromPreview(text)).toBe(true);
+  });
+
+  it('does not treat finished Claude lines as blocked or working', () => {
+    expect(inferBlockedFromPreview('* Crunched for 15s\n❯ ')).toBe(false);
+    expect(inferDisplayFromPreview('✽ Bloviating…\n')).toBeNull();
   });
 
   it('returns null for empty preview', () => {

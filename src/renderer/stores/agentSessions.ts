@@ -22,6 +22,33 @@ import {
 } from '@/stores/terminalPreviewRegistry';
 import { useAgentStatusStore } from './agentStatus';
 
+/** 与 OpenCove ptyState 一致：outputState 变化时同步看板四色灯（避免动态 import 循环依赖） */
+function queueCanvasDisplaySync(
+  sessionId: string,
+  outputState: OutputState,
+  finishedOutputting: boolean
+): void {
+  queueMicrotask(() => {
+    void import('@/stores/canvasCardDisplayStore').then(({ useCanvasCardDisplayStore }) => {
+      const { setDisplayState, bySessionId } = useCanvasCardDisplayStore.getState();
+      const current = bySessionId[sessionId];
+      if (current === 'blocked') return;
+
+      if (outputState === 'outputting') {
+        if (current !== 'completed') setDisplayState(sessionId, 'working');
+        return;
+      }
+      if (finishedOutputting || outputState === 'unread') {
+        setDisplayState(sessionId, 'completed');
+        return;
+      }
+      if (current === 'working') {
+        setDisplayState(sessionId, 'idle');
+      }
+    });
+  });
+}
+
 // Global storage key for all sessions across all repos
 export const SESSIONS_STORAGE_KEY = 'enso-agent-sessions';
 
@@ -374,7 +401,10 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
 
         // Handle state transitions
         if (outputState === 'outputting') {
-          // Starting to output: just track the state
+          if (currentState?.outputState === 'outputting') {
+            return prev;
+          }
+          queueCanvasDisplaySync(sessionId, 'outputting', false);
           return {
             runtimeStates: {
               ...prev.runtimeStates,
@@ -400,13 +430,18 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
           // Only check if user is CURRENTLY viewing the session
           // If user is not viewing when AI finishes, mark as unread
           const shouldMarkUnread = wasOutputting && !isActive;
+          const nextOutput = shouldMarkUnread ? 'unread' : 'idle';
+          if (currentState?.outputState === nextOutput) {
+            return prev;
+          }
+          queueCanvasDisplaySync(sessionId, nextOutput, wasOutputting);
 
           return {
             runtimeStates: {
               ...prev.runtimeStates,
               [sessionId]: {
                 ...currentState,
-                outputState: shouldMarkUnread ? 'unread' : 'idle',
+                outputState: nextOutput,
                 lastActivityAt: Date.now(),
                 wasActiveWhenOutputting: false,
               },
@@ -417,6 +452,9 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
         // For other states (unread), just set directly
         if (currentState?.outputState === outputState) {
           return prev;
+        }
+        if (outputState === 'unread') {
+          queueCanvasDisplaySync(sessionId, 'unread', true);
         }
         return {
           runtimeStates: {

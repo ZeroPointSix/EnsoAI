@@ -199,17 +199,20 @@ export function SessionCanvasCard({
     isAgent && item.kind === 'agent' ? s.bySessionId[item.session.id] : undefined
   );
 
-  const snapshotDisplayState =
-    isAgent && item.kind === 'agent' ? item.agentDisplayState : undefined;
-
   const agentDisplayState: CanvasAgentDisplayState = useMemo(() => {
     if (!isAgent || item.kind !== 'agent') return 'idle';
+
+    // 独立看板进程：直接用主窗 IPC 快照里已算好的状态（勿把 agentDisplayState 当 hookState）
+    if (!hasLocalAgentRuntime && item.agentDisplayState) {
+      return item.agentDisplayState;
+    }
+
     return resolveCanvasAgentDisplayState({
       outputState: item.outputState,
       previewText,
-      hookState: hookDisplayState ?? snapshotDisplayState,
+      hookState: hookDisplayState,
     });
-  }, [isAgent, item, previewText, hookDisplayState, snapshotDisplayState]);
+  }, [isAgent, item, previewText, hookDisplayState, hasLocalAgentRuntime]);
 
   const glowState = isFocused
     ? 'idle'
