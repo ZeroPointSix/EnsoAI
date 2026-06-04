@@ -29,8 +29,32 @@ export interface AgentRuntimeActivity {
 /** 完成态保持时长（绿灯 60 秒后退回 idle） */
 const COMPLETED_TTL_MS = 60_000;
 
-/** CPU 空闲判定窗口：连续 N 毫秒无 CPU + 无输出 → 可判 idle */
-const IDLE_THRESHOLD_MS = 3_000;
+/** CPU/输出空闲判定：无活跃信号超过该时长 → completed（看板黄→绿） */
+const IDLE_THRESHOLD_MS = 1_200;
+
+function isOutputIdle(activity: AgentRuntimeActivity, now: number): boolean {
+  if (activity.lastOutputAt <= 0) {
+    return true;
+  }
+  return now - activity.lastOutputAt > IDLE_THRESHOLD_MS;
+}
+
+function promoteCompletedToRunning(
+  sessionId: string,
+  current: AgentRuntimeActivity,
+  now: number,
+  source: ActivitySource
+): AgentRuntimeActivity {
+  clearCompletedTimer(sessionId);
+  return {
+    ...current,
+    phase: 'running',
+    lastCpuActiveAt: now,
+    lastOutputAt: source === 'output' ? now : current.lastOutputAt,
+    lastStartedAt: now,
+    source,
+  };
+}
 
 interface AgentRuntimeActivityState {
   activities: Record<string, AgentRuntimeActivity>;
@@ -95,9 +119,14 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
       if (current.phase === 'blocked') {
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastCpuActiveAt: now } } };
       }
-      // completed 状态也不由 PTY CPU 活跃覆盖（需要 60s TTL 或新 running Hook）
       if (current.phase === 'completed') {
-        return { activities: { ...prev.activities, [sessionId]: { ...current, lastCpuActiveAt: now } } };
+        console.log(`[AgentRuntimeActivity] ${sessionId.slice(0, 8)} completed → running (cpu)`);
+        return {
+          activities: {
+            ...prev.activities,
+            [sessionId]: promoteCompletedToRunning(sessionId, current, now, 'pty'),
+          },
+        };
       }
       if (current.phase === 'running') {
         // 已经 running，只刷新时间戳
@@ -118,9 +147,17 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
     const now = Date.now();
     set((prev) => {
       const current = prev.activities[sessionId] ?? defaultActivity();
-      // blocked/completed 不被输出覆盖
-      if (current.phase === 'blocked' || current.phase === 'completed') {
+      if (current.phase === 'blocked') {
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastOutputAt: now } } };
+      }
+      if (current.phase === 'completed') {
+        console.log(`[AgentRuntimeActivity] ${sessionId.slice(0, 8)} completed → running (output)`);
+        return {
+          activities: {
+            ...prev.activities,
+            [sessionId]: promoteCompletedToRunning(sessionId, current, now, 'output'),
+          },
+        };
       }
       if (current.phase === 'running') {
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastOutputAt: now } } };
@@ -197,9 +234,8 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
     for (const [sessionId, activity] of Object.entries(activities)) {
       if (activity.phase !== 'running') continue;
       const elapsedSinceCpu = now - activity.lastCpuActiveAt;
-      const elapsedSinceOutput = now - activity.lastOutputAt;
-      // 两个都超过阈值 → 转为 completed（或 idle）
-      if (elapsedSinceCpu > IDLE_THRESHOLD_MS && elapsedSinceOutput > IDLE_THRESHOLD_MS) {
+      const outputIdle = isOutputIdle(activity, now);
+      if (elapsedSinceCpu > IDLE_THRESHOLD_MS && outputIdle) {
         // 有过实际工作（startedAt 存在且晚于 0）→ completed
         if (activity.lastStartedAt > 0) {
           updates[sessionId] = {

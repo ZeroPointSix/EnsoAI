@@ -94,6 +94,7 @@ import { refreshAllCanvasPreviews } from './lib/refreshCanvasPreviews';
 import { scheduleCanvasPreviewRefresh } from './lib/scheduleCanvasPreviewRefresh';
 import { pushSessionCanvasSnapshotToPanel } from './lib/sessionCanvasSync';
 import { initCanvasCardDisplayListeners } from './stores/canvasCardDisplayStore';
+import { useAgentRuntimeActivityStore } from './stores/agentRuntimeActivity';
 import { useAgentSessionsStore } from './stores/agentSessions';
 import { initAgentTasksListener, useAgentTasksStore } from './stores/agentTasks';
 import { initCloneProgressListener } from './stores/cloneTasks';
@@ -239,15 +240,17 @@ export default function App() {
     const poll = window.setInterval(() => {
       refreshAllCanvasPreviews();
       pushSessionCanvasSnapshotToPanel();
-    }, 2000);
+    }, 1000);
     const unsubAgent = useAgentSessionsStore.subscribe(scheduleSync);
     const unsubTerminal = useTerminalStore.subscribe(scheduleSync);
+    const unsubRuntimeActivity = useAgentRuntimeActivityStore.subscribe(scheduleSync);
     return () => {
       cancelBootstrap();
       if (timer) clearTimeout(timer);
       window.clearInterval(poll);
       unsubAgent();
       unsubTerminal();
+      unsubRuntimeActivity();
     };
   }, [isSessionCanvasPanelOpen]);
 

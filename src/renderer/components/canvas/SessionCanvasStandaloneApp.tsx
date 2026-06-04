@@ -37,7 +37,7 @@ export function SessionCanvasStandaloneApp() {
     void window.electronAPI.sessionCanvasPanel.getDisplayMode().then(setDisplayMode);
     const poll = window.setInterval(() => {
       window.electronAPI.sessionCanvasPanel.getSnapshot();
-    }, 1500);
+    }, 1000);
     return () => {
       window.clearInterval(poll);
     };

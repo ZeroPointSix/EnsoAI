@@ -63,7 +63,7 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
     };
 
     poll();
-    pollIntervalRef.current = setInterval(poll, 1500);
+    pollIntervalRef.current = setInterval(poll, 800);
 
     return () => {
       if (pollIntervalRef.current) {
