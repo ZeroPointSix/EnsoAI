@@ -122,7 +122,8 @@ export function SessionCanvasPanel({
 
   const previewSyncEnabled = syncPreviews && !externalItems;
   useCanvasPtyPreviewFanIn(previewSyncEnabled);
-  useAgentRuntimeActivityMonitor(previewSyncEnabled);
+  // 统一 monitor 始终启用（不依赖 previewSyncEnabled），确保状态灯在所有模式下工作
+  useAgentRuntimeActivityMonitor(true);
 
   useEffect(() => {
     if (!previewSyncEnabled) return;
