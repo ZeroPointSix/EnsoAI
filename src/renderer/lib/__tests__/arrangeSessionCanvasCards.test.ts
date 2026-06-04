@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CANVAS_CARD_DEFAULT_HEIGHT,
   CANVAS_CARD_DEFAULT_WIDTH,
+  computeArrangedCanvasHeight,
   computeArrangedPositions,
   getCardRepoPath,
   sortCardsByRepoPath,
@@ -49,5 +50,21 @@ describe('arrangeSessionCanvasCards', () => {
     });
     expect(CANVAS_CARD_DEFAULT_WIDTH).toBe(320);
     expect(CANVAS_CARD_DEFAULT_HEIGHT).toBe(300);
+  });
+
+  it('canvas min height grows with card count so board can scroll', () => {
+    const oneCard = computeArrangedCanvasHeight(1, 400);
+    const threeCardsNarrow = computeArrangedCanvasHeight(3, 400);
+    const fourCardsWide = computeArrangedCanvasHeight(4, 960);
+
+    expect(threeCardsNarrow).toBeGreaterThan(oneCard);
+    expect(fourCardsWide).toBeGreaterThan(computeArrangedCanvasHeight(2, 960));
+    expect(fourCardsWide).toBeGreaterThan(600);
+  });
+
+  it('uses two rows when many cards in narrow container', () => {
+    const height = computeArrangedCanvasHeight(3, 400);
+    const singleRowHeight = 16 + 300 + 16;
+    expect(height).toBeGreaterThan(singleRowHeight + 200);
   });
 });

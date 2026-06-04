@@ -20,6 +20,7 @@ import {
   computeArrangedCanvasHeight,
   computeArrangedPositions,
 } from '@/lib/arrangeSessionCanvasCards';
+import { resolveSessionCanvasCardClickIntent } from '@/lib/sessionCanvasCardClick';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { useCanvasPtyPreviewFanIn } from '@/hooks/useCanvasPtyPreviewFanIn';
 import { refreshAllCanvasPreviews } from '@/lib/refreshCanvasPreviews';
@@ -269,7 +270,11 @@ export function SessionCanvasPanel({
   /** 单击进入浮层快捷输入；Ctrl+单击跳转主窗口会话 */
   const handleCardClick = useCallback(
     (item: CanvasCardItem, event: React.MouseEvent) => {
-      if (event.ctrlKey || event.metaKey) {
+      const intent = resolveSessionCanvasCardClickIntent({
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+      });
+      if (intent === 'jump-to-session') {
         setFocusedCardKey(null);
         void handleFocus(item);
         return;

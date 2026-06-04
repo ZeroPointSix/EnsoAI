@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   mergeAuthoritativePreviewSnapshot,
   mergeCanvasRefreshPreview,
+  shouldApplyPreviewSnapshot,
 } from '../previewSnapshotMerge';
 
 describe('mergeAuthoritativePreviewSnapshot', () => {
@@ -18,6 +19,16 @@ describe('mergeAuthoritativePreviewSnapshot', () => {
   });
 });
 
+describe('shouldApplyPreviewSnapshot', () => {
+  it('rejects shorter subset refresh', () => {
+    expect(shouldApplyPreviewSnapshot('long conversation tail here', 'short')).toBe(false);
+  });
+
+  it('accepts incoming that extends existing', () => {
+    expect(shouldApplyPreviewSnapshot('hello', 'hello\nworld')).toBe(true);
+  });
+});
+
 describe('mergeCanvasRefreshPreview', () => {
   it('keeps streamed conversation when xterm refresh returns startup screen', () => {
     const stream =
@@ -25,5 +36,25 @@ describe('mergeCanvasRefreshPreview', () => {
     const startup =
       "What's new\nWelcome back!\nTips for getting started\nMiniMax-M3 · API Usage Billing\nE:\\hushaokang\\apple\n>";
     expect(mergeCanvasRefreshPreview(stream, startup)).toBe(stream);
+  });
+
+  it('returns incoming when existing is empty', () => {
+    expect(mergeCanvasRefreshPreview('', 'new line')).toBe('new line');
+  });
+
+  it('returns existing when incoming is empty', () => {
+    expect(mergeCanvasRefreshPreview('keep me', '')).toBe('keep me');
+  });
+
+  it('replaces chrome-only existing with real snapshot', () => {
+    const chrome = '? for shortcuts · for agents';
+    const real = 'Self introduction\nThought for 9s\nDone.';
+    expect(mergeCanvasRefreshPreview(chrome, real)).toBe(real);
+  });
+
+  it('keeps longer stream when incoming is shorter unrelated xterm slice', () => {
+    const stream = 'A'.repeat(200) + '\nuser asked about editors\nBloviating...';
+    const short = 'Welcome back!\n>';
+    expect(mergeCanvasRefreshPreview(stream, short)).toBe(stream);
   });
 });
