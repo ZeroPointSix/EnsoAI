@@ -1,6 +1,6 @@
 import type { CanvasAgentDisplayState } from '@/components/canvas/CanvasAgentStatusDot';
 import type { OutputState } from '@/stores/agentSessions';
-import { inferBlockedFromPreview } from './inferDisplayFromPreview';
+import { inferPreviewSignalReason } from './inferDisplayFromPreview';
 
 /**
  * 对齐 OpenCove AgentRuntimeStatus / ptyState：
@@ -13,9 +13,15 @@ import { inferBlockedFromPreview } from './inferDisplayFromPreview';
 export function resolveCanvasAgentDisplayState(input: {
   outputState: OutputState;
   previewText?: string;
+  previewRawTail?: string;
   hookState?: CanvasAgentDisplayState;
 }): CanvasAgentDisplayState {
-  if (input.hookState === 'blocked' || inferBlockedFromPreview(input.previewText)) {
+  const previewSignal = inferPreviewSignalReason(input.previewText, input.previewRawTail);
+  if (
+    input.hookState === 'blocked' ||
+    previewSignal.kind === 'blocked' ||
+    previewSignal.kind === 'error'
+  ) {
     return 'blocked';
   }
 

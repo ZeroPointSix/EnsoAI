@@ -24,6 +24,7 @@
 | Hook | 主进程 `ClaudeIdeBridge` |
 | Standalone | 独立看板进程 |
 | QuickInput / PtyCheck / PtyRegistry / Preview | 输入、PTY、预览 |
+| PreviewSignal | 终端 ANSI 红/1-2-3 菜单/授权文案推断 |
 | IPC / Window | 主进程 IPC 与窗口 |
 
 ## 限流

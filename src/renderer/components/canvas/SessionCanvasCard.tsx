@@ -127,6 +127,10 @@ export function SessionCanvasCard({
       runtime?.previewEscapePending
     );
   });
+  const livePreviewRawTail = useAgentSessionsStore((s) => {
+    if (item.kind !== 'agent' || !hasLocalAgentRuntime) return undefined;
+    return s.runtimeStates[item.session.id]?.previewRawTail;
+  });
 
   const previewText =
     item.kind === 'agent'
@@ -211,9 +215,10 @@ export function SessionCanvasCard({
     return resolveCanvasAgentDisplayState({
       outputState: item.outputState,
       previewText,
+      previewRawTail: livePreviewRawTail,
       hookState: hookDisplayState,
     });
-  }, [isAgent, item, previewText, hookDisplayState, hasLocalAgentRuntime]);
+  }, [isAgent, item, previewText, livePreviewRawTail, hookDisplayState, hasLocalAgentRuntime]);
 
   const prevDisplayRef = useRef(agentDisplayState);
   useEffect(() => {
@@ -227,6 +232,7 @@ export function SessionCanvasCard({
       hookDisplayState,
       snapshotLight: item.agentDisplayState,
       outputState: item.outputState,
+      previewSignalReason: livePreviewRawTail ? 'raw-present' : 'no-raw',
       isFocused,
       disableDrag,
     });

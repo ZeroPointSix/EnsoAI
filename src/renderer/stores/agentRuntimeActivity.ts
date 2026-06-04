@@ -29,6 +29,8 @@ export interface AgentRuntimeActivity {
   lastStartedAt: number;
   lastCompletedAt: number;
   source: ActivitySource;
+  /** 预览推断的 blocked 原因（ansi_red / numbered_menu 等） */
+  previewBlockReason?: string;
 }
 
 /** 完成态保持时长（绿灯 60 秒后退回 idle） */
@@ -78,6 +80,12 @@ interface AgentRuntimeActivityState {
 
   /** Hook 语义事件：blocked */
   reportHookBlocked: (sessionId: string) => void;
+
+  /** 终端预览推断：授权 / Ask / 红色输出 */
+  reportPreviewBlocked: (sessionId: string, reason: string) => void;
+
+  /** 预览信号消失后退出 preview-blocked */
+  clearPreviewBlocked: (sessionId: string, clearReason: string) => void;
 
   /** Hook 语义事件：completed */
   reportHookCompleted: (sessionId: string) => void;
@@ -233,8 +241,54 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         phase: 'blocked',
         lastOutputAt: now,
         source: 'hook',
+        previewBlockReason: undefined,
       };
       logPhaseIfChanged(sessionId, current.phase, 'blocked', 'hook:AskUserQuestion');
+      return { activities: { ...prev.activities, [sessionId]: next } };
+    });
+  },
+
+  reportPreviewBlocked: (sessionId, reason) => {
+    const now = Date.now();
+    set((prev) => {
+      const current = prev.activities[sessionId] ?? defaultActivity();
+      if (current.phase === 'blocked' && current.source === 'hook') {
+        sessionCanvasLogThrottled(
+          `preview-block-skip-hook-${sessionId}`,
+          3000,
+          'Activity',
+          'preview blocked skipped (hook already blocked)',
+          { sessionId: sessionId.slice(0, 8), reason }
+        );
+        return prev;
+      }
+      clearCompletedTimer(sessionId);
+      const next: AgentRuntimeActivity = {
+        ...current,
+        phase: 'blocked',
+        lastOutputAt: now,
+        source: 'inferred',
+        previewBlockReason: reason,
+      };
+      logPhaseIfChanged(sessionId, current.phase, 'blocked', `preview:${reason}`);
+      return { activities: { ...prev.activities, [sessionId]: next } };
+    });
+  },
+
+  clearPreviewBlocked: (sessionId, clearReason) => {
+    set((prev) => {
+      const current = prev.activities[sessionId];
+      if (!current || current.phase !== 'blocked') return prev;
+      if (current.source === 'hook' || !current.previewBlockReason) return prev;
+      logPhaseIfChanged(sessionId, 'blocked', 'idle', clearReason, {
+        wasPreviewReason: current.previewBlockReason,
+      });
+      const next: AgentRuntimeActivity = {
+        ...current,
+        phase: 'idle',
+        source: 'inferred',
+        previewBlockReason: undefined,
+      };
       return { activities: { ...prev.activities, [sessionId]: next } };
     });
   },

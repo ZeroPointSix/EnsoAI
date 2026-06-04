@@ -19,6 +19,7 @@ export type SessionCanvasLogArea =
   | 'Standalone'
   | 'QuickInput'
   | 'Preview'
+  | 'PreviewSignal'
   | 'PtyRegistry'
   | 'App'
   | 'Resize'

@@ -1,20 +1,23 @@
 import type { CanvasAgentDisplayState } from '@/components/canvas/CanvasAgentStatusDot';
+import { inferPreviewInterruptSignal } from './analyzeTerminalPreviewSignals';
 
-/** 仅从预览文本识别「需用户确认」类 blocked（对齐 OpenCove：状态不靠预览猜 working） */
-export function inferBlockedFromPreview(previewText: string | undefined): boolean {
-  if (!previewText?.trim()) return false;
+/** 从预览（可含 raw ANSI 尾 + 纯文本）推断是否应亮红灯 */
+export function inferBlockedFromPreview(
+  previewText: string | undefined,
+  rawTail?: string
+): boolean {
+  const signal = inferPreviewInterruptSignal({
+    rawTail,
+    strippedTail: previewText,
+  });
+  return signal.kind === 'blocked' || signal.kind === 'error';
+}
 
-  const tail = previewText.slice(-4000);
-  const lower = tail.toLowerCase();
-
-  return (
-    lower.includes('do you want to proceed?') ||
-    lower.includes('would you like to proceed?') ||
-    lower.includes('waiting for permission') ||
-    lower.includes('do you want to allow this connection?') ||
-    lower.includes('tab to amend') ||
-    lower.includes('ctrl+e to explain')
-  );
+export function inferPreviewSignalReason(
+  previewText: string | undefined,
+  rawTail?: string
+) {
+  return inferPreviewInterruptSignal({ rawTail, strippedTail: previewText });
 }
 
 /** @deprecated 仅保留 blocked；working/idle 由 outputState + Hook 驱动 */

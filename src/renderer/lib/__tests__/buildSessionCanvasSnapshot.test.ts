@@ -49,6 +49,17 @@ describe('resolveAgentDisplayStateForSnapshot', () => {
     ).toBe('blocked');
   });
 
+  it('infers blocked from red ANSI raw tail', () => {
+    expect(
+      resolveAgentDisplayStateForSnapshot({
+        activity: baseActivity('running'),
+        outputState: 'idle',
+        previewText: 'Allow connection?',
+        previewRawTail: '\x1b[31mAllow connection?\x1b[0m',
+      })
+    ).toBe('blocked');
+  });
+
   it('maps completed phase to completed', () => {
     expect(
       resolveAgentDisplayStateForSnapshot({

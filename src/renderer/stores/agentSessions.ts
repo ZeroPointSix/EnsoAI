@@ -11,6 +11,13 @@ import {
   mergePreviewSnapshot,
   mergeXtermCanvasPreview,
 } from '@/lib/previewSnapshotMerge';
+import {
+  appendRawPreviewTail,
+  type PreviewInterruptReason,
+  inferPreviewInterruptSignal,
+  logPreviewSignalAnalysis,
+} from '@/lib/canvasAgentState/analyzeTerminalPreviewSignals';
+import { syncPreviewSignalToActivity } from '@/lib/canvasAgentState/syncPreviewSignalToActivity';
 import { appendTerminalPreviewChunk, getDisplayPreviewText } from '@/lib/terminalPreview';
 import {
   removeCachedSessionPreview,
@@ -63,6 +70,10 @@ export interface SessionRuntimeState {
   previewText?: string;
   /** Incomplete ESC bytes waiting for the next PTY chunk */
   previewEscapePending?: string;
+  /** 带 ANSI 的原始尾部（颜色/菜单推断） */
+  previewRawTail?: string;
+  /** 最近一次预览信号 reason（none 时不写） */
+  previewSignalReason?: string;
 }
 
 // Enhanced input state for each session (not persisted)
@@ -600,14 +611,30 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
     appendSessionPreview: (sessionId, data) =>
       set((prev) => {
         const current = prev.runtimeStates[sessionId];
+        const previewRawTail = appendRawPreviewTail(current?.previewRawTail, data);
         const { previewText, escapePending } = appendTerminalPreviewChunk(
           current?.previewText,
           current?.previewEscapePending,
           data
         );
+        const strippedTail = getDisplayPreviewText(previewText, escapePending);
+        const signal = inferPreviewInterruptSignal({
+          rawTail: previewRawTail,
+          strippedTail,
+        });
+        const prevSignalReason = current?.previewSignalReason as PreviewInterruptReason | undefined;
+        logPreviewSignalAnalysis(sessionId, signal, {
+          bytes: data.length,
+        });
+        syncPreviewSignalToActivity(sessionId, signal, prevSignalReason);
+        const previewSignalReason =
+          signal.reason === 'none' ? undefined : signal.reason;
+
         if (
           previewText === current?.previewText &&
-          escapePending === current?.previewEscapePending
+          escapePending === current?.previewEscapePending &&
+          previewRawTail === current?.previewRawTail &&
+          previewSignalReason === current?.previewSignalReason
         ) {
           return prev;
         }
@@ -623,6 +650,8 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
               wasActiveWhenOutputting: current?.wasActiveWhenOutputting ?? false,
               previewText,
               previewEscapePending: escapePending,
+              previewRawTail,
+              previewSignalReason,
             },
           },
         };
