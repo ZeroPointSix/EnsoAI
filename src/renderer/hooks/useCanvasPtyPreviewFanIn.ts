@@ -24,7 +24,15 @@ export function useCanvasPtyPreviewFanIn(enabled: boolean): void {
         if (ptyId !== id) continue;
         if (hasTerminalPreviewReader(sessionId)) {
           const snap = snapshotTerminalPreview(sessionId);
-          if (snap?.trim() && !isLowSignalCanvasPreview(snap)) break;
+          const runtime = useAgentSessionsStore.getState().runtimeStates[sessionId]?.previewText;
+          const stream = agentIds.has(sessionId) ? runtime : useTerminalStore.getState().sessions.find((s) => s.id === sessionId)?.previewText;
+          if (
+            snap?.trim() &&
+            !isLowSignalCanvasPreview(snap) &&
+            (stream?.trim()?.length ?? 0) <= snap.length
+          ) {
+            break;
+          }
         }
         if (agentIds.has(sessionId)) {
           appendAgent(sessionId, data);

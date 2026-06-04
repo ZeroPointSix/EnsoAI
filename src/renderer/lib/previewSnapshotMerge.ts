@@ -47,3 +47,28 @@ export function mergeAuthoritativePreviewSnapshot(
 
   return incoming!;
 }
+
+/**
+ * 看板定时从 xterm 刷新预览：不得用启动屏/旧快照覆盖 PTY 流式文本。
+ */
+export function mergeCanvasRefreshPreview(
+  existing: string | undefined,
+  incoming: string | null | undefined
+): string {
+  const next = incoming?.trim() ?? '';
+  if (!next) return existing ?? '';
+  const prev = existing?.trim() ?? '';
+  if (!prev) return next;
+
+  if (isLowSignalCanvasPreview(next)) {
+    return !isLowSignalCanvasPreview(prev) ? prev : next;
+  }
+  if (isLowSignalCanvasPreview(prev)) return next;
+
+  const prevTail = prev.slice(-100);
+  if (prev.length > next.length + 48 && prevTail && !next.includes(prevTail.slice(-50))) {
+    return prev;
+  }
+
+  return mergePreviewSnapshot(prev, next) || prev;
+}

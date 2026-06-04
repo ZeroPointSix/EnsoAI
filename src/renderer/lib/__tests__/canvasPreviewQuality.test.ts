@@ -8,6 +8,12 @@ describe('isLowSignalCanvasPreview', () => {
     ).toBe(true);
   });
 
+  it('detects Claude startup screen with Whats new', () => {
+    const startup =
+      "What's new\nWelcome back!\nTips for getting started\nRecent activity\nMiniMax-M3 · API Usage Billing";
+    expect(isLowSignalCanvasPreview(startup)).toBe(true);
+  });
+
   it('keeps real agent output', () => {
     const output = 'User: fix the bug\n\nAssistant: I will read the file first.\n* Cooked for 3s';
     expect(isLowSignalCanvasPreview(output)).toBe(false);

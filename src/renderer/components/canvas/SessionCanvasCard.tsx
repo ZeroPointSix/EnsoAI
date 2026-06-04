@@ -55,7 +55,6 @@ interface SessionCanvasCardProps {
   positionOverride?: { x: number; y: number };
   disableDrag?: boolean;
   onCardClick: (event: React.MouseEvent) => void;
-  onCardDoubleClick?: (event: React.MouseEvent) => void;
   onRenameSession?: (kind: SessionCanvasCardKind, sessionId: string, name: string) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
   renameRequestToken?: number;
@@ -97,7 +96,6 @@ export function SessionCanvasCard({
   positionOverride,
   disableDrag = false,
   onCardClick,
-  onCardDoubleClick,
   onRenameSession,
   onContextMenu,
   renameRequestToken,
@@ -288,7 +286,7 @@ export function SessionCanvasCard({
               className="min-h-0 flex-1"
             />
             <p className="shrink-0 text-[10px] text-muted-foreground">
-              {t('Esc to close · Double-click card to expand input')}
+              {t('Ctrl+click to jump to session · Esc to close')}
             </p>
           </div>
         </div>
@@ -300,9 +298,7 @@ export function SessionCanvasCard({
             isActive={isActive}
           />
           <p className="truncate text-[10px] text-muted-foreground/80" title={item.session.cwd}>
-            {ptyExists
-              ? t('Click to open session · Double-click for quick input')
-              : t('Click to open session — start terminal in main window first')}
+            {item.session.cwd}
           </p>
         </>
       )}
@@ -345,10 +341,6 @@ export function SessionCanvasCard({
     onCardClick(e);
   };
 
-  const handleShellDoubleClick = (e: React.MouseEvent) => {
-    onCardDoubleClick?.(e);
-  };
-
   const handleShellContextMenu = (e: React.MouseEvent) => {
     onContextMenu?.(e);
   };
@@ -367,7 +359,6 @@ export function SessionCanvasCard({
 
   const shellHandlers = {
     onClick: handleShellClick,
-    onDoubleClick: handleShellDoubleClick,
     onContextMenu: handleShellContextMenu,
   };
 

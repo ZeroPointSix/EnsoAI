@@ -24,6 +24,19 @@ export function isLowSignalCanvasPreview(text: string | undefined): boolean {
     return true;
   }
 
+  if (
+    /what'?s new/i.test(trimmed) &&
+    (/welcome back/i.test(trimmed) || /tips for getting started/i.test(trimmed))
+  ) {
+    return true;
+  }
+  if (/welcome back!/i.test(trimmed) && /recent activity/i.test(trimmed)) {
+    return true;
+  }
+  if (/api usage billing/i.test(trimmed) && /tips for getting started/i.test(trimmed)) {
+    return true;
+  }
+
   return false;
 }
 

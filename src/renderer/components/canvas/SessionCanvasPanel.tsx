@@ -266,21 +266,18 @@ export function SessionCanvasPanel({
     setFocusedCardKey(null);
   }, [filteredItems, canvasSize.width, setCardPosition, setCardSize]);
 
-  /** 单击跳转主窗口会话；双击展开快捷输入浮层（避免单击后整板变灰不可点） */
+  /** 单击进入浮层快捷输入；Ctrl+单击跳转主窗口会话 */
   const handleCardClick = useCallback(
     (item: CanvasCardItem, event: React.MouseEvent) => {
-      if (event.detail > 1) return;
-      setFocusedCardKey(null);
-      void handleFocus(item);
+      if (event.ctrlKey || event.metaKey) {
+        setFocusedCardKey(null);
+        void handleFocus(item);
+        return;
+      }
+      setFocusedCardKey(getSessionCanvasCardKey(item));
     },
     [handleFocus]
   );
-
-  const handleCardDoubleClick = useCallback((item: CanvasCardItem, event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setFocusedCardKey(getSessionCanvasCardKey(item));
-  }, []);
 
   const openContextMenu = useCallback((event: React.MouseEvent, item: CanvasCardItem | null) => {
     event.preventDefault();
@@ -434,7 +431,6 @@ export function SessionCanvasPanel({
                   isDimmed={isSoftDimmed}
                   disableDrag={Boolean(focusedCardKey)}
                   onCardClick={(e) => handleCardClick(item, e)}
-                  onCardDoubleClick={(e) => handleCardDoubleClick(item, e)}
                   onRenameSession={handleRenameSession}
                   onContextMenu={(e) => openContextMenu(e, item)}
                   renameRequestToken={
@@ -466,7 +462,6 @@ export function SessionCanvasPanel({
                 positionOverride={{ x: 0, y: 0 }}
                 disableDrag
                 onCardClick={(e) => handleCardClick(focusedItem, e)}
-                onCardDoubleClick={(e) => handleCardDoubleClick(focusedItem, e)}
                 onRenameSession={handleRenameSession}
                 onContextMenu={(e) => openContextMenu(e, focusedItem)}
                 renameRequestToken={

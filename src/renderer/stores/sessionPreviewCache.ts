@@ -1,6 +1,6 @@
 import { resolveCanvasCardPreviewText } from '@/lib/canvasPreviewQuality';
 import { getDisplayPreviewText } from '@/lib/terminalPreview';
-import { mergeAuthoritativePreviewSnapshot, mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
+import { mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
 
 export type SessionPreviewKind = 'agent' | 'terminal';
 
@@ -74,7 +74,7 @@ export function getResolvedSessionPreview(
   const runtime = getDisplayPreviewText(runtimeText, runtimePending);
   const cached = getCachedSessionPreview(kind, sessionId);
   if (runtime?.trim() && cached?.trim()) {
-    const merged = mergeAuthoritativePreviewSnapshot(cached, runtime);
+    const merged = mergePreviewSnapshot(cached, runtime);
     return resolveCanvasCardPreviewText(merged, cached) || undefined;
   }
   return resolveCanvasCardPreviewText(runtime, cached);

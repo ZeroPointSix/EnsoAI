@@ -4,7 +4,11 @@ import { normalizePath, pathsEqual } from '@/App/storage';
 import type { Session } from '@/components/chat/SessionBar';
 import type { AgentGroupState } from '@/components/chat/types';
 import { createInitialGroupState } from '@/components/chat/types';
-import { mergeAuthoritativePreviewSnapshot, mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
+import {
+  mergeAuthoritativePreviewSnapshot,
+  mergeCanvasRefreshPreview,
+  mergePreviewSnapshot,
+} from '@/lib/previewSnapshotMerge';
 import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
 import {
   removeCachedSessionPreview,
@@ -525,7 +529,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
         for (const session of prev.sessions) {
           const snapshot = snapshotTerminalPreview(session.id);
           const current = nextStates[session.id];
-          const merged = mergeAuthoritativePreviewSnapshot(current?.previewText, snapshot);
+          const merged = mergeCanvasRefreshPreview(current?.previewText, snapshot);
           if (!merged || (merged === current?.previewText && !current?.previewEscapePending)) {
             continue;
           }
