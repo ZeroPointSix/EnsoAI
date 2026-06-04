@@ -1,8 +1,10 @@
 import type { SessionCanvasSnapshot } from '@shared/types/sessionCanvas';
 import { buildSessionCanvasSnapshot } from '@/lib/buildSessionCanvasSnapshot';
+import { refreshAllCanvasPreviews } from '@/lib/refreshCanvasPreviews';
 
-/** 推送当前 runtime + 缓存解析后的快照；不在此处做 xterm 刷新，避免启动屏覆盖 PTY 流。 */
+/** 先从 xterm 刷新预览再推送（已挂载终端以屏幕为准，对齐 OpenCove presentationSnapshot）。 */
 export function pushSessionCanvasSnapshotToPanel(): void {
+  refreshAllCanvasPreviews();
   const snapshot: SessionCanvasSnapshot = buildSessionCanvasSnapshot();
   window.electronAPI.sessionCanvasPanel.sendSync(snapshot);
 }

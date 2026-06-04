@@ -217,6 +217,7 @@ export default function App() {
 
   useEffect(() => {
     return window.electronAPI.sessionCanvasPanel.onGetSnapshot(() => {
+      refreshAllCanvasPreviews();
       const snapshot = buildSessionCanvasSnapshot();
       window.electronAPI.sessionCanvasPanel.sendSnapshotResponse(snapshot);
     });

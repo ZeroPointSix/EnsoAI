@@ -281,7 +281,7 @@ export function SessionCanvasCard({
             text={previewText}
             placeholder={t('No output yet — open this session to stream preview')}
             isActive={isActive}
-            className="!min-h-0 !flex-none h-full min-h-0 overflow-hidden"
+            className="min-h-0 flex-1"
           />
           <div className="flex min-h-0 min-w-0 flex-col gap-1 overflow-hidden">
             <SessionCanvasQuickInput

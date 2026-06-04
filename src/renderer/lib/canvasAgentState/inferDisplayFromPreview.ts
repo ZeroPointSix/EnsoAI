@@ -38,6 +38,9 @@ export function inferDisplayFromPreview(previewText: string | undefined): Canvas
   if (
     lower.includes('esc to interrupt') ||
     lower.includes('ctrl+c to interrupt') ||
+    /\bthought for \d+s\b/i.test(tail) ||
+    /\bcrunched for \d+s\b/i.test(tail) ||
+    /\bbloviat(?:ing)?(?:\s+for\s+\d+s)?\b/i.test(tail) ||
     /\bcooked for \d+s\b/i.test(tail) ||
     /[*✽✻]?\s*cooked for \d+s/i.test(tail) ||
     /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(tail) ||

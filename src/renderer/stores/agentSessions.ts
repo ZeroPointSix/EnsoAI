@@ -9,6 +9,7 @@ import {
   mergeAuthoritativePreviewSnapshot,
   mergeCanvasRefreshPreview,
   mergePreviewSnapshot,
+  mergeXtermCanvasPreview,
 } from '@/lib/previewSnapshotMerge';
 import { appendTerminalPreviewChunk, getDisplayPreviewText } from '@/lib/terminalPreview';
 import {
@@ -536,17 +537,12 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
             current?.previewText,
             current?.previewEscapePending
           );
-          if (hasTerminalPreviewReader(session.id) && currentDisplay?.trim()) {
-            continue;
-          }
-          if (
-            currentDisplay &&
-            (isHighSignalCanvasPreview(currentDisplay) || !isLowSignalCanvasPreview(currentDisplay))
-          ) {
-            continue;
-          }
           const snapshot = snapshotTerminalPreview(session.id);
-          const merged = mergeCanvasRefreshPreview(current?.previewText, snapshot);
+          if (!snapshot?.trim()) continue;
+
+          const merged = hasTerminalPreviewReader(session.id)
+            ? mergeXtermCanvasPreview(current?.previewText, snapshot)
+            : mergeCanvasRefreshPreview(current?.previewText, snapshot);
           if (!merged || (merged === current?.previewText && !current?.previewEscapePending)) {
             continue;
           }

@@ -30,6 +30,10 @@ describe('isHighSignalCanvasPreview', () => {
     expect(isHighSignalCanvasPreview('hello\n你好！有什么我可以帮你的吗？\n'.repeat(8))).toBe(true);
   });
 
+  it('marks garbled esc+thinking tail as low signal', () => {
+    expect(isLowSignalCanvasPreview('esc to interruptthinkingthinking')).toBe(true);
+  });
+
   it('does not mark startup chrome as high signal', () => {
     const startup =
       "What's new\nWelcome back!\nTips for getting started\nMiniMax-M3 · API Usage Billing";

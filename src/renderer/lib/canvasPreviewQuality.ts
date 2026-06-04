@@ -7,8 +7,10 @@ export function isHighSignalCanvasPreview(text: string | undefined): boolean {
 
   const trimmed = text.trim();
   if (/Thought for \d+s/i.test(trimmed)) return true;
+  if (/\bthought for \d+s\b/i.test(trimmed)) return true;
+  if (/\bcrunched for \d+s\b/i.test(trimmed)) return true;
   if (/(?:Bloviat|Crunched|Cooked)(?:ing)?(?:\s+for\s+\d+s)?/i.test(trimmed)) return true;
-  if (/esc to interrupt/i.test(trimmed)) return true;
+  if (/esc to interrupt/i.test(trimmed) && trimmed.length >= 200) return true;
   if (/^❯\s+\S/m.test(trimmed)) return true;
   if (trimmed.length >= 120) return true;
 
@@ -55,6 +57,15 @@ export function isLowSignalCanvasPreview(text: string | undefined): boolean {
   if (
     compact.length < 400 &&
     (/forshortcuts/i.test(compact) || /foragents/i.test(compact))
+  ) {
+    return true;
+  }
+
+  if (
+    /esc to interrupt/i.test(trimmed) &&
+    /thinking/i.test(trimmed) &&
+    trimmed.length < 320 &&
+    !/[\u4e00-\u9fff]{6,}/.test(trimmed)
   ) {
     return true;
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   mergeAuthoritativePreviewSnapshot,
   mergeCanvasRefreshPreview,
+  mergeXtermCanvasPreview,
   shouldApplyPreviewSnapshot,
 } from '../previewSnapshotMerge';
 
@@ -26,6 +27,15 @@ describe('shouldApplyPreviewSnapshot', () => {
 
   it('accepts incoming that extends existing', () => {
     expect(shouldApplyPreviewSnapshot('hello', 'hello\nworld')).toBe(true);
+  });
+});
+
+describe('mergeXtermCanvasPreview', () => {
+  it('replaces garbled PTY stream with meaningful xterm screen', () => {
+    const garbled = 'esc to interruptthinkingthinking';
+    const screen =
+      '介绍一下世界第一美丽的人\nThought for 6s\n奥黛丽·赫本、费雯·丽…\n* Crunched for 15s\n';
+    expect(mergeXtermCanvasPreview(garbled, screen)).toBe(screen);
   });
 });
 

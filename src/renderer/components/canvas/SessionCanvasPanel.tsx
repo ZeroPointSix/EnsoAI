@@ -448,14 +448,14 @@ export function SessionCanvasPanel({
 
         {focusedItem ? (
           <div
-            className="absolute inset-0 z-40 overflow-y-auto overscroll-y-contain bg-black/55 p-3"
+            className="pointer-events-none absolute inset-0 z-40 overflow-y-auto overscroll-y-contain bg-black/55 p-3"
             onClick={(e) => {
               if (e.target === e.currentTarget) setFocusedCardKey(null);
             }}
             onContextMenu={(e) => e.preventDefault()}
           >
             <div
-              className="relative mx-auto flex min-h-0 max-w-full flex-col"
+              className="pointer-events-auto relative mx-auto flex min-h-0 max-w-full flex-col"
               style={{ width: focusSize.width, maxHeight: focusSize.height }}
               onClick={(e) => e.stopPropagation()}
             >

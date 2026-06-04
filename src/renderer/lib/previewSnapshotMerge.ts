@@ -49,6 +49,17 @@ export function mergeAuthoritativePreviewSnapshot(
 }
 
 /**
+ * 已挂载 xterm 时以屏幕快照为准（对齐 OpenCove presentationSnapshot / SerializeAddon 思路）。
+ * 流式 PTY 在 Claude TUI 备用屏下常为乱码，不得阻止 xterm 刷新。
+ */
+export function mergeXtermCanvasPreview(
+  existing: string | undefined,
+  incoming: string | null | undefined
+): string {
+  return mergeAuthoritativePreviewSnapshot(existing, incoming);
+}
+
+/**
  * 看板定时从 xterm 刷新预览：不得用启动屏/旧快照覆盖 PTY 流式文本。
  */
 export function mergeCanvasRefreshPreview(
