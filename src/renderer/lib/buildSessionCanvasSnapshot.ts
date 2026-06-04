@@ -1,4 +1,5 @@
 import type {
+  SessionCanvasAgentDisplayState,
   SessionCanvasCardSnapshot,
   SessionCanvasSnapshot,
 } from '@shared/types/sessionCanvas';
@@ -9,12 +10,52 @@ import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
 import type { TerminalSessionEntry } from '@/stores/terminal';
 import { resolveCanvasAgentDisplayState } from '@/lib/canvasAgentState/resolveCanvasAgentDisplayState';
 import { useCanvasCardDisplayStore } from '@/stores/canvasCardDisplayStore';
+import {
+  type AgentRuntimeActivity,
+  type AgentRuntimePhase,
+  useAgentRuntimeActivityStore,
+} from '@/stores/agentRuntimeActivity';
 import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { useTerminalStore } from '@/stores/terminal';
 
 function mapOutputState(state: OutputState | undefined): SessionCanvasCardSnapshot['outputState'] {
   if (state === 'outputting' || state === 'unread') return state;
   return 'idle';
+}
+
+function runtimePhaseToAgentDisplayState(
+  phase: AgentRuntimePhase
+): SessionCanvasAgentDisplayState {
+  switch (phase) {
+    case 'running':
+      return 'working';
+    case 'blocked':
+      return 'blocked';
+    case 'completed':
+      return 'completed';
+    default:
+      return 'idle';
+  }
+}
+
+/** 快照用 Agent 四色状态：Hook blocked > runtime activity > 旧 outputState 回退 */
+export function resolveAgentDisplayStateForSnapshot(input: {
+  activity?: AgentRuntimeActivity;
+  hookState?: SessionCanvasAgentDisplayState;
+  outputState: OutputState;
+  previewText?: string;
+}): SessionCanvasAgentDisplayState {
+  if (input.hookState === 'blocked') {
+    return 'blocked';
+  }
+  if (input.activity) {
+    return runtimePhaseToAgentDisplayState(input.activity.phase);
+  }
+  return resolveCanvasAgentDisplayState({
+    outputState: input.outputState,
+    previewText: input.previewText,
+    hookState: input.hookState,
+  });
 }
 
 function agentCard(session: Session, outputState: OutputState): SessionCanvasCardSnapshot {
@@ -26,10 +67,12 @@ function agentCard(session: Session, outputState: OutputState): SessionCanvasCar
     runtime?.previewEscapePending
   );
   const hookState = useCanvasCardDisplayStore.getState().bySessionId[session.id];
-  const agentDisplayState = resolveCanvasAgentDisplayState({
+  const activity = useAgentRuntimeActivityStore.getState().activities[session.id];
+  const agentDisplayState = resolveAgentDisplayStateForSnapshot({
+    activity,
+    hookState,
     outputState,
     previewText,
-    hookState,
   });
   return {
     key: `agent-${session.id}`,

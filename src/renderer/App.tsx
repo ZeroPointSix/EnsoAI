@@ -88,6 +88,7 @@ import {
 } from './hooks/useWorktree';
 import { useI18n } from './i18n';
 import { buildSessionCanvasSnapshot } from './lib/buildSessionCanvasSnapshot';
+import { useAgentRuntimeActivityMonitor } from './hooks/useAgentRuntimeActivityMonitor';
 import { useCanvasPtyPreviewFanIn } from './hooks/useCanvasPtyPreviewFanIn';
 import { refreshAllCanvasPreviews } from './lib/refreshCanvasPreviews';
 import { scheduleCanvasPreviewRefresh } from './lib/scheduleCanvasPreviewRefresh';
@@ -188,6 +189,7 @@ export default function App() {
   // Session canvas standalone window (Ctrl+5)
   const [isSessionCanvasPanelOpen, setIsSessionCanvasPanelOpen] = useState(false);
   useCanvasPtyPreviewFanIn(isSessionCanvasPanelOpen);
+  useAgentRuntimeActivityMonitor(isSessionCanvasPanelOpen);
   const toggleSessionCanvas = useCallback(() => {
     void window.electronAPI.sessionCanvasPanel.toggle();
   }, []);
