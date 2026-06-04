@@ -131,6 +131,10 @@ export function SessionCanvasCard({
     if (item.kind !== 'agent' || !hasLocalAgentRuntime) return undefined;
     return s.runtimeStates[item.session.id]?.previewRawTail;
   });
+  const livePreviewSignalReason = useAgentSessionsStore((s) => {
+    if (item.kind !== 'agent' || !hasLocalAgentRuntime) return undefined;
+    return s.runtimeStates[item.session.id]?.previewSignalReason;
+  });
 
   const previewText =
     item.kind === 'agent'
@@ -232,7 +236,7 @@ export function SessionCanvasCard({
       hookDisplayState,
       snapshotLight: item.agentDisplayState,
       outputState: item.outputState,
-      previewSignalReason: livePreviewRawTail ? 'raw-present' : 'no-raw',
+      previewSignalReason: livePreviewSignalReason ?? 'none',
       isFocused,
       disableDrag,
     });
