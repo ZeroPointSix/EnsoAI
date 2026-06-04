@@ -1,8 +1,9 @@
 # 会话看板（Session Canvas）— 问题陈述与修复记录
 
 > 更新：2026-06-04  
-> 分支：**dev** | 包版本：**0.2.84**（提交 `ae95661`）  
-> 产物：**EnsoAIPlus Dev** → GitHub Actions `windows-installer-dev`
+> 分支：**dev** | 包版本：**0.2.85+**（提交 `97fd7d1` / `874ae78`）  
+> 产物：**EnsoAIPlus Dev** → GitHub Actions `windows-installer-dev`  
+> **讨论纪要**：[../../../docs/session-canvas/2026-06-04-discussion-record.md](../../../docs/session-canvas/2026-06-04-discussion-record.md)（Enso 根目录 `docs/`）
 
 ---
 

@@ -11,6 +11,7 @@ import { useI18n } from '@/i18n';
 import { type OutputState, useAgentSessionsStore } from '@/stores/agentSessions';
 import { useSettingsStore } from '@/stores/settings';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
+import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 import { hasTerminalPreviewReader } from '@/stores/terminalPreviewRegistry';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
@@ -484,6 +485,10 @@ export function AgentTerminal({
     (ptyId: string) => {
       if (terminalSessionId) {
         setSessionPtyId(terminalSessionId, ptyId);
+        sessionCanvasLog('PtyRegistry', 'AgentTerminal pty init → push snapshot', {
+          sessionId: shortSessionId(terminalSessionId),
+          ptyId,
+        });
         pushSessionCanvasSnapshotToPanel();
       }
       ptyIdRef.current = ptyId;

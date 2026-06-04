@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { sessionCanvasLog, sessionCanvasLogPhase } from '@/lib/sessionCanvasLog';
 
 /**
  * 统一 Agent Runtime Activity 状态机。
@@ -108,6 +109,17 @@ function defaultActivity(): AgentRuntimeActivity {
   };
 }
 
+function logPhaseIfChanged(
+  sessionId: string,
+  from: AgentRuntimePhase,
+  to: AgentRuntimePhase,
+  reason: string,
+  extra?: Record<string, unknown>
+): void {
+  if (from === to) return;
+  sessionCanvasLogPhase('Activity', sessionId, from, to, reason, extra);
+}
+
 export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((set, get) => ({
   activities: {},
 
@@ -115,31 +127,26 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
     const now = Date.now();
     set((prev) => {
       const current = prev.activities[sessionId] ?? defaultActivity();
-      // blocked 状态不由 PTY CPU 活跃覆盖（需要 Hook 解除）
       if (current.phase === 'blocked') {
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastCpuActiveAt: now } } };
       }
       if (current.phase === 'completed') {
-        console.log(`[AgentRuntimeActivity] ${sessionId.slice(0, 8)} completed → running (cpu)`);
-        return {
-          activities: {
-            ...prev.activities,
-            [sessionId]: promoteCompletedToRunning(sessionId, current, now, 'pty'),
-          },
-        };
+        const next = promoteCompletedToRunning(sessionId, current, now, 'pty');
+        logPhaseIfChanged(sessionId, 'completed', 'running', 'cpu');
+        return { activities: { ...prev.activities, [sessionId]: next } };
       }
       if (current.phase === 'running') {
-        // 已经 running，只刷新时间戳
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastCpuActiveAt: now } } };
       }
-      // idle → running
-      console.log(`[AgentRuntimeActivity] ${sessionId.slice(0, 8)} idle → running (cpu)`);
-      return {
-        activities: {
-          ...prev.activities,
-          [sessionId]: { ...current, phase: 'running', lastCpuActiveAt: now, lastStartedAt: now, source: 'pty' },
-        },
+      const next: AgentRuntimeActivity = {
+        ...current,
+        phase: 'running',
+        lastCpuActiveAt: now,
+        lastStartedAt: now,
+        source: 'pty',
       };
+      logPhaseIfChanged(sessionId, current.phase, 'running', 'cpu');
+      return { activities: { ...prev.activities, [sessionId]: next } };
     });
   },
 
@@ -151,25 +158,22 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastOutputAt: now } } };
       }
       if (current.phase === 'completed') {
-        console.log(`[AgentRuntimeActivity] ${sessionId.slice(0, 8)} completed → running (output)`);
-        return {
-          activities: {
-            ...prev.activities,
-            [sessionId]: promoteCompletedToRunning(sessionId, current, now, 'output'),
-          },
-        };
+        const next = promoteCompletedToRunning(sessionId, current, now, 'output');
+        logPhaseIfChanged(sessionId, 'completed', 'running', 'output');
+        return { activities: { ...prev.activities, [sessionId]: next } };
       }
       if (current.phase === 'running') {
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastOutputAt: now } } };
       }
-      // idle → running
-      console.log(`[AgentRuntimeActivity] ${sessionId.slice(0, 8)} idle → running (output)`);
-      return {
-        activities: {
-          ...prev.activities,
-          [sessionId]: { ...current, phase: 'running', lastOutputAt: now, lastStartedAt: now, source: 'output' },
-        },
+      const next: AgentRuntimeActivity = {
+        ...current,
+        phase: 'running',
+        lastOutputAt: now,
+        lastStartedAt: now,
+        source: 'output',
       };
+      logPhaseIfChanged(sessionId, current.phase, 'running', 'output');
+      return { activities: { ...prev.activities, [sessionId]: next } };
     });
   },
 
@@ -177,15 +181,16 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
     const now = Date.now();
     set((prev) => {
       const current = prev.activities[sessionId] ?? defaultActivity();
-      // blocked 可被 running Hook 解除（如 PostToolUse/AskUserQuestion）
       clearCompletedTimer(sessionId);
-      console.log(`[AgentRuntimeActivity] ${sessionId.slice(0, 8)} → running (hook)`);
-      return {
-        activities: {
-          ...prev.activities,
-          [sessionId]: { ...current, phase: 'running', lastCpuActiveAt: now, lastStartedAt: now, source: 'hook' },
-        },
+      const next: AgentRuntimeActivity = {
+        ...current,
+        phase: 'running',
+        lastCpuActiveAt: now,
+        lastStartedAt: now,
+        source: 'hook',
       };
+      logPhaseIfChanged(sessionId, current.phase, 'running', 'hook:PreToolUse');
+      return { activities: { ...prev.activities, [sessionId]: next } };
     });
   },
 
@@ -194,12 +199,14 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
     set((prev) => {
       const current = prev.activities[sessionId] ?? defaultActivity();
       clearCompletedTimer(sessionId);
-      return {
-        activities: {
-          ...prev.activities,
-          [sessionId]: { ...current, phase: 'blocked', lastOutputAt: now, source: 'hook' },
-        },
+      const next: AgentRuntimeActivity = {
+        ...current,
+        phase: 'blocked',
+        lastOutputAt: now,
+        source: 'hook',
       };
+      logPhaseIfChanged(sessionId, current.phase, 'blocked', 'hook:AskUserQuestion');
+      return { activities: { ...prev.activities, [sessionId]: next } };
     });
   },
 
@@ -208,23 +215,25 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
     set((prev) => {
       const current = prev.activities[sessionId] ?? defaultActivity();
       clearCompletedTimer(sessionId);
-      // 设置 completed + 60s TTL 自动回 idle
       const timer = setTimeout(() => {
         completedTimers.delete(sessionId);
         const currentNow = get().activities[sessionId];
         if (currentNow?.phase === 'completed') {
+          logPhaseIfChanged(sessionId, 'completed', 'idle', 'completed TTL 60s');
           set((p) => ({
             activities: { ...p.activities, [sessionId]: { ...currentNow, phase: 'idle', source: 'inferred' } },
           }));
         }
       }, COMPLETED_TTL_MS);
       completedTimers.set(sessionId, timer);
-      return {
-        activities: {
-          ...prev.activities,
-          [sessionId]: { ...current, phase: 'completed', lastCompletedAt: now, source: 'hook' },
-        },
+      const next: AgentRuntimeActivity = {
+        ...current,
+        phase: 'completed',
+        lastCompletedAt: now,
+        source: 'hook',
       };
+      logPhaseIfChanged(sessionId, current.phase, 'completed', 'hook:Stop');
+      return { activities: { ...prev.activities, [sessionId]: next } };
     });
   },
 
@@ -236,7 +245,6 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
       const elapsedSinceCpu = now - activity.lastCpuActiveAt;
       const outputIdle = isOutputIdle(activity, now);
       if (elapsedSinceCpu > IDLE_THRESHOLD_MS && outputIdle) {
-        // 有过实际工作（startedAt 存在且晚于 0）→ completed
         if (activity.lastStartedAt > 0) {
           updates[sessionId] = {
             ...activity,
@@ -244,13 +252,17 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
             lastCompletedAt: now,
             source: 'inferred',
           };
-          // 60s TTL 自动回 idle
+          logPhaseIfChanged(sessionId, 'running', 'completed', 'tickIdleCheck', {
+            elapsedSinceCpu,
+            idleThresholdMs: IDLE_THRESHOLD_MS,
+          });
           clearCompletedTimer(sessionId);
           const sid = sessionId;
           const timer = setTimeout(() => {
             completedTimers.delete(sid);
             const currentNow = get().activities[sid];
             if (currentNow?.phase === 'completed') {
+              logPhaseIfChanged(sid, 'completed', 'idle', 'completed TTL 60s');
               set((p) => ({
                 activities: { ...p.activities, [sid]: { ...currentNow, phase: 'idle', source: 'inferred' } },
               }));
@@ -259,6 +271,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
           completedTimers.set(sid, timer);
         } else {
           updates[sessionId] = { ...activity, phase: 'idle', source: 'inferred' };
+          logPhaseIfChanged(sessionId, 'running', 'idle', 'tickIdleCheck:noStartedAt');
         }
       }
     }
@@ -272,6 +285,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
       const current = prev.activities[sessionId];
       if (!current || current.phase !== 'completed') return prev;
       clearCompletedTimer(sessionId);
+      logPhaseIfChanged(sessionId, 'completed', 'idle', 'markViewed');
       return {
         activities: { ...prev.activities, [sessionId]: { ...current, phase: 'idle', source: 'manual' } },
       };
@@ -280,6 +294,10 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
 
   clearSession: (sessionId) => {
     clearCompletedTimer(sessionId);
+    const phase = get().activities[sessionId]?.phase;
+    if (phase) {
+      sessionCanvasLog('Activity', 'clearSession', { sessionId: sessionId.slice(0, 8), phase });
+    }
     set((prev) => {
       const { [sessionId]: _, ...rest } = prev.activities;
       return { activities: rest };

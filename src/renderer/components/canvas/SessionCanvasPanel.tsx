@@ -41,6 +41,7 @@ import { getSessionCanvasCardKey } from '@/lib/sessionCanvasCardKey';
 import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { SessionCanvasPromptSettings } from './SessionCanvasPromptSettings';
 import { useAgentRuntimeActivityMonitor } from '@/hooks/useAgentRuntimeActivityMonitor';
+import { sessionCanvasLog } from '@/lib/sessionCanvasLog';
 
 interface SessionCanvasPanelProps {
   variant?: 'embedded' | 'floating';
@@ -155,6 +156,14 @@ export function SessionCanvasPanel({
     return buildCardItems(agentSessions, runtimeStates, terminalSessions);
   }, [externalItems, agentSessions, runtimeStates, terminalSessions]);
 
+  useEffect(() => {
+    sessionCanvasLog('Panel', 'mount config', {
+      externalItems: Boolean(externalItems),
+      itemCount: allItems.length,
+      previewSyncEnabled,
+    });
+  }, [externalItems, allItems.length, previewSyncEnabled]);
+
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return allItems;
     const q = searchQuery.toLowerCase();
@@ -185,14 +194,25 @@ export function SessionCanvasPanel({
 
   useEffect(() => {
     if (focusedCardKey && !focusedItem) {
+      sessionCanvasLog('Focus', 'focused card missing, clear', { focusedCardKey });
       setFocusedCardKey(null);
     }
   }, [focusedCardKey, focusedItem]);
 
   useEffect(() => {
+    sessionCanvasLog('Focus', focusedCardKey ? 'enter overlay' : 'exit overlay', {
+      focusedCardKey,
+      disableDragAll: Boolean(focusedCardKey),
+    });
+  }, [focusedCardKey]);
+
+  useEffect(() => {
     if (!focusedCardKey) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFocusedCardKey(null);
+      if (e.key === 'Escape') {
+        sessionCanvasLog('Focus', 'Escape → clear focus');
+        setFocusedCardKey(null);
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -277,12 +297,18 @@ export function SessionCanvasPanel({
         ctrlKey: event.ctrlKey,
         metaKey: event.metaKey,
       });
+      const key = getSessionCanvasCardKey(item);
+      sessionCanvasLog('Click', 'card click', {
+        key,
+        intent,
+        ctrl: event.ctrlKey || event.metaKey,
+      });
       if (intent === 'jump-to-session') {
         setFocusedCardKey(null);
         void handleFocus(item);
         return;
       }
-      setFocusedCardKey(getSessionCanvasCardKey(item));
+      setFocusedCardKey(key);
     },
     [handleFocus]
   );
@@ -453,7 +479,10 @@ export function SessionCanvasPanel({
           <div
             className="pointer-events-none absolute inset-0 z-40 overflow-y-auto overscroll-y-contain bg-black/55 p-3"
             onClick={(e) => {
-              if (e.target === e.currentTarget) setFocusedCardKey(null);
+              if (e.target === e.currentTarget) {
+                sessionCanvasLog('Focus', 'backdrop click (may not fire if pointer-events-none)');
+                setFocusedCardKey(null);
+              }
             }}
             onContextMenu={(e) => e.preventDefault()}
           >

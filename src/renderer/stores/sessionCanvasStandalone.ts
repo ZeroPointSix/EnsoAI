@@ -1,4 +1,5 @@
 import type { SessionCanvasSnapshot } from '@shared/types/sessionCanvas';
+import { sessionCanvasLog } from '@/lib/sessionCanvasLog';
 import { create } from 'zustand';
 
 interface SessionCanvasStandaloneState {
@@ -9,6 +10,12 @@ interface SessionCanvasStandaloneState {
 
 export const useSessionCanvasStandaloneStore = create<SessionCanvasStandaloneState>((set) => ({
   snapshot: null,
-  setSnapshot: (snapshot) => set({ snapshot }),
-  clearSnapshot: () => set({ snapshot: null }),
+  setSnapshot: (snapshot) => {
+    sessionCanvasLog('Standalone', 'store setSnapshot', { cardCount: snapshot.cards.length });
+    set({ snapshot });
+  },
+  clearSnapshot: () => {
+    sessionCanvasLog('Standalone', 'store clearSnapshot');
+    set({ snapshot: null });
+  },
 }));

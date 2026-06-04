@@ -1,5 +1,6 @@
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { getCachedSessionPreview } from '@/stores/sessionPreviewCache';
+import { sessionCanvasLogThrottled } from '@/lib/sessionCanvasLog';
 import { useTerminalStore } from '@/stores/terminal';
 
 /** Restore previews from durable cache when runtime store is empty. */
@@ -26,6 +27,7 @@ export function hydratePreviewsFromCache(): void {
 
 /** Pull latest text from live xterm buffers into canvas preview stores. */
 export function refreshAllCanvasPreviews(): void {
+  sessionCanvasLogThrottled('preview-refresh', 3000, 'Preview', 'refreshAllCanvasPreviews');
   hydratePreviewsFromCache();
   useAgentSessionsStore.getState().refreshCanvasPreviewsFromTerminals();
   useTerminalStore.getState().refreshCanvasPreviewsFromTerminals();

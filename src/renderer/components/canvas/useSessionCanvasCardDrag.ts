@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { sessionCanvasLog } from '@/lib/sessionCanvasLog';
 import { useSettingsStore } from '@/stores/settings';
 
 const GRID_GAP = 12;
@@ -40,9 +41,10 @@ export function useSessionCanvasCardDrag(
         posX: position.x,
         posY: position.y,
       };
+      sessionCanvasLog('Drag', 'drag start', { cardKey, x: position.x, y: position.y });
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [fixedPosition, position.x, position.y]
+    [fixedPosition, position.x, position.y, cardKey]
   );
 
   useEffect(() => {
@@ -51,13 +53,18 @@ export function useSessionCanvasCardDrag(
     const handleMove = (e: PointerEvent) => {
       const deltaX = e.clientX - dragStart.current.x;
       const deltaY = e.clientY - dragStart.current.y;
-      setCardPosition(cardKey, {
+      const next = {
         x: Math.max(0, dragStart.current.posX + deltaX),
         y: Math.max(0, dragStart.current.posY + deltaY),
-      });
+      };
+      setCardPosition(cardKey, next);
     };
 
-    const handleUp = () => setIsDragging(false);
+    const handleUp = () => {
+      const saved = useSettingsStore.getState().sessionCanvasCardPositions[cardKey];
+      sessionCanvasLog('Drag', 'drag end', { cardKey, position: saved });
+      setIsDragging(false);
+    };
 
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);

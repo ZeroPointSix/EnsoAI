@@ -17,6 +17,7 @@ import {
 } from '@/stores/agentRuntimeActivity';
 import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { useTerminalStore } from '@/stores/terminal';
+import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 
 function mapOutputState(state: OutputState | undefined): SessionCanvasCardSnapshot['outputState'] {
   if (state === 'outputting' || state === 'unread') return state;
@@ -38,6 +39,8 @@ function runtimePhaseToAgentDisplayState(
   }
 }
 
+export type SnapshotDisplayResolveBranch = 'hookBlocked' | 'activity' | 'fallback';
+
 /** 快照用 Agent 四色状态：Hook blocked > runtime activity > 旧 outputState 回退 */
 export function resolveAgentDisplayStateForSnapshot(input: {
   activity?: AgentRuntimeActivity;
@@ -45,17 +48,33 @@ export function resolveAgentDisplayStateForSnapshot(input: {
   outputState: OutputState;
   previewText?: string;
 }): SessionCanvasAgentDisplayState {
+  return resolveAgentDisplayStateWithBranch(input).state;
+}
+
+export function resolveAgentDisplayStateWithBranch(input: {
+  activity?: AgentRuntimeActivity;
+  hookState?: SessionCanvasAgentDisplayState;
+  outputState: OutputState;
+  previewText?: string;
+}): { state: SessionCanvasAgentDisplayState; branch: SnapshotDisplayResolveBranch; activityPhase?: AgentRuntimePhase } {
   if (input.hookState === 'blocked') {
-    return 'blocked';
+    return { state: 'blocked', branch: 'hookBlocked' };
   }
   if (input.activity) {
-    return runtimePhaseToAgentDisplayState(input.activity.phase);
+    return {
+      state: runtimePhaseToAgentDisplayState(input.activity.phase),
+      branch: 'activity',
+      activityPhase: input.activity.phase,
+    };
   }
-  return resolveCanvasAgentDisplayState({
-    outputState: input.outputState,
-    previewText: input.previewText,
-    hookState: input.hookState,
-  });
+  return {
+    state: resolveCanvasAgentDisplayState({
+      outputState: input.outputState,
+      previewText: input.previewText,
+      hookState: input.hookState,
+    }),
+    branch: 'fallback',
+  };
 }
 
 function agentCard(session: Session, outputState: OutputState): SessionCanvasCardSnapshot {
@@ -68,12 +87,23 @@ function agentCard(session: Session, outputState: OutputState): SessionCanvasCar
   );
   const hookState = useCanvasCardDisplayStore.getState().bySessionId[session.id];
   const activity = useAgentRuntimeActivityStore.getState().activities[session.id];
-  const agentDisplayState = resolveAgentDisplayStateForSnapshot({
+  const resolved = resolveAgentDisplayStateWithBranch({
     activity,
     hookState,
     outputState,
     previewText,
   });
+
+  sessionCanvasLog('Snapshot', 'agent card display', {
+    sessionId: shortSessionId(session.id),
+    branch: resolved.branch,
+    agentDisplayState: resolved.state,
+    activityPhase: resolved.activityPhase,
+    hookState: hookState ?? 'none',
+    outputState,
+    previewTail: previewText?.slice(-80),
+  });
+
   return {
     key: `agent-${session.id}`,
     kind: 'agent',
@@ -90,7 +120,7 @@ function agentCard(session: Session, outputState: OutputState): SessionCanvasCar
     customPath: session.customPath,
     previewText,
     outputState: mapOutputState(outputState),
-    agentDisplayState,
+    agentDisplayState: resolved.state,
   };
 }
 
@@ -120,6 +150,20 @@ export function buildSessionCanvasSnapshot(): SessionCanvasSnapshot {
     ...sessions.map((s) => agentCard(s, runtimeStates[s.id]?.outputState ?? 'idle')),
     ...terminalSessions.map(terminalCard),
   ];
+
+  const agentLights = cards
+    .filter((c) => c.kind === 'agent')
+    .map((c) => ({
+      sessionId: shortSessionId(c.sessionId),
+      light: c.agentDisplayState,
+      outputState: c.outputState,
+    }));
+
+  sessionCanvasLog('Snapshot', 'build complete', {
+    agentCount: sessions.length,
+    terminalCount: terminalSessions.length,
+    agentLights,
+  });
 
   return { cards };
 }

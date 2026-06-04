@@ -4,6 +4,11 @@ import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
 import type { CanvasAgentDisplayState } from '@/components/canvas/CanvasAgentStatusDot';
 import { normalizePath } from '@shared/utils/path';
+import {
+  sessionCanvasLog,
+  sessionCanvasLogThrottled,
+  shortSessionId,
+} from '@/lib/sessionCanvasLog';
 
 /**
  * 将 Hook 传来的 Claude sessionId + cwd 解析为 Enso session.id。
@@ -36,6 +41,10 @@ function resolveEnsoSessionId(incomingSessionId: string, cwd?: string): string |
 export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  useEffect(() => {
+    sessionCanvasLog('Monitor', enabled ? 'enabled' : 'disabled');
+  }, [enabled]);
+
   // --- 第一层：PTY CPU 活跃度轮询 ---
   useEffect(() => {
     if (!enabled) return;
@@ -46,20 +55,48 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
       const { reportCpuActive, tickIdleCheck } = useAgentRuntimeActivityStore.getState();
       const now = Date.now();
 
+      let withPty = 0;
+      let cpuActive = 0;
+      let noPty = 0;
+
       for (const session of sessions) {
         const ptyId = ptyMap[session.id];
-        if (!ptyId) continue;
+        if (!ptyId) {
+          noPty++;
+          continue;
+        }
+        withPty++;
         try {
           const isActive = await window.electronAPI.terminal.getActivity(ptyId);
           if (isActive) {
+            cpuActive++;
             reportCpuActive(session.id);
           }
         } catch {
-          // PTY 可能已销毁，忽略
+          sessionCanvasLogThrottled(
+            `monitor-pty-error-${session.id}`,
+            5000,
+            'Monitor',
+            'getActivity failed',
+            { sessionId: shortSessionId(session.id), ptyId }
+          );
         }
       }
 
       tickIdleCheck(now);
+
+      const phases = useAgentRuntimeActivityStore.getState().activities;
+      const phaseSummary = Object.fromEntries(
+        Object.entries(phases).map(([id, a]) => [shortSessionId(id), a.phase])
+      );
+
+      sessionCanvasLogThrottled('monitor-poll-summary', 2000, 'Monitor', 'poll tick', {
+        agentCount: sessions.length,
+        withPty,
+        noPty,
+        cpuActive,
+        phaseSummary,
+      });
     };
 
     poll();
@@ -70,6 +107,7 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
+      sessionCanvasLog('Monitor', 'poll stopped');
     };
   }, [enabled]);
 
@@ -87,6 +125,13 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
         if (ptyId !== id) continue;
         if (agentIds.has(sessionId)) {
           reportOutput(sessionId);
+          sessionCanvasLogThrottled(
+            `monitor-ondata-${sessionId}`,
+            3000,
+            'Monitor',
+            'terminal.onData → reportOutput',
+            { sessionId: shortSessionId(sessionId), ptyId, bytes: data.length }
+          );
         }
         break;
       }
@@ -102,23 +147,58 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
 
     const unsubPre = window.electronAPI.notification.onPreToolUse((data) => {
       const sessionId = resolveEnsoSessionId(data.sessionId, data.cwd);
-      if (sessionId) reportHookRunning(sessionId);
+      if (sessionId) {
+        reportHookRunning(sessionId);
+        sessionCanvasLog('Monitor', 'hook PreToolUse → running', {
+          sessionId: shortSessionId(sessionId),
+          toolName: data.toolName,
+        });
+      } else {
+        sessionCanvasLog('Monitor', 'hook PreToolUse resolve failed', {
+          incomingSessionId: data.sessionId?.slice(0, 8),
+          cwd: data.cwd,
+        });
+      }
     });
 
     const unsubAsk = window.electronAPI.notification.onAskUserQuestion((data) => {
       const sessionId = resolveEnsoSessionId(data.sessionId, data.cwd);
-      if (sessionId) reportHookBlocked(sessionId);
+      if (sessionId) {
+        reportHookBlocked(sessionId);
+        sessionCanvasLog('Monitor', 'hook AskUserQuestion → blocked', {
+          sessionId: shortSessionId(sessionId),
+          cwd: data.cwd,
+        });
+      } else {
+        sessionCanvasLog('Monitor', 'hook AskUserQuestion resolve failed', {
+          incomingSessionId: data.sessionId?.slice(0, 8),
+          cwd: data.cwd,
+        });
+      }
     });
 
     const unsubStop = window.electronAPI.notification.onAgentStop((data) => {
       const sessionId = resolveEnsoSessionId(data.sessionId, data.cwd);
-      if (sessionId) reportHookCompleted(sessionId);
+      if (sessionId) {
+        reportHookCompleted(sessionId);
+        sessionCanvasLog('Monitor', 'hook Stop → completed', {
+          sessionId: shortSessionId(sessionId),
+        });
+      } else {
+        sessionCanvasLog('Monitor', 'hook Stop resolve failed', {
+          incomingSessionId: data.sessionId?.slice(0, 8),
+          cwd: data.cwd,
+        });
+      }
     });
+
+    sessionCanvasLog('Monitor', 'hook listeners registered');
 
     return () => {
       unsubPre();
       unsubAsk();
       unsubStop();
+      sessionCanvasLog('Monitor', 'hook listeners removed');
     };
   }, [enabled]);
 }

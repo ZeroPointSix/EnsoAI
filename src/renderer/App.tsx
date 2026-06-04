@@ -93,6 +93,7 @@ import { useCanvasPtyPreviewFanIn } from './hooks/useCanvasPtyPreviewFanIn';
 import { refreshAllCanvasPreviews } from './lib/refreshCanvasPreviews';
 import { scheduleCanvasPreviewRefresh } from './lib/scheduleCanvasPreviewRefresh';
 import { pushSessionCanvasSnapshotToPanel } from './lib/sessionCanvasSync';
+import { sessionCanvasLog } from './lib/sessionCanvasLog';
 import { initCanvasCardDisplayListeners } from './stores/canvasCardDisplayStore';
 import { useAgentRuntimeActivityStore } from './stores/agentRuntimeActivity';
 import { useAgentSessionsStore } from './stores/agentSessions';
@@ -214,12 +215,14 @@ export default function App() {
 
   useEffect(() => {
     return window.electronAPI.sessionCanvasPanel.onVisibilityChanged((visible: boolean) => {
+      sessionCanvasLog('App', 'panel visibility', { visible });
       setIsSessionCanvasPanelOpen(visible);
     });
   }, []);
 
   useEffect(() => {
     return window.electronAPI.sessionCanvasPanel.onGetSnapshot(() => {
+      sessionCanvasLog('App', 'onGetSnapshot (main renderer)');
       refreshAllCanvasPreviews();
       const snapshot = buildSessionCanvasSnapshot();
       window.electronAPI.sessionCanvasPanel.sendSnapshotResponse(snapshot);
@@ -228,11 +231,13 @@ export default function App() {
 
   useEffect(() => {
     if (!isSessionCanvasPanelOpen) return;
+    sessionCanvasLog('App', 'canvas sync loop start (monitor + IPC push)');
     const cancelBootstrap = scheduleCanvasPreviewRefresh();
     let timer: ReturnType<typeof setTimeout> | null = null;
     const scheduleSync = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
+        sessionCanvasLog('App', 'scheduleSync → push');
         pushSessionCanvasSnapshotToPanel();
       }, 300);
     };
@@ -245,6 +250,7 @@ export default function App() {
     const unsubTerminal = useTerminalStore.subscribe(scheduleSync);
     const unsubRuntimeActivity = useAgentRuntimeActivityStore.subscribe(scheduleSync);
     return () => {
+      sessionCanvasLog('App', 'canvas sync loop stop');
       cancelBootstrap();
       if (timer) clearTimeout(timer);
       window.clearInterval(poll);

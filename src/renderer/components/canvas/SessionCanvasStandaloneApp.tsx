@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { snapshotCardsToCanvasItems } from '@/lib/snapshotToCanvasItems';
 import { cn } from '@/lib/utils';
+import { sessionCanvasLog } from '@/lib/sessionCanvasLog';
 import { useSessionCanvasStandaloneStore } from '@/stores/sessionCanvasStandalone';
 import { SessionCanvasPromptSettings } from './SessionCanvasPromptSettings';
 import type { CanvasCardItem } from './SessionCanvasCard';
@@ -26,13 +27,21 @@ export function SessionCanvasStandaloneApp() {
   const [openSettings, setOpenSettings] = useState(false);
 
   const applySnapshot = useCallback(
-    (next: SessionCanvasSnapshot) => {
+    (next: SessionCanvasSnapshot, source: 'response' | 'sync' | 'poll') => {
+      const agentLights = next.cards
+        .filter((c) => c.kind === 'agent')
+        .map((c) => ({ id: c.sessionId.slice(0, 8), light: c.agentDisplayState }));
+      sessionCanvasLog('Standalone', `snapshot applied (${source})`, {
+        cardCount: next.cards.length,
+        agentLights,
+      });
       setSnapshot(next);
     },
     [setSnapshot]
   );
 
   useEffect(() => {
+    sessionCanvasLog('Standalone', 'mount');
     window.electronAPI.sessionCanvasPanel.getSnapshot();
     void window.electronAPI.sessionCanvasPanel.getDisplayMode().then(setDisplayMode);
     const poll = window.setInterval(() => {
@@ -40,18 +49,19 @@ export function SessionCanvasStandaloneApp() {
     }, 1000);
     return () => {
       window.clearInterval(poll);
+      sessionCanvasLog('Standalone', 'unmount');
     };
   }, []);
 
   useEffect(() => {
     return window.electronAPI.sessionCanvasPanel.onSnapshotResponse((data) => {
-      applySnapshot(data);
+      applySnapshot(data, 'response');
     });
   }, [applySnapshot]);
 
   useEffect(() => {
     return window.electronAPI.sessionCanvasPanel.onSync((data) => {
-      applySnapshot(data);
+      applySnapshot(data, 'sync');
     });
   }, [applySnapshot]);
 

@@ -22,6 +22,7 @@ import {
 } from './ClaudeHookManager';
 import { MCP_TOOLS } from './mcpTools';
 import { checkTaskCompletion, readLastAssistantMessages } from './sessionLogReader';
+import { sessionCanvasLog } from '../../utils/sessionCanvasLog';
 
 interface LockFilePayload {
   pid: number;
@@ -341,6 +342,10 @@ export async function startClaudeIdeBridge(
               console.log(
                 `[ClaudeIdeBridge] → waiting_input (AskUserQuestion) at ${data.cwd?.split('/').slice(-2).join('/')}`
               );
+              sessionCanvasLog('Hook', '→ AskUserQuestion / blocked', {
+                sessionId: sessionId?.slice(0, 8),
+                cwd: data.cwd,
+              });
               for (const window of BrowserWindow.getAllWindows()) {
                 if (!window.isDestroyed()) {
                   window.webContents.send(IPC_CHANNELS.AGENT_ASK_USER_QUESTION_NOTIFICATION, {
@@ -380,6 +385,11 @@ export async function startClaudeIdeBridge(
                 console.log(
                   `[ClaudeIdeBridge] → waiting_input (${data.tool_name} permission) at ${data.cwd?.split('/').slice(-2).join('/')}`
                 );
+                sessionCanvasLog('Hook', '→ PermissionRequest / blocked', {
+                  sessionId: sessionId?.slice(0, 8),
+                  toolName: data.tool_name,
+                  cwd: data.cwd,
+                });
                 for (const window of BrowserWindow.getAllWindows()) {
                   if (!window.isDestroyed()) {
                     window.webContents.send(IPC_CHANNELS.AGENT_ASK_USER_QUESTION_NOTIFICATION, {
@@ -392,6 +402,11 @@ export async function startClaudeIdeBridge(
               }
               // Don't log skipped PermissionRequest for read-only tools - too noisy
             } else if (data.hook_event_name === 'PreToolUse') {
+              sessionCanvasLog('Hook', '→ PreToolUse / working', {
+                sessionId: sessionId?.slice(0, 8),
+                toolName: data.tool_name,
+                cwd: data.cwd,
+              });
               // 普通 PreToolUse：Agent 正在执行工具 → running（黄灯）
               for (const window of BrowserWindow.getAllWindows()) {
                 if (!window.isDestroyed()) {
@@ -405,6 +420,10 @@ export async function startClaudeIdeBridge(
             } else if (data.hook_event_name === 'Stop') {
               // Stop event - agent has finished or been stopped
               console.log(`[ClaudeIdeBridge] → completed (Stop) ${sessionId?.slice(0, 8)}`);
+              sessionCanvasLog('Hook', '→ Stop / completed', {
+                sessionId: sessionId?.slice(0, 8),
+                cwd: data.cwd,
+              });
 
               // Check for task completion marker in session log (async)
               let taskCompletionStatus: 'completed' | 'unknown' = 'unknown';

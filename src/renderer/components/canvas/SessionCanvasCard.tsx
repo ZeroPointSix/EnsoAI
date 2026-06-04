@@ -1,6 +1,6 @@
 import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
 import { Bot, GripVertical, Sparkles, Terminal } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Session } from '@/components/chat/SessionBar';
 import { Badge } from '@/components/ui/badge';
 import { GlowCard } from '@/components/ui/glow-card';
@@ -14,6 +14,7 @@ import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { resolveSessionCanvasSubtitle } from './sessionCanvasSubtitle';
 import { resolveSessionCanvasCardPreviewText } from '@/lib/resolveSessionCanvasCardPreview';
+import { resolveCanvasAgentDisplayState } from '@/lib/canvasAgentState/resolveCanvasAgentDisplayState';
 import { useCanvasCardDisplayStore } from '@/stores/canvasCardDisplayStore';
 import {
   type CanvasAgentDisplayState,
@@ -25,7 +26,7 @@ import { SessionCanvasPreview } from './SessionCanvasPreview';
 import { SessionCanvasQuickInput } from './SessionCanvasQuickInput';
 import { getSessionCanvasCardKey, useSessionCanvasCardResize } from './useSessionCanvasCardResize';
 import { useSessionCanvasCardDrag } from './useSessionCanvasCardDrag';
-import { useSessionRuntimePhase } from '@/hooks/useAgentRuntimeActivityMonitor';
+import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 
 export type CanvasCardItem =
   | {
@@ -199,25 +200,46 @@ export function SessionCanvasCard({
     isAgent && item.kind === 'agent' ? s.bySessionId[item.session.id] : undefined
   );
 
-  // 统一 runtime activity 主信号（PTY CPU + 输出 + Hook）
-  const runtimePhase = useSessionRuntimePhase(item.session.id, isAgent);
-
   const agentDisplayState: CanvasAgentDisplayState = useMemo(() => {
     if (!isAgent || item.kind !== 'agent') return 'idle';
 
-    // 独立看板进程：直接用主窗 IPC 快照里已算好的状态
+    // 独立看板进程：直接用主窗 IPC 快照里已算好的状态（勿把 agentDisplayState 当 hookState）
     if (!hasLocalAgentRuntime && item.agentDisplayState) {
       return item.agentDisplayState;
     }
 
-    // Hook blocked 语义优先级最高（精确的等待用户输入信号）
-    if (hookDisplayState === 'blocked') {
-      return 'blocked';
-    }
+    return resolveCanvasAgentDisplayState({
+      outputState: item.outputState,
+      previewText,
+      hookState: hookDisplayState,
+    });
+  }, [isAgent, item, previewText, hookDisplayState, hasLocalAgentRuntime]);
 
-    // 统一 runtime phase 为主信号
-    return runtimePhase;
-  }, [isAgent, item, hasLocalAgentRuntime, hookDisplayState, runtimePhase]);
+  const prevDisplayRef = useRef(agentDisplayState);
+  useEffect(() => {
+    if (!isAgent || item.kind !== 'agent') return;
+    if (prevDisplayRef.current === agentDisplayState) return;
+    sessionCanvasLog('Card', 'display state', {
+      sessionId: shortSessionId(item.session.id),
+      from: prevDisplayRef.current,
+      to: agentDisplayState,
+      source: !hasLocalAgentRuntime && item.agentDisplayState ? 'snapshot' : 'localResolve',
+      hookDisplayState,
+      snapshotLight: item.agentDisplayState,
+      outputState: item.outputState,
+      isFocused,
+      disableDrag,
+    });
+    prevDisplayRef.current = agentDisplayState;
+  }, [
+    agentDisplayState,
+    isAgent,
+    item,
+    hasLocalAgentRuntime,
+    hookDisplayState,
+    isFocused,
+    disableDrag,
+  ]);
 
   const glowState = isFocused
     ? 'idle'
