@@ -1,50 +1,28 @@
 import type { CanvasAgentDisplayState } from '@/components/canvas/CanvasAgentStatusDot';
+import { inferPreviewInterruptSignal } from './analyzeTerminalPreviewSignals';
 
-const SPINNER_CHARS = '·✱✲✳✴✵✶✷✸✹✺✻✼✽✾✿❀❁❂❃❇❈❉❊❋✢✣✤✥✦✧✨⊛⊕⊙◉◎◍⁂⁕※⍟☼★☆✽';
-
-function hasSpinnerLine(text: string): boolean {
-  for (const line of text.split('\n')) {
-    const trimmed = line.trim();
-    const first = trimmed.charAt(0);
-    if (!first || !SPINNER_CHARS.includes(first)) continue;
-    const rest = trimmed.slice(1);
-    if (rest.startsWith(' ') && rest.includes('…') && /\d|for|ing|process/i.test(rest)) {
-      return true;
-    }
-  }
-  return false;
+/** 从预览（可含 raw ANSI 尾 + 纯文本）推断是否应亮红灯 */
+export function inferBlockedFromPreview(
+  previewText: string | undefined,
+  rawTail?: string
+): boolean {
+  const signal = inferPreviewInterruptSignal({
+    rawTail,
+    strippedTail: previewText,
+  });
+  return signal.kind === 'blocked' || signal.kind === 'error';
 }
 
-function hasBlockedPrompt(lower: string, _raw: string): boolean {
-  return (
-    lower.includes('do you want to proceed?') ||
-    lower.includes('would you like to proceed?') ||
-    lower.includes('waiting for permission') ||
-    lower.includes('do you want to allow this connection?') ||
-    lower.includes('tab to amend') ||
-    lower.includes('ctrl+e to explain')
-  );
+export function inferPreviewSignalReason(
+  previewText: string | undefined,
+  rawTail?: string
+) {
+  return inferPreviewInterruptSignal({ rawTail, strippedTail: previewText });
 }
 
-/** 从看板 preview 尾部推断 Agent 展示状态（Claude Code 为主） */
-export function inferDisplayFromPreview(previewText: string | undefined): CanvasAgentDisplayState | null {
-  if (!previewText?.trim()) return null;
-
-  const tail = previewText.slice(-4000);
-  const lower = tail.toLowerCase();
-
-  if (hasBlockedPrompt(lower, tail)) return 'blocked';
-
-  if (
-    lower.includes('esc to interrupt') ||
-    lower.includes('ctrl+c to interrupt') ||
-    /\bcooked for \d+s\b/i.test(tail) ||
-    /[*✽✻]?\s*cooked for \d+s/i.test(tail) ||
-    /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(tail) ||
-    hasSpinnerLine(tail)
-  ) {
-    return 'working';
-  }
-
-  return null;
+/** @deprecated 仅保留 blocked；working/idle 由 outputState + Hook 驱动 */
+export function inferDisplayFromPreview(
+  previewText: string | undefined
+): CanvasAgentDisplayState | null {
+  return inferBlockedFromPreview(previewText) ? 'blocked' : null;
 }

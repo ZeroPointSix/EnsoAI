@@ -1,6 +1,6 @@
 import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
 import { Bot, GripVertical, Sparkles, Terminal } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Session } from '@/components/chat/SessionBar';
 import { Badge } from '@/components/ui/badge';
 import { GlowCard } from '@/components/ui/glow-card';
@@ -13,6 +13,7 @@ import type { TerminalSessionEntry } from '@/stores/terminal';
 import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { resolveSessionCanvasSubtitle } from './sessionCanvasSubtitle';
+import { resolveSessionCanvasCardPreviewText } from '@/lib/resolveSessionCanvasCardPreview';
 import { resolveCanvasAgentDisplayState } from '@/lib/canvasAgentState/resolveCanvasAgentDisplayState';
 import { useCanvasCardDisplayStore } from '@/stores/canvasCardDisplayStore';
 import {
@@ -20,10 +21,12 @@ import {
   CanvasAgentStatusDot,
   canvasAgentIconAccentClass,
 } from './CanvasAgentStatusDot';
+import { useSessionCanvasPtyExists } from '@/hooks/useSessionCanvasPtyExists';
 import { SessionCanvasPreview } from './SessionCanvasPreview';
 import { SessionCanvasQuickInput } from './SessionCanvasQuickInput';
 import { getSessionCanvasCardKey, useSessionCanvasCardResize } from './useSessionCanvasCardResize';
 import { useSessionCanvasCardDrag } from './useSessionCanvasCardDrag';
+import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 
 export type CanvasCardItem =
   | {
@@ -69,6 +72,21 @@ function outputStateToGlow(state: OutputState): 'idle' | 'running' | 'waiting_in
   }
 }
 
+function agentDisplayStateToGlow(
+  state: CanvasAgentDisplayState
+): 'idle' | 'running' | 'waiting_input' | 'completed' {
+  switch (state) {
+    case 'working':
+      return 'running';
+    case 'blocked':
+      return 'waiting_input';
+    case 'completed':
+      return 'completed';
+    default:
+      return 'idle';
+  }
+}
+
 export function SessionCanvasCard({
   item,
   index,
@@ -86,7 +104,7 @@ export function SessionCanvasCard({
   const { t } = useI18n();
   const cardKey = getSessionCanvasCardKey(item);
   const { width, height, handleResizePointerDown } = useSessionCanvasCardResize(cardKey, sizeOverride);
-  const dragEnabled = !disableDrag && !isFocused && !positionOverride;
+  const dragEnabled = !disableDrag && !positionOverride;
   const { position, isDragging, handleDragPointerDown } = useSessionCanvasCardDrag(
     cardKey,
     index,
@@ -96,8 +114,11 @@ export function SessionCanvasCard({
   const isAgent = item.kind === 'agent';
   const title = resolveSessionCanvasCardTitle(item, t('Terminal'));
   const subtitle = resolveSessionCanvasSubtitle(item, t('Shell'));
+  const hasLocalAgentRuntime = useAgentSessionsStore(
+    (s) => item.kind === 'agent' && Boolean(s.runtimeStates[item.session.id])
+  );
   const liveAgentPreview = useAgentSessionsStore((s) => {
-    if (item.kind !== 'agent') return undefined;
+    if (item.kind !== 'agent' || !hasLocalAgentRuntime) return undefined;
     const runtime = s.runtimeStates[item.session.id];
     return getResolvedSessionPreview(
       'agent',
@@ -106,9 +127,25 @@ export function SessionCanvasCard({
       runtime?.previewEscapePending
     );
   });
+  const livePreviewRawTail = useAgentSessionsStore((s) => {
+    if (item.kind !== 'agent' || !hasLocalAgentRuntime) return undefined;
+    return s.runtimeStates[item.session.id]?.previewRawTail;
+  });
+  const livePreviewSignalReason = useAgentSessionsStore((s) => {
+    if (item.kind !== 'agent' || !hasLocalAgentRuntime) return undefined;
+    return s.runtimeStates[item.session.id]?.previewSignalReason;
+  });
 
   const previewText =
-    item.kind === 'agent' ? (liveAgentPreview ?? item.previewText) : item.previewText;
+    item.kind === 'agent'
+      ? resolveSessionCanvasCardPreviewText(
+          item.previewText,
+          liveAgentPreview,
+          hasLocalAgentRuntime
+        )
+      : resolveSessionCanvasCardPreviewText(item.previewText, undefined, false);
+  const ptyIdHint = item.ptyIdHint;
+  const { ptyExists } = useSessionCanvasPtyExists(item.session.id, !isFocused, ptyIdHint);
   const Icon = isAgent ? Sparkles : Terminal;
 
   const handleCommitRename = useCallback(
@@ -167,45 +204,92 @@ export function SessionCanvasCard({
     </span>
   );
 
-  const glowState = isFocused ? 'idle' : outputStateToGlow(isAgent ? item.outputState : 'idle');
-
   const hookDisplayState = useCanvasCardDisplayStore((s) =>
     isAgent && item.kind === 'agent' ? s.bySessionId[item.session.id] : undefined
   );
 
-  const snapshotDisplayState =
-    isAgent && item.kind === 'agent' ? item.agentDisplayState : undefined;
-
   const agentDisplayState: CanvasAgentDisplayState = useMemo(() => {
     if (!isAgent || item.kind !== 'agent') return 'idle';
+
+    // 独立看板进程：直接用主窗 IPC 快照里已算好的状态（勿把 agentDisplayState 当 hookState）
+    if (!hasLocalAgentRuntime && item.agentDisplayState) {
+      return item.agentDisplayState;
+    }
+
     return resolveCanvasAgentDisplayState({
       outputState: item.outputState,
       previewText,
-      hookState: hookDisplayState ?? snapshotDisplayState,
+      previewRawTail: livePreviewRawTail,
+      hookState: hookDisplayState,
     });
-  }, [isAgent, item, previewText, hookDisplayState, snapshotDisplayState]);
+  }, [isAgent, item, previewText, livePreviewRawTail, hookDisplayState, hasLocalAgentRuntime]);
+
+  const prevDisplayRef = useRef(agentDisplayState);
+  useEffect(() => {
+    if (!isAgent || item.kind !== 'agent') return;
+    if (prevDisplayRef.current === agentDisplayState) return;
+    sessionCanvasLog('Card', 'display state', {
+      sessionId: shortSessionId(item.session.id),
+      from: prevDisplayRef.current,
+      to: agentDisplayState,
+      source: !hasLocalAgentRuntime && item.agentDisplayState ? 'snapshot' : 'localResolve',
+      hookDisplayState,
+      snapshotLight: item.agentDisplayState,
+      outputState: item.outputState,
+      previewSignalReason: livePreviewSignalReason ?? 'none',
+      isFocused,
+      disableDrag,
+    });
+    prevDisplayRef.current = agentDisplayState;
+  }, [
+    agentDisplayState,
+    isAgent,
+    item,
+    hasLocalAgentRuntime,
+    hookDisplayState,
+    isFocused,
+    disableDrag,
+  ]);
+
+  const glowState = isFocused
+    ? 'idle'
+    : item.kind === 'agent'
+      ? agentDisplayStateToGlow(agentDisplayState)
+      : outputStateToGlow('idle');
+  const showAgentGlow =
+    item.kind === 'agent' &&
+    !isFocused &&
+    (item.outputState !== 'idle' || agentDisplayState !== 'idle');
+
+  const dragHandle = dragEnabled ? (
+    <button
+      type="button"
+      data-canvas-drag-handle
+      aria-label={t('Drag card')}
+      className={cn(
+        'no-drag absolute left-1 top-3 z-30 flex h-7 w-5 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground active:cursor-grabbing',
+        isDragging && 'cursor-grabbing'
+      )}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleDragPointerDown(e);
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <GripVertical className="h-4 w-4" />
+    </button>
+  ) : null;
 
   const body = (
     <div
-      className={cn('flex h-full min-h-0 flex-col gap-2 p-3 text-left', isFocused && 'overflow-hidden')}
+      className={cn(
+        'flex h-full min-h-0 flex-col gap-2 p-3 text-left',
+        dragEnabled && 'pl-5',
+        isFocused && 'overflow-hidden'
+      )}
     >
       <div className="flex min-w-0 items-start gap-2">
-        {dragEnabled ? (
-          <button
-            type="button"
-            aria-label={t('Drag card')}
-            className={cn(
-              'mt-0.5 flex h-7 w-5 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground active:cursor-grabbing',
-              isDragging && 'cursor-grabbing'
-            )}
-            onPointerDown={handleDragPointerDown}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-        ) : (
-          <span className="mt-0.5 h-7 w-5 shrink-0" />
-        )}
         <div
           className={cn(
             'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
@@ -245,7 +329,7 @@ export function SessionCanvasCard({
             text={previewText}
             placeholder={t('No output yet — open this session to stream preview')}
             isActive={isActive}
-            className="!min-h-0 !flex-none h-full min-h-0 overflow-hidden"
+            className="min-h-0 flex-1"
           />
           <div className="flex min-h-0 min-w-0 flex-col gap-1 overflow-hidden">
             <SessionCanvasQuickInput
@@ -282,7 +366,8 @@ export function SessionCanvasCard({
     'transition-shadow hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
     isDragging && 'ring-2 ring-primary/40',
     isFocused && 'ring-2 ring-primary border-primary/50 shadow-lg overflow-hidden',
-    isDimmed && 'opacity-40 pointer-events-none'
+    isDimmed && 'opacity-50 saturate-75',
+    !isFocused && ptyExists && 'ring-1 ring-primary/35 border-primary/25'
   );
 
   const resizeHandle =
@@ -290,7 +375,8 @@ export function SessionCanvasCard({
       <button
         type="button"
         aria-label={t('Resize')}
-        className="absolute bottom-1 right-1 z-10 flex h-4 w-4 cursor-se-resize items-end justify-end rounded-sm p-0.5 text-muted-foreground/70 hover:text-foreground"
+        data-canvas-resize-handle
+        className="no-drag absolute bottom-1 right-1 z-10 flex h-4 w-4 cursor-se-resize items-end justify-end rounded-sm p-0.5 text-muted-foreground/70 hover:text-foreground"
         onPointerDown={handleResizePointerDown}
         onClick={(e) => e.stopPropagation()}
       >
@@ -309,54 +395,58 @@ export function SessionCanvasCard({
   };
 
   const handleShellClick = (e: React.MouseEvent) => {
-    if (isDimmed) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-canvas-drag-handle]') || target.closest('[data-canvas-resize-handle]')) {
+      sessionCanvasLog('Click', 'shell click ignored (drag/resize handle)', {
+        cardKey,
+      });
+      return;
+    }
     onCardClick(e);
   };
 
   const handleShellContextMenu = (e: React.MouseEvent) => {
-    if (isDimmed) return;
     onContextMenu?.(e);
   };
 
-  const shellInteractiveProps = isFocused
-    ? {}
-    : {
-        role: 'button' as const,
-        tabIndex: 0,
-        onKeyDown: (e: React.KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            handleShellClick(e as unknown as React.MouseEvent);
-          }
-        },
-      };
+  const shellInteractiveProps =
+    isFocused
+      ? {}
+      : {
+          tabIndex: 0,
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              handleShellClick(e as unknown as React.MouseEvent);
+            }
+          },
+        };
 
-  if (isAgent && item.outputState !== 'idle') {
+  const shellHandlers = {
+    onClick: handleShellClick,
+    onContextMenu: handleShellContextMenu,
+  };
+
+  if (showAgentGlow) {
     return (
-      <div
-        style={positionedStyle}
-        onClick={handleShellClick}
-        onContextMenu={handleShellContextMenu}
-        {...shellInteractiveProps}
-      >
-        <GlowCard as="div" state={glowState} className={shellClass}>
-          {body}
-          {resizeHandle}
+      <div className="no-drag relative" style={positionedStyle}>
+        {dragHandle}
+        <GlowCard as="div" state={glowState} className={cn('no-drag h-full', shellClass)}>
+          <div className="h-full" {...shellHandlers} {...shellInteractiveProps}>
+            {body}
+            {resizeHandle}
+          </div>
         </GlowCard>
       </div>
     );
   }
 
   return (
-    <div style={positionedStyle}>
-      <div
-        className={shellClass}
-        onClick={handleShellClick}
-        onContextMenu={handleShellContextMenu}
-        {...shellInteractiveProps}
-      >
+    <div className="no-drag relative" style={positionedStyle}>
+      {dragHandle}
+      <div className={cn('no-drag h-full', shellClass)} {...shellHandlers} {...shellInteractiveProps}>
         {body}
+        {resizeHandle}
       </div>
-      {resizeHandle}
     </div>
   );
 }

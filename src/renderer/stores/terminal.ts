@@ -1,9 +1,17 @@
 import type { TerminalSession } from '@shared/types';
 import { create } from 'zustand';
-import { mergeAuthoritativePreviewSnapshot, mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
+import {
+  mergeAuthoritativePreviewSnapshot,
+  mergeCanvasRefreshPreview,
+  mergePreviewSnapshot,
+  mergeXtermCanvasPreview,
+} from '@/lib/previewSnapshotMerge';
 import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
 import { removeCachedSessionPreview, setCachedSessionPreview } from '@/stores/sessionPreviewCache';
-import { snapshotTerminalPreview } from '@/stores/terminalPreviewRegistry';
+import {
+  hasTerminalPreviewReader,
+  snapshotTerminalPreview,
+} from '@/stores/terminalPreviewRegistry';
 
 export type TerminalSessionEntry = TerminalSession & {
   previewText?: string;
@@ -116,7 +124,10 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       let changed = false;
       const sessions = state.sessions.map((session) => {
         const snapshot = snapshotTerminalPreview(session.id);
-        const merged = mergeAuthoritativePreviewSnapshot(session.previewText, snapshot);
+        if (!snapshot?.trim()) return session;
+        const merged = hasTerminalPreviewReader(session.id)
+          ? mergeXtermCanvasPreview(session.previewText, snapshot)
+          : mergeCanvasRefreshPreview(session.previewText, snapshot);
         if (!merged || merged === session.previewText) return session;
         changed = true;
         setCachedSessionPreview('terminal', session.id, merged);

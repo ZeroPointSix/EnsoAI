@@ -1,3 +1,4 @@
+import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 
@@ -80,14 +81,32 @@ export async function sendSessionCanvasQuickInput(
   const writer = useTerminalWriteStore.getState().writers.get(sessionId);
 
   if (!writer) {
-    if (!ptyId) return false;
+    if (!ptyId) {
+      sessionCanvasLog('QuickInput', 'send failed: no ptyId', {
+        sessionId: shortSessionId(sessionId),
+      });
+      return false;
+    }
     const exists = await window.electronAPI.terminal.exists(ptyId);
-    if (!exists) return false;
+    if (!exists) {
+      sessionCanvasLog('QuickInput', 'send failed: pty not exists', {
+        sessionId: shortSessionId(sessionId),
+        ptyId,
+      });
+      return false;
+    }
   }
 
   inFlightBySession.add(sessionId);
   try {
     const message = buildPayload(trimmed, imagePaths);
+    sessionCanvasLog('QuickInput', 'send', {
+      sessionId: shortSessionId(sessionId),
+      ptyId,
+      hasWriter: Boolean(writer),
+      chars: message.length,
+      images: imagePaths.length,
+    });
     await writeChunks(sessionId, ptyId ?? sessionId, writer, message);
     if (writer) {
       focusSessionTerminal(sessionId);

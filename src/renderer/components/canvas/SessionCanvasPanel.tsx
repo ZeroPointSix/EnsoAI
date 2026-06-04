@@ -20,6 +20,7 @@ import {
   computeArrangedCanvasHeight,
   computeArrangedPositions,
 } from '@/lib/arrangeSessionCanvasCards';
+import { resolveSessionCanvasCardClickIntent } from '@/lib/sessionCanvasCardClick';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { useCanvasPtyPreviewFanIn } from '@/hooks/useCanvasPtyPreviewFanIn';
 import { refreshAllCanvasPreviews } from '@/lib/refreshCanvasPreviews';
@@ -39,6 +40,8 @@ import { getDefaultCardPosition } from './useSessionCanvasCardDrag';
 import { getSessionCanvasCardKey } from '@/lib/sessionCanvasCardKey';
 import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { SessionCanvasPromptSettings } from './SessionCanvasPromptSettings';
+import { useAgentRuntimeActivityMonitor } from '@/hooks/useAgentRuntimeActivityMonitor';
+import { sessionCanvasLog } from '@/lib/sessionCanvasLog';
 
 interface SessionCanvasPanelProps {
   variant?: 'embedded' | 'floating';
@@ -120,6 +123,8 @@ export function SessionCanvasPanel({
 
   const previewSyncEnabled = syncPreviews && !externalItems;
   useCanvasPtyPreviewFanIn(previewSyncEnabled);
+  // 独立看板（externalItems）由主窗 App 挂载 monitor；仅本进程 live 看板时在此启用
+  useAgentRuntimeActivityMonitor(!externalItems);
 
   useEffect(() => {
     if (!previewSyncEnabled) return;
@@ -146,19 +151,18 @@ export function SessionCanvasPanel({
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!focusedCardKey) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFocusedCardKey(null);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [focusedCardKey]);
-
   const allItems = useMemo(() => {
     if (externalItems) return externalItems;
     return buildCardItems(agentSessions, runtimeStates, terminalSessions);
   }, [externalItems, agentSessions, runtimeStates, terminalSessions]);
+
+  useEffect(() => {
+    sessionCanvasLog('Panel', 'mount config', {
+      externalItems: Boolean(externalItems),
+      itemCount: allItems.length,
+      previewSyncEnabled,
+    });
+  }, [externalItems, allItems.length, previewSyncEnabled]);
 
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return allItems;
@@ -188,6 +192,32 @@ export function SessionCanvasPanel({
     [filteredItems, focusedCardKey]
   );
 
+  useEffect(() => {
+    if (focusedCardKey && !focusedItem) {
+      sessionCanvasLog('Focus', 'focused card missing, clear', { focusedCardKey });
+      setFocusedCardKey(null);
+    }
+  }, [focusedCardKey, focusedItem]);
+
+  useEffect(() => {
+    sessionCanvasLog('Focus', focusedCardKey ? 'enter overlay' : 'exit overlay', {
+      focusedCardKey,
+      disableDragAll: Boolean(focusedCardKey),
+    });
+  }, [focusedCardKey]);
+
+  useEffect(() => {
+    if (!focusedCardKey) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        sessionCanvasLog('Focus', 'Escape → clear focus');
+        setFocusedCardKey(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [focusedCardKey]);
+
   const focusSize = useMemo(() => {
     const pad = 32;
     const maxW = Math.max(280, canvasSize.width - pad);
@@ -198,8 +228,8 @@ export function SessionCanvasPanel({
     };
   }, [canvasSize.width, canvasSize.height]);
 
-  const agentCount = agentSessions.length;
-  const terminalCount = terminalSessions.length;
+  const agentCount = allItems.filter((i) => i.kind === 'agent').length;
+  const terminalCount = allItems.filter((i) => i.kind === 'terminal').length;
 
   const handleFocus = useCallback(
     async (item: CanvasCardItem) => {
@@ -260,14 +290,25 @@ export function SessionCanvasPanel({
     setFocusedCardKey(null);
   }, [filteredItems, canvasSize.width, setCardPosition, setCardSize]);
 
+  /** 单击进入浮层快捷输入；Ctrl+单击跳转主窗口会话 */
   const handleCardClick = useCallback(
     (item: CanvasCardItem, event: React.MouseEvent) => {
-      if (event.ctrlKey || event.metaKey) {
+      const intent = resolveSessionCanvasCardClickIntent({
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+      });
+      const key = getSessionCanvasCardKey(item);
+      sessionCanvasLog('Click', 'card click', {
+        key,
+        intent,
+        ctrl: event.ctrlKey || event.metaKey,
+      });
+      if (intent === 'jump-to-session') {
         setFocusedCardKey(null);
         void handleFocus(item);
         return;
       }
-      setFocusedCardKey(getSessionCanvasCardKey(item));
+      setFocusedCardKey(key);
     },
     [handleFocus]
   );
@@ -278,17 +319,16 @@ export function SessionCanvasPanel({
     setContextMenu({ x: event.clientX, y: event.clientY, item });
   }, []);
 
-  const canvasMinHeight = useMemo(() => {
-    if (focusedCardKey) {
-      return Math.max(360, canvasSize.height);
-    }
-    return computeArrangedCanvasHeight(
-      filteredItems.length,
-      canvasSize.width,
-      CANVAS_CARD_DEFAULT_WIDTH,
-      CANVAS_CARD_DEFAULT_HEIGHT
-    );
-  }, [filteredItems.length, canvasSize.width, canvasSize.height, focusedCardKey]);
+  const canvasMinHeight = useMemo(
+    () =>
+      computeArrangedCanvasHeight(
+        filteredItems.length,
+        canvasSize.width,
+        CANVAS_CARD_DEFAULT_WIDTH,
+        CANVAS_CARD_DEFAULT_HEIGHT
+      ),
+    [filteredItems.length, canvasSize.width]
+  );
 
   const isFloating = variant === 'floating';
 
@@ -413,7 +453,7 @@ export function SessionCanvasPanel({
               if (focusedCardKey === key) {
                 return null;
               }
-              const isDimmed = Boolean(focusedCardKey);
+              const isSoftDimmed = Boolean(focusedCardKey);
               return (
                 <SessionCanvasCard
                   key={`${item.kind}-${item.session.id}`}
@@ -421,8 +461,8 @@ export function SessionCanvasPanel({
                   index={index}
                   isActive={isActive}
                   isFocused={false}
-                  isDimmed={isDimmed}
-                  disableDrag={Boolean(focusedCardKey)}
+                  isDimmed={isSoftDimmed}
+                  disableDrag={false}
                   onCardClick={(e) => handleCardClick(item, e)}
                   onRenameSession={handleRenameSession}
                   onContextMenu={(e) => openContextMenu(e, item)}
@@ -437,13 +477,18 @@ export function SessionCanvasPanel({
 
         {focusedItem ? (
           <div
-            className="absolute inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/55 p-3"
-            onClick={() => setFocusedCardKey(null)}
+            className="absolute inset-0 z-40 overflow-y-auto overscroll-y-contain bg-black/55 p-3"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                sessionCanvasLog('Focus', 'backdrop click → clear focus');
+                setFocusedCardKey(null);
+              }
+            }}
             onContextMenu={(e) => e.preventDefault()}
           >
             <div
-              className="relative flex max-h-full max-w-full min-h-0 min-w-0 overflow-hidden"
-              style={{ width: focusSize.width, height: focusSize.height }}
+              className="pointer-events-auto relative mx-auto flex min-h-0 max-w-full flex-col"
+              style={{ width: focusSize.width, maxHeight: focusSize.height }}
               onClick={(e) => e.stopPropagation()}
             >
               <SessionCanvasCard
@@ -453,7 +498,6 @@ export function SessionCanvasPanel({
                 isFocused
                 sizeOverride={focusSize}
                 positionOverride={{ x: 0, y: 0 }}
-                disableDrag
                 onCardClick={(e) => handleCardClick(focusedItem, e)}
                 onRenameSession={handleRenameSession}
                 onContextMenu={(e) => openContextMenu(e, focusedItem)}

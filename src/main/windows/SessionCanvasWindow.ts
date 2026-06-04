@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { is } from '@electron-toolkit/utils';
 import { IPC_CHANNELS } from '@shared/types';
 import { app, BrowserWindow } from 'electron';
+import { sessionCanvasLog } from '../utils/sessionCanvasLog';
 
 let sessionCanvasWindow: BrowserWindow | null = null;
 let mainWindowRef: BrowserWindow | null = null;
@@ -189,6 +190,7 @@ export function createSessionCanvasWindow(): BrowserWindow {
 }
 
 export function showSessionCanvasWindow(): BrowserWindow {
+  sessionCanvasLog('Window', 'show');
   const win = createSessionCanvasWindow();
   win.show();
   win.focus();
@@ -196,6 +198,7 @@ export function showSessionCanvasWindow(): BrowserWindow {
 }
 
 export function hideSessionCanvasWindow(): void {
+  sessionCanvasLog('Window', 'hide');
   if (sessionCanvasWindow && !sessionCanvasWindow.isDestroyed()) {
     sessionCanvasWindow.hide();
   }

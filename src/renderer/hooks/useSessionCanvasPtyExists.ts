@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { sessionCanvasPtyExists } from '@/lib/sessionCanvasQuickSend';
+import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 
@@ -18,6 +19,7 @@ export function useSessionCanvasPtyExists(
   const hasWriter = useTerminalWriteStore((s) => s.writers.has(sessionId));
   const [ptyExists, setPtyExists] = useState(false);
   const [checking, setChecking] = useState(true);
+  const prevExistsRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     if (!enabled || !sessionId) {
@@ -41,11 +43,26 @@ export function useSessionCanvasPtyExists(
           ptyIdHint ?? ptyIdFromRegistry
         );
         if (!cancelled) {
+          if (prevExistsRef.current !== exists) {
+            sessionCanvasLog('PtyCheck', 'pty exists changed', {
+              sessionId: shortSessionId(sessionId),
+              ptyId: ptyIdHint ?? ptyIdFromRegistry,
+              exists,
+              hasWriter,
+            });
+            prevExistsRef.current = exists;
+          }
           setPtyExists(exists);
           setChecking(false);
         }
       } catch {
         if (!cancelled) {
+          if (prevExistsRef.current !== false) {
+            sessionCanvasLog('PtyCheck', 'pty check error', {
+              sessionId: shortSessionId(sessionId),
+            });
+            prevExistsRef.current = false;
+          }
           setPtyExists(false);
           setChecking(false);
         }

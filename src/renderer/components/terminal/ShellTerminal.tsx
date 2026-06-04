@@ -5,6 +5,7 @@ import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
+import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
 import { useTerminalStore } from '@/stores/terminal';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
@@ -52,6 +53,10 @@ export function ShellTerminal({
     (ptyId: string) => {
       if (terminalSessionId) {
         setSessionPtyId(terminalSessionId, ptyId);
+        sessionCanvasLog('PtyRegistry', 'ShellTerminal pty init → push snapshot', {
+          sessionId: shortSessionId(terminalSessionId),
+          ptyId,
+        });
         pushSessionCanvasSnapshotToPanel();
       }
       onInit?.(ptyId);

@@ -1,6 +1,7 @@
 import { normalizePath } from '@shared/utils/path';
 import { create } from 'zustand';
 import type { CanvasAgentDisplayState } from '@/components/canvas/CanvasAgentStatusDot';
+import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 import { useAgentSessionsStore } from './agentSessions';
 
 /** 任务完成绿灯保持时长（用户配置：1 分钟） */
@@ -40,6 +41,14 @@ export const useCanvasCardDisplayStore = create<CanvasCardDisplayStore>((set, ge
   bySessionId: {},
 
   setDisplayState: (sessionId, state) => {
+    const prevState = get().bySessionId[sessionId];
+    if (prevState !== state) {
+      sessionCanvasLog('HookDisplay', 'hookState updated', {
+        sessionId: shortSessionId(sessionId),
+        from: prevState ?? 'none',
+        to: state,
+      });
+    }
     clearCompletedTimer(sessionId);
 
     set((prev) => ({
@@ -71,6 +80,7 @@ export const useCanvasCardDisplayStore = create<CanvasCardDisplayStore>((set, ge
 
 /** 仅在看板 Panel 挂载时注册，按 sessionId 更新四色状态 */
 export function initCanvasCardDisplayListeners(): () => void {
+  sessionCanvasLog('HookDisplay', 'initCanvasCardDisplayListeners');
   const { setDisplayState } = useCanvasCardDisplayStore.getState();
 
   const applyHookState = (
@@ -80,18 +90,39 @@ export function initCanvasCardDisplayListeners(): () => void {
   ) => {
     if (!incomingSessionId) return;
     const sessionId = resolveEnsoSessionId(incomingSessionId, cwd);
-    if (sessionId) setDisplayState(sessionId, state);
+    if (sessionId) {
+      setDisplayState(sessionId, state);
+    } else {
+      sessionCanvasLog('HookDisplay', 'applyHookState session resolve failed', {
+        incomingSessionId: shortSessionId(incomingSessionId),
+        cwd,
+        state,
+      });
+    }
   };
 
   const unsubPre = window.electronAPI.notification.onPreToolUse((data) => {
+    sessionCanvasLog('HookDisplay', 'event PreToolUse', {
+      incomingSessionId: data.sessionId?.slice(0, 8),
+      toolName: data.toolName,
+      cwd: data.cwd,
+    });
     applyHookState(data.sessionId, data.cwd, 'working');
   });
 
   const unsubAsk = window.electronAPI.notification.onAskUserQuestion((data) => {
+    sessionCanvasLog('HookDisplay', 'event AskUserQuestion', {
+      incomingSessionId: data.sessionId?.slice(0, 8),
+      cwd: data.cwd,
+    });
     applyHookState(data.sessionId, data.cwd, 'blocked');
   });
 
   const unsubStop = window.electronAPI.notification.onAgentStop((data) => {
+    sessionCanvasLog('HookDisplay', 'event AgentStop', {
+      incomingSessionId: data.sessionId?.slice(0, 8),
+      cwd: data.cwd,
+    });
     applyHookState(data.sessionId, data.cwd, 'completed');
   });
 

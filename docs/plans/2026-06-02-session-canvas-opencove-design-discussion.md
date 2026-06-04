@@ -1,7 +1,7 @@
 # 会话画板 × OpenCove 设计对照与讨论稿
 
 **日期**: 2026-06-02  
-**状态**: 已确认并实现（v0.2.50）  
+**状态**: v0.2.50 已实现；**2026-06-04 后续问题未关闭** → 见 `../handoff/2026-06-04-session-canvas-known-issues.md`  
 **参考项目**: 仓库内 `opencove/`（OpenCove 空间画布工作台）  
 **关联**: `2026-06-01-session-canvas-design.md`、用户截图 `PixPin_2026-06-01_22-53-49.png`
 

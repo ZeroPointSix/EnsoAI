@@ -88,11 +88,14 @@ import {
 } from './hooks/useWorktree';
 import { useI18n } from './i18n';
 import { buildSessionCanvasSnapshot } from './lib/buildSessionCanvasSnapshot';
+import { useAgentRuntimeActivityMonitor } from './hooks/useAgentRuntimeActivityMonitor';
 import { useCanvasPtyPreviewFanIn } from './hooks/useCanvasPtyPreviewFanIn';
 import { refreshAllCanvasPreviews } from './lib/refreshCanvasPreviews';
 import { scheduleCanvasPreviewRefresh } from './lib/scheduleCanvasPreviewRefresh';
 import { pushSessionCanvasSnapshotToPanel } from './lib/sessionCanvasSync';
+import { sessionCanvasLog } from './lib/sessionCanvasLog';
 import { initCanvasCardDisplayListeners } from './stores/canvasCardDisplayStore';
+import { useAgentRuntimeActivityStore } from './stores/agentRuntimeActivity';
 import { useAgentSessionsStore } from './stores/agentSessions';
 import { initAgentTasksListener, useAgentTasksStore } from './stores/agentTasks';
 import { initCloneProgressListener } from './stores/cloneTasks';
@@ -188,6 +191,7 @@ export default function App() {
   // Session canvas standalone window (Ctrl+5)
   const [isSessionCanvasPanelOpen, setIsSessionCanvasPanelOpen] = useState(false);
   useCanvasPtyPreviewFanIn(isSessionCanvasPanelOpen);
+  useAgentRuntimeActivityMonitor(isSessionCanvasPanelOpen);
   const toggleSessionCanvas = useCallback(() => {
     void window.electronAPI.sessionCanvasPanel.toggle();
   }, []);
@@ -211,12 +215,14 @@ export default function App() {
 
   useEffect(() => {
     return window.electronAPI.sessionCanvasPanel.onVisibilityChanged((visible: boolean) => {
+      sessionCanvasLog('App', 'panel visibility', { visible });
       setIsSessionCanvasPanelOpen(visible);
     });
   }, []);
 
   useEffect(() => {
     return window.electronAPI.sessionCanvasPanel.onGetSnapshot(() => {
+      sessionCanvasLog('App', 'onGetSnapshot (main renderer)');
       refreshAllCanvasPreviews();
       const snapshot = buildSessionCanvasSnapshot();
       window.electronAPI.sessionCanvasPanel.sendSnapshotResponse(snapshot);
@@ -225,11 +231,13 @@ export default function App() {
 
   useEffect(() => {
     if (!isSessionCanvasPanelOpen) return;
+    sessionCanvasLog('App', 'canvas sync loop start (monitor + IPC push)');
     const cancelBootstrap = scheduleCanvasPreviewRefresh();
     let timer: ReturnType<typeof setTimeout> | null = null;
     const scheduleSync = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
+        sessionCanvasLog('App', 'scheduleSync → push');
         pushSessionCanvasSnapshotToPanel();
       }, 300);
     };
@@ -237,15 +245,18 @@ export default function App() {
     const poll = window.setInterval(() => {
       refreshAllCanvasPreviews();
       pushSessionCanvasSnapshotToPanel();
-    }, 2000);
+    }, 1000);
     const unsubAgent = useAgentSessionsStore.subscribe(scheduleSync);
     const unsubTerminal = useTerminalStore.subscribe(scheduleSync);
+    const unsubRuntimeActivity = useAgentRuntimeActivityStore.subscribe(scheduleSync);
     return () => {
+      sessionCanvasLog('App', 'canvas sync loop stop');
       cancelBootstrap();
       if (timer) clearTimeout(timer);
       window.clearInterval(poll);
       unsubAgent();
       unsubTerminal();
+      unsubRuntimeActivity();
     };
   }, [isSessionCanvasPanelOpen]);
 

@@ -1,5 +1,6 @@
+import { isHighSignalCanvasPreview, resolveCanvasCardPreviewText } from '@/lib/canvasPreviewQuality';
 import { getDisplayPreviewText } from '@/lib/terminalPreview';
-import { mergeAuthoritativePreviewSnapshot, mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
+import { mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
 
 export type SessionPreviewKind = 'agent' | 'terminal';
 
@@ -49,8 +50,9 @@ export function setCachedSessionPreview(
   if (!trimmed) return;
   const existing = memoryCache[key];
   const merged = mergePreviewSnapshot(existing, trimmed);
-  if (!merged.trim() || merged === existing) return;
-  memoryCache = { ...memoryCache, [key]: merged };
+  const display = resolveCanvasCardPreviewText(merged, existing) ?? merged;
+  if (!display.trim() || display === existing) return;
+  memoryCache = { ...memoryCache, [key]: display };
   persistCache();
 }
 
@@ -71,8 +73,12 @@ export function getResolvedSessionPreview(
 ): string | undefined {
   const runtime = getDisplayPreviewText(runtimeText, runtimePending);
   const cached = getCachedSessionPreview(kind, sessionId);
-  if (runtime?.trim() && cached?.trim()) {
-    return mergeAuthoritativePreviewSnapshot(cached, runtime) || undefined;
+  if (runtime && isHighSignalCanvasPreview(runtime)) {
+    return runtime;
   }
-  return runtime?.trim() ? runtime : cached;
+  if (runtime?.trim() && cached?.trim()) {
+    const merged = mergePreviewSnapshot(cached, runtime);
+    return resolveCanvasCardPreviewText(merged, cached ?? runtime) || undefined;
+  }
+  return resolveCanvasCardPreviewText(runtime, cached);
 }

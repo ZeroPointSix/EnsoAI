@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasCardItem } from './SessionCanvasCard';
+import { sessionCanvasLog } from '@/lib/sessionCanvasLog';
 import { useSettingsStore } from '@/stores/settings';
 
 const DEFAULT_WIDTH = 320;
@@ -30,6 +31,7 @@ export function useSessionCanvasCardResize(
       e.preventDefault();
       e.stopPropagation();
       setIsResizing(true);
+      sessionCanvasLog('Resize', 'resize start', { cardKey, width, height });
       resizeStart.current = { x: e.clientX, y: e.clientY, width, height };
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     },
@@ -53,7 +55,11 @@ export function useSessionCanvasCardResize(
       setCardSize(cardKey, { width: nextWidth, height: nextHeight });
     };
 
-    const handleUp = () => setIsResizing(false);
+    const handleUp = () => {
+      const saved = useSettingsStore.getState().sessionCanvasCardSizes[cardKey];
+      sessionCanvasLog('Resize', 'resize end', { cardKey, size: saved });
+      setIsResizing(false);
+    };
 
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);

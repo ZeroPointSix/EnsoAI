@@ -4,14 +4,57 @@ import { normalizePath, pathsEqual } from '@/App/storage';
 import type { Session } from '@/components/chat/SessionBar';
 import type { AgentGroupState } from '@/components/chat/types';
 import { createInitialGroupState } from '@/components/chat/types';
-import { mergeAuthoritativePreviewSnapshot, mergePreviewSnapshot } from '@/lib/previewSnapshotMerge';
-import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
+import { isHighSignalCanvasPreview, isLowSignalCanvasPreview } from '@/lib/canvasPreviewQuality';
+import {
+  mergeAuthoritativePreviewSnapshot,
+  mergeCanvasRefreshPreview,
+  mergePreviewSnapshot,
+  mergeXtermCanvasPreview,
+} from '@/lib/previewSnapshotMerge';
+import {
+  appendRawPreviewTail,
+  type PreviewInterruptReason,
+  inferPreviewInterruptSignal,
+  logPreviewSignalAnalysis,
+} from '@/lib/canvasAgentState/analyzeTerminalPreviewSignals';
+import { syncPreviewSignalToActivity } from '@/lib/canvasAgentState/syncPreviewSignalToActivity';
+import { appendTerminalPreviewChunk, getDisplayPreviewText } from '@/lib/terminalPreview';
 import {
   removeCachedSessionPreview,
   setCachedSessionPreview,
 } from '@/stores/sessionPreviewCache';
-import { snapshotTerminalPreview } from '@/stores/terminalPreviewRegistry';
+import {
+  hasTerminalPreviewReader,
+  snapshotTerminalPreview,
+} from '@/stores/terminalPreviewRegistry';
 import { useAgentStatusStore } from './agentStatus';
+
+/** 与 OpenCove ptyState 一致：outputState 变化时同步看板四色灯（避免动态 import 循环依赖） */
+function queueCanvasDisplaySync(
+  sessionId: string,
+  outputState: OutputState,
+  finishedOutputting: boolean
+): void {
+  queueMicrotask(() => {
+    void import('@/stores/canvasCardDisplayStore').then(({ useCanvasCardDisplayStore }) => {
+      const { setDisplayState, bySessionId } = useCanvasCardDisplayStore.getState();
+      const current = bySessionId[sessionId];
+      if (current === 'blocked') return;
+
+      if (outputState === 'outputting') {
+        if (current !== 'completed') setDisplayState(sessionId, 'working');
+        return;
+      }
+      if (finishedOutputting || outputState === 'unread') {
+        setDisplayState(sessionId, 'completed');
+        return;
+      }
+      if (current === 'working') {
+        setDisplayState(sessionId, 'idle');
+      }
+    });
+  });
+}
 
 // Global storage key for all sessions across all repos
 export const SESSIONS_STORAGE_KEY = 'enso-agent-sessions';
@@ -27,6 +70,10 @@ export interface SessionRuntimeState {
   previewText?: string;
   /** Incomplete ESC bytes waiting for the next PTY chunk */
   previewEscapePending?: string;
+  /** 带 ANSI 的原始尾部（颜色/菜单推断） */
+  previewRawTail?: string;
+  /** 最近一次预览信号 reason（none 时不写） */
+  previewSignalReason?: string;
 }
 
 // Enhanced input state for each session (not persisted)
@@ -365,7 +412,10 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
 
         // Handle state transitions
         if (outputState === 'outputting') {
-          // Starting to output: just track the state
+          if (currentState?.outputState === 'outputting') {
+            return prev;
+          }
+          queueCanvasDisplaySync(sessionId, 'outputting', false);
           return {
             runtimeStates: {
               ...prev.runtimeStates,
@@ -391,13 +441,18 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
           // Only check if user is CURRENTLY viewing the session
           // If user is not viewing when AI finishes, mark as unread
           const shouldMarkUnread = wasOutputting && !isActive;
+          const nextOutput = shouldMarkUnread ? 'unread' : 'idle';
+          if (currentState?.outputState === nextOutput) {
+            return prev;
+          }
+          queueCanvasDisplaySync(sessionId, nextOutput, wasOutputting);
 
           return {
             runtimeStates: {
               ...prev.runtimeStates,
               [sessionId]: {
                 ...currentState,
-                outputState: shouldMarkUnread ? 'unread' : 'idle',
+                outputState: nextOutput,
                 lastActivityAt: Date.now(),
                 wasActiveWhenOutputting: false,
               },
@@ -408,6 +463,9 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
         // For other states (unread), just set directly
         if (currentState?.outputState === outputState) {
           return prev;
+        }
+        if (outputState === 'unread') {
+          queueCanvasDisplaySync(sessionId, 'unread', true);
         }
         return {
           runtimeStates: {
@@ -523,9 +581,17 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
         const nextStates = { ...prev.runtimeStates };
         let changed = false;
         for (const session of prev.sessions) {
-          const snapshot = snapshotTerminalPreview(session.id);
           const current = nextStates[session.id];
-          const merged = mergeAuthoritativePreviewSnapshot(current?.previewText, snapshot);
+          const currentDisplay = getDisplayPreviewText(
+            current?.previewText,
+            current?.previewEscapePending
+          );
+          const snapshot = snapshotTerminalPreview(session.id);
+          if (!snapshot?.trim()) continue;
+
+          const merged = hasTerminalPreviewReader(session.id)
+            ? mergeXtermCanvasPreview(current?.previewText, snapshot)
+            : mergeCanvasRefreshPreview(current?.previewText, snapshot);
           if (!merged || (merged === current?.previewText && !current?.previewEscapePending)) {
             continue;
           }
@@ -545,14 +611,30 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
     appendSessionPreview: (sessionId, data) =>
       set((prev) => {
         const current = prev.runtimeStates[sessionId];
+        const previewRawTail = appendRawPreviewTail(current?.previewRawTail, data);
         const { previewText, escapePending } = appendTerminalPreviewChunk(
           current?.previewText,
           current?.previewEscapePending,
           data
         );
+        const strippedTail = getDisplayPreviewText(previewText, escapePending);
+        const signal = inferPreviewInterruptSignal({
+          rawTail: previewRawTail,
+          strippedTail,
+        });
+        const prevSignalReason = current?.previewSignalReason as PreviewInterruptReason | undefined;
+        logPreviewSignalAnalysis(sessionId, signal, {
+          bytes: data.length,
+        });
+        syncPreviewSignalToActivity(sessionId, signal, prevSignalReason);
+        const previewSignalReason =
+          signal.reason === 'none' ? undefined : signal.reason;
+
         if (
           previewText === current?.previewText &&
-          escapePending === current?.previewEscapePending
+          escapePending === current?.previewEscapePending &&
+          previewRawTail === current?.previewRawTail &&
+          previewSignalReason === current?.previewSignalReason
         ) {
           return prev;
         }
@@ -568,6 +650,8 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
               wasActiveWhenOutputting: current?.wasActiveWhenOutputting ?? false,
               previewText,
               previewEscapePending: escapePending,
+              previewRawTail,
+              previewSignalReason,
             },
           },
         };

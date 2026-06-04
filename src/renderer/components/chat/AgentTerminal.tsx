@@ -11,6 +11,8 @@ import { useI18n } from '@/i18n';
 import { type OutputState, useAgentSessionsStore } from '@/stores/agentSessions';
 import { useSettingsStore } from '@/stores/settings';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
+import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
+import { hasTerminalPreviewReader } from '@/stores/terminalPreviewRegistry';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
@@ -483,6 +485,10 @@ export function AgentTerminal({
     (ptyId: string) => {
       if (terminalSessionId) {
         setSessionPtyId(terminalSessionId, ptyId);
+        sessionCanvasLog('PtyRegistry', 'AgentTerminal pty init → push snapshot', {
+          sessionId: shortSessionId(terminalSessionId),
+          ptyId,
+        });
         pushSessionCanvasSnapshotToPanel();
       }
       ptyIdRef.current = ptyId;
@@ -510,7 +516,8 @@ export function AgentTerminal({
         outputBufferRef.current = outputBufferRef.current.slice(-500);
       }
 
-      if (terminalSessionId) {
+      // 已挂载 xterm 时由定时 xterm 快照提供看板预览（PTY 流在 TUI 备用屏下常为乱码）
+      if (terminalSessionId && !hasTerminalPreviewReader(terminalSessionId)) {
         appendSessionPreview(terminalSessionId, data);
       }
 

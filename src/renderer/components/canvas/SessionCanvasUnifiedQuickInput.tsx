@@ -18,6 +18,7 @@ import {
   saveCanvasInputImageToTemp,
 } from '@/lib/sessionCanvasClaudeInputUtils';
 import { sendSessionCanvasQuickInput } from '@/lib/sessionCanvasQuickSend';
+import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 import { cn } from '@/lib/utils';
 import {
   selectConditionalPrompts,
@@ -311,7 +312,29 @@ export function SessionCanvasUnifiedQuickInput({
 
   const hasPromptChrome =
     promptsEnabled && (normalPrompts.length > 0 || conditionalPrompts.length > 0);
-  const useInputPanel = hasPromptChrome || imagePaths.length > 0;
+  const useInputPanel = expanded || hasPromptChrome || imagePaths.length > 0;
+
+  useEffect(() => {
+    sessionCanvasLog('QuickInput', 'layout', {
+      sessionId: shortSessionId(sessionId),
+      expanded,
+      useInputPanel,
+      hasPromptChrome,
+      normalPromptCount: normalPrompts.length,
+      conditionalPromptCount: conditionalPrompts.length,
+      ptyExists,
+      checkingPty,
+    });
+  }, [
+    sessionId,
+    expanded,
+    useInputPanel,
+    hasPromptChrome,
+    normalPrompts.length,
+    conditionalPrompts.length,
+    ptyExists,
+    checkingPty,
+  ]);
 
   const placeholder =
     claudeMode && cwd
