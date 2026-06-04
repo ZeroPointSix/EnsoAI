@@ -391,6 +391,17 @@ export async function startClaudeIdeBridge(
                 }
               }
               // Don't log skipped PermissionRequest for read-only tools - too noisy
+            } else if (data.hook_event_name === 'PreToolUse') {
+              // 普通 PreToolUse：Agent 正在执行工具 → running（黄灯）
+              for (const window of BrowserWindow.getAllWindows()) {
+                if (!window.isDestroyed()) {
+                  window.webContents.send(IPC_CHANNELS.AGENT_PRE_TOOL_USE_NOTIFICATION, {
+                    sessionId,
+                    toolName: data.tool_name,
+                    cwd: data.cwd,
+                  });
+                }
+              }
             } else if (data.hook_event_name === 'Stop') {
               // Stop event - agent has finished or been stopped
               console.log(`[ClaudeIdeBridge] → completed (Stop) ${sessionId?.slice(0, 8)}`);

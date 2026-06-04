@@ -14,7 +14,6 @@ import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { resolveSessionCanvasSubtitle } from './sessionCanvasSubtitle';
 import { resolveSessionCanvasCardPreviewText } from '@/lib/resolveSessionCanvasCardPreview';
-import { resolveCanvasAgentDisplayState } from '@/lib/canvasAgentState/resolveCanvasAgentDisplayState';
 import { useCanvasCardDisplayStore } from '@/stores/canvasCardDisplayStore';
 import {
   type CanvasAgentDisplayState,
@@ -26,6 +25,7 @@ import { SessionCanvasPreview } from './SessionCanvasPreview';
 import { SessionCanvasQuickInput } from './SessionCanvasQuickInput';
 import { getSessionCanvasCardKey, useSessionCanvasCardResize } from './useSessionCanvasCardResize';
 import { useSessionCanvasCardDrag } from './useSessionCanvasCardDrag';
+import { useSessionRuntimePhase } from '@/hooks/useAgentRuntimeActivityMonitor';
 
 export type CanvasCardItem =
   | {
@@ -199,20 +199,25 @@ export function SessionCanvasCard({
     isAgent && item.kind === 'agent' ? s.bySessionId[item.session.id] : undefined
   );
 
+  // 统一 runtime activity 主信号（PTY CPU + 输出 + Hook）
+  const runtimePhase = useSessionRuntimePhase(item.session.id, isAgent);
+
   const agentDisplayState: CanvasAgentDisplayState = useMemo(() => {
     if (!isAgent || item.kind !== 'agent') return 'idle';
 
-    // 独立看板进程：直接用主窗 IPC 快照里已算好的状态（勿把 agentDisplayState 当 hookState）
+    // 独立看板进程：直接用主窗 IPC 快照里已算好的状态
     if (!hasLocalAgentRuntime && item.agentDisplayState) {
       return item.agentDisplayState;
     }
 
-    return resolveCanvasAgentDisplayState({
-      outputState: item.outputState,
-      previewText,
-      hookState: hookDisplayState,
-    });
-  }, [isAgent, item, previewText, hookDisplayState, hasLocalAgentRuntime]);
+    // Hook blocked 语义优先级最高（精确的等待用户输入信号）
+    if (hookDisplayState === 'blocked') {
+      return 'blocked';
+    }
+
+    // 统一 runtime phase 为主信号
+    return runtimePhase;
+  }, [isAgent, item, hasLocalAgentRuntime, hookDisplayState, runtimePhase]);
 
   const glowState = isFocused
     ? 'idle'

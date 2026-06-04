@@ -40,6 +40,7 @@ import { getDefaultCardPosition } from './useSessionCanvasCardDrag';
 import { getSessionCanvasCardKey } from '@/lib/sessionCanvasCardKey';
 import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { SessionCanvasPromptSettings } from './SessionCanvasPromptSettings';
+import { useAgentRuntimeActivityMonitor } from '@/hooks/useAgentRuntimeActivityMonitor';
 
 interface SessionCanvasPanelProps {
   variant?: 'embedded' | 'floating';
@@ -121,6 +122,7 @@ export function SessionCanvasPanel({
 
   const previewSyncEnabled = syncPreviews && !externalItems;
   useCanvasPtyPreviewFanIn(previewSyncEnabled);
+  useAgentRuntimeActivityMonitor(previewSyncEnabled);
 
   useEffect(() => {
     if (!previewSyncEnabled) return;
