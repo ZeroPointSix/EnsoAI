@@ -26,6 +26,27 @@ describe('agentRuntimeActivity', () => {
     expect(useAgentRuntimeActivityStore.getState().getPhase(sessionId)).toBe('running');
   });
 
+  it('keeps completed when only cpu is reported (green hold)', () => {
+    const sessionId = 'session-c';
+    const now = 50_000;
+    useAgentRuntimeActivityStore.setState({
+      activities: {
+        [sessionId]: {
+          phase: 'completed',
+          lastOutputAt: now - 10_000,
+          lastCpuActiveAt: now - 10_000,
+          lastStartedAt: now - 20_000,
+          lastCompletedAt: now - 3_000,
+          source: 'inferred',
+        },
+      },
+    });
+
+    useAgentRuntimeActivityStore.getState().reportCpuActive(sessionId);
+
+    expect(useAgentRuntimeActivityStore.getState().getPhase(sessionId)).toBe('completed');
+  });
+
   it('transitions running → completed after cpu and output idle', () => {
     const sessionId = 'session-b';
     const now = 100_000;

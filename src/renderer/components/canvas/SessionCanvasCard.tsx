@@ -104,7 +104,7 @@ export function SessionCanvasCard({
   const { t } = useI18n();
   const cardKey = getSessionCanvasCardKey(item);
   const { width, height, handleResizePointerDown } = useSessionCanvasCardResize(cardKey, sizeOverride);
-  const dragEnabled = !disableDrag && !isFocused && !positionOverride;
+  const dragEnabled = !disableDrag && !positionOverride;
   const { position, isDragging, handleDragPointerDown } = useSessionCanvasCardDrag(
     cardKey,
     index,
@@ -259,9 +259,10 @@ export function SessionCanvasCard({
         {dragEnabled ? (
           <button
             type="button"
+            data-canvas-drag-handle
             aria-label={t('Drag card')}
             className={cn(
-              'mt-0.5 flex h-7 w-5 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground active:cursor-grabbing',
+              'no-drag mt-0.5 flex h-7 w-5 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground active:cursor-grabbing',
               isDragging && 'cursor-grabbing'
             )}
             onPointerDown={handleDragPointerDown}
@@ -357,7 +358,8 @@ export function SessionCanvasCard({
       <button
         type="button"
         aria-label={t('Resize')}
-        className="absolute bottom-1 right-1 z-10 flex h-4 w-4 cursor-se-resize items-end justify-end rounded-sm p-0.5 text-muted-foreground/70 hover:text-foreground"
+        data-canvas-resize-handle
+        className="no-drag absolute bottom-1 right-1 z-10 flex h-4 w-4 cursor-se-resize items-end justify-end rounded-sm p-0.5 text-muted-foreground/70 hover:text-foreground"
         onPointerDown={handleResizePointerDown}
         onClick={(e) => e.stopPropagation()}
       >
@@ -376,6 +378,13 @@ export function SessionCanvasCard({
   };
 
   const handleShellClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-canvas-drag-handle]') || target.closest('[data-canvas-resize-handle]')) {
+      sessionCanvasLog('Click', 'shell click ignored (drag/resize handle)', {
+        cardKey,
+      });
+      return;
+    }
     onCardClick(e);
   };
 
@@ -383,17 +392,17 @@ export function SessionCanvasCard({
     onContextMenu?.(e);
   };
 
-  const shellInteractiveProps = isFocused
-    ? {}
-    : {
-        role: 'button' as const,
-        tabIndex: 0,
-        onKeyDown: (e: React.KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            handleShellClick(e as unknown as React.MouseEvent);
-          }
-        },
-      };
+  const shellInteractiveProps =
+    isFocused
+      ? {}
+      : {
+          tabIndex: 0,
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              handleShellClick(e as unknown as React.MouseEvent);
+            }
+          },
+        };
 
   const shellHandlers = {
     onClick: handleShellClick,
@@ -402,8 +411,8 @@ export function SessionCanvasCard({
 
   if (showAgentGlow) {
     return (
-      <div style={positionedStyle} {...shellHandlers} {...shellInteractiveProps}>
-        <GlowCard as="div" state={glowState} className={shellClass}>
+      <div className="no-drag" style={positionedStyle} {...shellHandlers} {...shellInteractiveProps}>
+        <GlowCard as="div" state={glowState} className={cn('no-drag', shellClass)}>
           {body}
           {resizeHandle}
         </GlowCard>
@@ -412,8 +421,8 @@ export function SessionCanvasCard({
   }
 
   return (
-    <div style={positionedStyle}>
-      <div className={shellClass} {...shellHandlers} {...shellInteractiveProps}>
+    <div className="no-drag" style={positionedStyle}>
+      <div className={cn('no-drag', shellClass)} {...shellHandlers} {...shellInteractiveProps}>
         {body}
       </div>
       {resizeHandle}

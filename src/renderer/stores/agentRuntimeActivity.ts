@@ -1,5 +1,9 @@
 import { create } from 'zustand';
-import { sessionCanvasLog, sessionCanvasLogPhase } from '@/lib/sessionCanvasLog';
+import {
+  sessionCanvasLog,
+  sessionCanvasLogPhase,
+  sessionCanvasLogThrottled,
+} from '@/lib/sessionCanvasLog';
 
 /**
  * 统一 Agent Runtime Activity 状态机。
@@ -33,8 +37,8 @@ const COMPLETED_TTL_MS = 60_000;
 /** CPU/输出空闲判定：无活跃信号超过该时长 → completed（看板黄→绿） */
 const IDLE_THRESHOLD_MS = 5_000;
 
-/** 绿态后短时 CPU 抖动不再立刻拉回黄（避免黄绿闪烁） */
-const COMPLETED_REARM_MS = 4_000;
+/** 绿态保持：completed 阶段不因 PTY CPU 轮询回到 running（仅 output / hook 可打破） */
+export const COMPLETED_HOLD_IGNORE_CPU = true;
 
 function isOutputIdle(activity: AgentRuntimeActivity, now: number): boolean {
   if (activity.lastOutputAt <= 0) {
@@ -134,7 +138,18 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastCpuActiveAt: now } } };
       }
       if (current.phase === 'completed') {
-        if (current.lastCompletedAt > 0 && now - current.lastCompletedAt < COMPLETED_REARM_MS) {
+        if (COMPLETED_HOLD_IGNORE_CPU) {
+          sessionCanvasLogThrottled(
+            `activity-cpu-hold-${sessionId}`,
+            5000,
+            'Activity',
+            'cpu ignored (completed-hold)',
+            {
+              sessionId: sessionId.slice(0, 8),
+              lastCompletedAt: current.lastCompletedAt,
+              ageMs: current.lastCompletedAt > 0 ? now - current.lastCompletedAt : null,
+            }
+          );
           return {
             activities: {
               ...prev.activities,

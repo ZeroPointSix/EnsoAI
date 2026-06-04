@@ -181,7 +181,7 @@ export function SessionCanvasStandaloneApp() {
           )}
         </div>
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="no-drag min-h-0 flex-1" style={noDragRegionStyle}>
         {openSettings ? (
           <SessionCanvasPromptSettings className="h-full" onBack={() => setOpenSettings(false)} />
         ) : (

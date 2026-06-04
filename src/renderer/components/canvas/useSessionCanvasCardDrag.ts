@@ -31,7 +31,10 @@ export function useSessionCanvasCardDrag(
 
   const handleDragPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (fixedPosition) return;
+      if (fixedPosition) {
+        sessionCanvasLog('Drag', 'drag pointerdown blocked (fixedPosition)', { cardKey });
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(true);

@@ -462,7 +462,7 @@ export function SessionCanvasPanel({
                   isActive={isActive}
                   isFocused={false}
                   isDimmed={isSoftDimmed}
-                  disableDrag={Boolean(focusedCardKey)}
+                  disableDrag={false}
                   onCardClick={(e) => handleCardClick(item, e)}
                   onRenameSession={handleRenameSession}
                   onContextMenu={(e) => openContextMenu(e, item)}
@@ -498,7 +498,6 @@ export function SessionCanvasPanel({
                 isFocused
                 sizeOverride={focusSize}
                 positionOverride={{ x: 0, y: 0 }}
-                disableDrag
                 onCardClick={(e) => handleCardClick(focusedItem, e)}
                 onRenameSession={handleRenameSession}
                 onContextMenu={(e) => openContextMenu(e, focusedItem)}

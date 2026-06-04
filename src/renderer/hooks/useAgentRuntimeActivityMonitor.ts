@@ -28,6 +28,9 @@ function resolveEnsoSessionId(incomingSessionId: string, cwd?: string): string |
   return null;
 }
 
+/** 绿态下终端碎片输出（光标/进度条）不拉回黄 */
+const MIN_OUTPUT_WAKE_BYTES = 32;
+
 /**
  * 统一 Agent Runtime Activity Monitor。
  *
@@ -70,7 +73,18 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
           const isActive = await window.electronAPI.terminal.getActivity(ptyId);
           if (isActive) {
             cpuActive++;
+            const phaseBefore = useAgentRuntimeActivityStore.getState().getPhase(session.id);
             reportCpuActive(session.id);
+            const phaseAfter = useAgentRuntimeActivityStore.getState().getPhase(session.id);
+            if (phaseBefore === 'completed' && phaseAfter === 'completed') {
+              sessionCanvasLogThrottled(
+                `monitor-cpu-hold-${session.id}`,
+                5000,
+                'Monitor',
+                'getActivity true but phase stays completed (cpu-hold)',
+                { sessionId: shortSessionId(session.id), ptyId }
+              );
+            }
           }
         } catch {
           sessionCanvasLogThrottled(
@@ -124,13 +138,24 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
       for (const [sessionId, ptyId] of Object.entries(ptyMap)) {
         if (ptyId !== id) continue;
         if (agentIds.has(sessionId)) {
+          const phase = useAgentRuntimeActivityStore.getState().getPhase(sessionId);
+          if (phase === 'completed' && data.length < MIN_OUTPUT_WAKE_BYTES) {
+            sessionCanvasLogThrottled(
+              `monitor-ondata-skip-${sessionId}`,
+              3000,
+              'Monitor',
+              'onData skipped (completed-hold, small chunk)',
+              { sessionId: shortSessionId(sessionId), bytes: data.length, minBytes: MIN_OUTPUT_WAKE_BYTES }
+            );
+            break;
+          }
           reportOutput(sessionId);
           sessionCanvasLogThrottled(
             `monitor-ondata-${sessionId}`,
             3000,
             'Monitor',
             'terminal.onData → reportOutput',
-            { sessionId: shortSessionId(sessionId), ptyId, bytes: data.length }
+            { sessionId: shortSessionId(sessionId), ptyId, bytes: data.length, phase }
           );
         }
         break;
