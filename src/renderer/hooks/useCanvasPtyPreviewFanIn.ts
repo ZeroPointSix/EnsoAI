@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
-import { isLowSignalCanvasPreview } from '@/lib/canvasPreviewQuality';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
-import { hasTerminalPreviewReader, snapshotTerminalPreview } from '@/stores/terminalPreviewRegistry';
+import { hasTerminalPreviewReader } from '@/stores/terminalPreviewRegistry';
 import { useTerminalStore } from '@/stores/terminal';
 
 /**
@@ -22,18 +21,8 @@ export function useCanvasPtyPreviewFanIn(enabled: boolean): void {
 
       for (const [sessionId, ptyId] of Object.entries(ptyMap)) {
         if (ptyId !== id) continue;
-        if (hasTerminalPreviewReader(sessionId)) {
-          const snap = snapshotTerminalPreview(sessionId);
-          const runtime = useAgentSessionsStore.getState().runtimeStates[sessionId]?.previewText;
-          const stream = agentIds.has(sessionId) ? runtime : useTerminalStore.getState().sessions.find((s) => s.id === sessionId)?.previewText;
-          if (
-            snap?.trim() &&
-            !isLowSignalCanvasPreview(snap) &&
-            (stream?.trim()?.length ?? 0) <= snap.length
-          ) {
-            break;
-          }
-        }
+        // 已挂载 xterm 时由 AgentTerminal.handleData → appendSessionPreview 负责，避免重复追加
+        if (hasTerminalPreviewReader(sessionId)) break;
         if (agentIds.has(sessionId)) {
           appendAgent(sessionId, data);
         } else {

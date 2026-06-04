@@ -2,8 +2,22 @@
  * Detect Claude Code / TUI idle screens that look like content but carry no session signal.
  * Used so canvas cards prefer real output over welcome chrome.
  */
+export function isHighSignalCanvasPreview(text: string | undefined): boolean {
+  if (!text?.trim()) return false;
+
+  const trimmed = text.trim();
+  if (/Thought for \d+s/i.test(trimmed)) return true;
+  if (/(?:Bloviat|Crunched|Cooked)(?:ing)?(?:\s+for\s+\d+s)?/i.test(trimmed)) return true;
+  if (/esc to interrupt/i.test(trimmed)) return true;
+  if (/^❯\s+\S/m.test(trimmed)) return true;
+  if (trimmed.length >= 120) return true;
+
+  return false;
+}
+
 export function isLowSignalCanvasPreview(text: string | undefined): boolean {
   if (!text?.trim()) return true;
+  if (isHighSignalCanvasPreview(text)) return false;
 
   const trimmed = text.trim();
   const withoutDecor = trimmed.replace(/[\s\u2500-\u257f·•*?←→│─┌┐└┘├┤┬┴┼─═║╔╗╚╝╠╣╦╩╬]/g, '');
@@ -56,5 +70,8 @@ export function resolveCanvasCardPreviewText(
   const candidates = [runtime?.trim(), cached?.trim()].filter(Boolean) as string[];
   const good = candidates.filter((text) => !isLowSignalCanvasPreview(text));
   if (good.length === 0) return undefined;
-  return good.sort((a, b) => b.length - a.length)[0];
+
+  const high = good.filter((text) => isHighSignalCanvasPreview(text));
+  const pool = high.length > 0 ? high : good;
+  return pool.sort((a, b) => b.length - a.length)[0];
 }

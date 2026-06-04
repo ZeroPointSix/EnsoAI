@@ -13,7 +13,7 @@ import type { TerminalSessionEntry } from '@/stores/terminal';
 import { useSessionCanvasRename } from './sessionCanvasRename';
 import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 import { resolveSessionCanvasSubtitle } from './sessionCanvasSubtitle';
-import { resolveCanvasCardPreviewText } from '@/lib/canvasPreviewQuality';
+import { resolveSessionCanvasCardPreviewText } from '@/lib/resolveSessionCanvasCardPreview';
 import { resolveCanvasAgentDisplayState } from '@/lib/canvasAgentState/resolveCanvasAgentDisplayState';
 import { useCanvasCardDisplayStore } from '@/stores/canvasCardDisplayStore';
 import {
@@ -113,8 +113,11 @@ export function SessionCanvasCard({
   const isAgent = item.kind === 'agent';
   const title = resolveSessionCanvasCardTitle(item, t('Terminal'));
   const subtitle = resolveSessionCanvasSubtitle(item, t('Shell'));
+  const hasLocalAgentRuntime = useAgentSessionsStore(
+    (s) => item.kind === 'agent' && Boolean(s.runtimeStates[item.session.id])
+  );
   const liveAgentPreview = useAgentSessionsStore((s) => {
-    if (item.kind !== 'agent') return undefined;
+    if (item.kind !== 'agent' || !hasLocalAgentRuntime) return undefined;
     const runtime = s.runtimeStates[item.session.id];
     return getResolvedSessionPreview(
       'agent',
@@ -124,9 +127,14 @@ export function SessionCanvasCard({
     );
   });
 
-  const rawPreviewText =
-    item.kind === 'agent' ? (liveAgentPreview ?? item.previewText) : item.previewText;
-  const previewText = resolveCanvasCardPreviewText(rawPreviewText);
+  const previewText =
+    item.kind === 'agent'
+      ? resolveSessionCanvasCardPreviewText(
+          item.previewText,
+          liveAgentPreview,
+          hasLocalAgentRuntime
+        )
+      : resolveSessionCanvasCardPreviewText(item.previewText, undefined, false);
   const ptyIdHint = item.ptyIdHint;
   const { ptyExists } = useSessionCanvasPtyExists(item.session.id, !isFocused, ptyIdHint);
   const Icon = isAgent ? Sparkles : Terminal;

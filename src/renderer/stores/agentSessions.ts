@@ -4,17 +4,21 @@ import { normalizePath, pathsEqual } from '@/App/storage';
 import type { Session } from '@/components/chat/SessionBar';
 import type { AgentGroupState } from '@/components/chat/types';
 import { createInitialGroupState } from '@/components/chat/types';
+import { isHighSignalCanvasPreview, isLowSignalCanvasPreview } from '@/lib/canvasPreviewQuality';
 import {
   mergeAuthoritativePreviewSnapshot,
   mergeCanvasRefreshPreview,
   mergePreviewSnapshot,
 } from '@/lib/previewSnapshotMerge';
-import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
+import { appendTerminalPreviewChunk, getDisplayPreviewText } from '@/lib/terminalPreview';
 import {
   removeCachedSessionPreview,
   setCachedSessionPreview,
 } from '@/stores/sessionPreviewCache';
-import { snapshotTerminalPreview } from '@/stores/terminalPreviewRegistry';
+import {
+  hasTerminalPreviewReader,
+  snapshotTerminalPreview,
+} from '@/stores/terminalPreviewRegistry';
 import { useAgentStatusStore } from './agentStatus';
 
 // Global storage key for all sessions across all repos
@@ -527,8 +531,21 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
         const nextStates = { ...prev.runtimeStates };
         let changed = false;
         for (const session of prev.sessions) {
-          const snapshot = snapshotTerminalPreview(session.id);
           const current = nextStates[session.id];
+          const currentDisplay = getDisplayPreviewText(
+            current?.previewText,
+            current?.previewEscapePending
+          );
+          if (hasTerminalPreviewReader(session.id) && currentDisplay?.trim()) {
+            continue;
+          }
+          if (
+            currentDisplay &&
+            (isHighSignalCanvasPreview(currentDisplay) || !isLowSignalCanvasPreview(currentDisplay))
+          ) {
+            continue;
+          }
+          const snapshot = snapshotTerminalPreview(session.id);
           const merged = mergeCanvasRefreshPreview(current?.previewText, snapshot);
           if (!merged || (merged === current?.previewText && !current?.previewEscapePending)) {
             continue;

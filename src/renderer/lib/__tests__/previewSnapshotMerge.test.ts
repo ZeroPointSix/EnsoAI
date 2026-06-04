@@ -57,4 +57,12 @@ describe('mergeCanvasRefreshPreview', () => {
     const short = 'Welcome back!\n>';
     expect(mergeCanvasRefreshPreview(stream, short)).toBe(stream);
   });
+
+  it('never replaces high-signal stream with startup xterm snapshot', () => {
+    const stream =
+      'Self introduction\nThought for 9s\nhello from Claude\nI can help with software tasks.\n';
+    const startup =
+      "What's new\nWelcome back!\nTips for getting started\nMiniMax-M3 · API Usage Billing\n>";
+    expect(mergeCanvasRefreshPreview(stream, startup)).toBe(stream);
+  });
 });

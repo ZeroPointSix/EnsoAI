@@ -5,9 +5,13 @@ import {
   mergeCanvasRefreshPreview,
   mergePreviewSnapshot,
 } from '@/lib/previewSnapshotMerge';
-import { appendTerminalPreviewChunk } from '@/lib/terminalPreview';
+import { isHighSignalCanvasPreview, isLowSignalCanvasPreview } from '@/lib/canvasPreviewQuality';
+import { appendTerminalPreviewChunk, getDisplayPreviewText } from '@/lib/terminalPreview';
 import { removeCachedSessionPreview, setCachedSessionPreview } from '@/stores/sessionPreviewCache';
-import { snapshotTerminalPreview } from '@/stores/terminalPreviewRegistry';
+import {
+  hasTerminalPreviewReader,
+  snapshotTerminalPreview,
+} from '@/stores/terminalPreviewRegistry';
 
 export type TerminalSessionEntry = TerminalSession & {
   previewText?: string;
@@ -119,6 +123,19 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     set((state) => {
       let changed = false;
       const sessions = state.sessions.map((session) => {
+        const currentDisplay = getDisplayPreviewText(
+          session.previewText,
+          session.previewEscapePending
+        );
+        if (hasTerminalPreviewReader(session.id) && currentDisplay?.trim()) {
+          return session;
+        }
+        if (
+          currentDisplay &&
+          (isHighSignalCanvasPreview(currentDisplay) || !isLowSignalCanvasPreview(currentDisplay))
+        ) {
+          return session;
+        }
         const snapshot = snapshotTerminalPreview(session.id);
         const merged = mergeCanvasRefreshPreview(session.previewText, snapshot);
         if (!merged || merged === session.previewText) return session;

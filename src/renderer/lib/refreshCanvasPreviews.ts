@@ -3,7 +3,7 @@ import { getCachedSessionPreview } from '@/stores/sessionPreviewCache';
 import { useTerminalStore } from '@/stores/terminal';
 
 /** Restore previews from durable cache when runtime store is empty. */
-function hydratePreviewsFromCache(): void {
+export function hydratePreviewsFromCache(): void {
   const agentStore = useAgentSessionsStore.getState();
   for (const session of agentStore.sessions) {
     const cached = getCachedSessionPreview('agent', session.id);

@@ -1,4 +1,4 @@
-import { isLowSignalCanvasPreview } from '@/lib/canvasPreviewQuality';
+import { isHighSignalCanvasPreview, isLowSignalCanvasPreview } from '@/lib/canvasPreviewQuality';
 
 /** Whether incoming terminal preview should replace existing stored text. */
 export function shouldApplyPreviewSnapshot(
@@ -60,15 +60,20 @@ export function mergeCanvasRefreshPreview(
   const prev = existing?.trim() ?? '';
   if (!prev) return next;
 
+  if (isHighSignalCanvasPreview(prev)) {
+    if (!next || isLowSignalCanvasPreview(next)) return existing!;
+    return mergePreviewSnapshot(existing, incoming) || existing!;
+  }
+
   if (isLowSignalCanvasPreview(next)) {
-    return !isLowSignalCanvasPreview(prev) ? prev : next;
+    return !isLowSignalCanvasPreview(prev) ? (existing ?? '') : next;
   }
   if (isLowSignalCanvasPreview(prev)) return next;
 
   const prevTail = prev.slice(-100);
   if (prev.length > next.length + 48 && prevTail && !next.includes(prevTail.slice(-50))) {
-    return prev;
+    return existing ?? '';
   }
 
-  return mergePreviewSnapshot(prev, next) || prev;
+  return mergePreviewSnapshot(existing, incoming) || (existing ?? '');
 }
