@@ -23,6 +23,18 @@ export function outputStateToDisplay(state: OutputState): CanvasAgentDisplayStat
   return 'idle';
 }
 
+function normalizeHookState(
+  hookState: CanvasAgentDisplayState | undefined,
+  outputState: OutputState
+): CanvasAgentDisplayState | undefined {
+  if (!hookState) return undefined;
+  // PreToolUse 设了 working，但进程/输出已 idle 且未收到 Stop → 视为过期
+  if (hookState === 'working' && outputState !== 'outputting') {
+    return outputState === 'unread' ? 'completed' : 'idle';
+  }
+  return hookState;
+}
+
 /** 合并 Hook、preview 推断、outputState，供看板卡片展示 */
 export function resolveCanvasAgentDisplayState(input: {
   outputState: OutputState;
@@ -31,11 +43,13 @@ export function resolveCanvasAgentDisplayState(input: {
 }): CanvasAgentDisplayState {
   let resolved: CanvasAgentDisplayState = 'idle';
 
-  if (input.hookState) {
-    resolved = input.hookState;
+  const hookState = normalizeHookState(input.hookState, input.outputState);
+  if (hookState) {
+    resolved = hookState;
   }
 
-  const fromPreview = inferDisplayFromPreview(input.previewText);
+  const fromPreview =
+    input.outputState === 'outputting' ? inferDisplayFromPreview(input.previewText) : null;
   if (fromPreview) {
     resolved = pickHigher(resolved, fromPreview);
   }

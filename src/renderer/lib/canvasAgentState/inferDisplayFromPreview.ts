@@ -35,16 +35,17 @@ export function inferDisplayFromPreview(previewText: string | undefined): Canvas
 
   if (hasBlockedPrompt(lower, tail)) return 'blocked';
 
+  // Claude 空闲提示符旁常有 esc to interrupt — 表示等待输入，不是执行中
+  if (/^❯\s*$/m.test(tail.trimEnd()) || /\n❯\s*$/m.test(tail)) {
+    return null;
+  }
+
+  // 「Cooked/Crunched/Thought for Ns」是已结束的阶段行，留在 scrollback 里不能算仍在跑
   if (
-    lower.includes('esc to interrupt') ||
-    lower.includes('ctrl+c to interrupt') ||
-    /\bthought for \d+s\b/i.test(tail) ||
-    /\bcrunched for \d+s\b/i.test(tail) ||
-    /\bbloviat(?:ing)?(?:\s+for\s+\d+s)?\b/i.test(tail) ||
-    /\bcooked for \d+s\b/i.test(tail) ||
-    /[*✽✻]?\s*cooked for \d+s/i.test(tail) ||
     /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(tail) ||
-    hasSpinnerLine(tail)
+    hasSpinnerLine(tail) ||
+    /\bbloviat(?:ing)?\b/i.test(tail) ||
+    /\bbloviat(?:ing)?(?:\s+for\s+\d+s)?\s*…/i.test(tail)
   ) {
     return 'working';
   }
