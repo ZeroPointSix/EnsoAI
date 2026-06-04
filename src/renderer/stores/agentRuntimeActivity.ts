@@ -104,6 +104,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastCpuActiveAt: now } } };
       }
       // idle → running
+      console.log(`[AgentRuntimeActivity] ${sessionId.slice(0, 8)} idle → running (cpu)`);
       return {
         activities: {
           ...prev.activities,
@@ -125,6 +126,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastOutputAt: now } } };
       }
       // idle → running
+      console.log(`[AgentRuntimeActivity] ${sessionId.slice(0, 8)} idle → running (output)`);
       return {
         activities: {
           ...prev.activities,
@@ -140,6 +142,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
       const current = prev.activities[sessionId] ?? defaultActivity();
       // blocked 可被 running Hook 解除（如 PostToolUse/AskUserQuestion）
       clearCompletedTimer(sessionId);
+      console.log(`[AgentRuntimeActivity] ${sessionId.slice(0, 8)} → running (hook)`);
       return {
         activities: {
           ...prev.activities,
