@@ -18,17 +18,44 @@ interface SessionCanvasPromptState extends SessionCanvasPromptConfig {
   resetToDefaults: () => void;
 }
 
-function mergeWithDefaults(parsed: Partial<SessionCanvasPromptConfig>): SessionCanvasPromptConfig {
+const DEFAULT_PROMPT_IDS = new Set(DEFAULT_SESSION_CANVAS_PROMPT_CONFIG.prompts.map((p) => p.id));
+
+function deletedDefaultPromptIdsFrom(
+  parsed: Partial<SessionCanvasPromptConfig>,
+  saved: SessionCanvasCustomPrompt[]
+): string[] {
+  if (Array.isArray(parsed.deletedDefaultPromptIds)) {
+    const deleted = new Set(parsed.deletedDefaultPromptIds);
+    return DEFAULT_SESSION_CANVAS_PROMPT_CONFIG.prompts
+      .filter((prompt) => deleted.has(prompt.id))
+      .map((prompt) => prompt.id);
+  }
+
+  if (!Array.isArray(parsed.prompts)) return [];
+
+  const savedIds = new Set(saved.map((prompt) => prompt.id));
+  return DEFAULT_SESSION_CANVAS_PROMPT_CONFIG.prompts
+    .filter((prompt) => !savedIds.has(prompt.id))
+    .map((prompt) => prompt.id);
+}
+
+export function mergeWithDefaults(
+  parsed: Partial<SessionCanvasPromptConfig>
+): SessionCanvasPromptConfig {
   const defaults = DEFAULT_SESSION_CANVAS_PROMPT_CONFIG;
   const defaultById = new Map(defaults.prompts.map((p) => [p.id, p]));
   const mergedPrompts: SessionCanvasCustomPrompt[] = [];
 
   const saved = parsed.prompts ?? [];
+  const deletedDefaultPromptIds = deletedDefaultPromptIdsFrom(parsed, saved);
+  const deletedDefaults = new Set(deletedDefaultPromptIds);
   for (const p of saved) {
+    if (defaultById.has(p.id) && deletedDefaults.has(p.id)) continue;
     const def = defaultById.get(p.id);
     mergedPrompts.push(def ? { ...def, ...p, type: p.type ?? def.type } : p);
   }
   for (const def of defaults.prompts) {
+    if (deletedDefaults.has(def.id)) continue;
     if (!mergedPrompts.some((p) => p.id === def.id)) {
       mergedPrompts.push(def);
     }
@@ -40,6 +67,7 @@ function mergeWithDefaults(parsed: Partial<SessionCanvasPromptConfig>): SessionC
     maxPrompts: parsed.maxPrompts ?? defaults.maxPrompts,
     prompts: mergedPrompts,
     reply: { ...defaults.reply, ...parsed.reply },
+    deletedDefaultPromptIds,
   };
 }
 
@@ -47,6 +75,7 @@ export const useSessionCanvasPromptStore = create<SessionCanvasPromptState>()(
   persist(
     (set, get) => ({
       ...DEFAULT_SESSION_CANVAS_PROMPT_CONFIG,
+      deletedDefaultPromptIds: [],
 
       setPromptsEnabled: (enabled) => set({ promptsEnabled: enabled }),
 
@@ -71,7 +100,10 @@ export const useSessionCanvasPromptStore = create<SessionCanvasPromptState>()(
           createdAt: now,
           updatedAt: now,
         };
-        set({ prompts: [...state.prompts, next] });
+        set({
+          prompts: [...state.prompts, next],
+          deletedDefaultPromptIds: state.deletedDefaultPromptIds.filter((id) => id !== next.id),
+        });
       },
 
       updatePrompt: (prompt) =>
@@ -84,10 +116,14 @@ export const useSessionCanvasPromptStore = create<SessionCanvasPromptState>()(
       deletePrompt: (promptId) =>
         set((state) => {
           const next = state.prompts.filter((p) => p.id !== promptId);
-          if (next.length === 0) {
-            return { prompts: [], promptsEnabled: false };
-          }
-          return { prompts: next };
+          const deletedDefaultPromptIds = DEFAULT_PROMPT_IDS.has(promptId)
+            ? Array.from(new Set([...state.deletedDefaultPromptIds, promptId]))
+            : state.deletedDefaultPromptIds;
+          return {
+            prompts: next,
+            deletedDefaultPromptIds,
+            ...(next.length === 0 ? { promptsEnabled: false } : {}),
+          };
         }),
 
       reorderPrompts: (orderedIds) =>
@@ -116,12 +152,13 @@ export const useSessionCanvasPromptStore = create<SessionCanvasPromptState>()(
             updatedAt: now,
           })),
           reply: { ...defaults.reply },
+          deletedDefaultPromptIds: [],
         });
       },
     }),
     {
       name: 'ensoai.sessionCanvas.promptConfig',
-      version: 2,
+      version: 3,
       migrate: (persisted) => {
         const parsed = (persisted ?? {}) as Partial<SessionCanvasPromptConfig>;
         return mergeWithDefaults(parsed);
@@ -129,9 +166,6 @@ export const useSessionCanvasPromptStore = create<SessionCanvasPromptState>()(
       merge: (persisted, current) => {
         const parsed = (persisted ?? {}) as Partial<SessionCanvasPromptConfig>;
         const merged = mergeWithDefaults(parsed);
-        if (merged.prompts.length === 0) {
-          return { ...current, ...mergeWithDefaults(DEFAULT_SESSION_CANVAS_PROMPT_CONFIG) };
-        }
         return { ...current, ...merged };
       },
     }

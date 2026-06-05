@@ -214,6 +214,21 @@ export default function App() {
   useEffect(() => initCanvasCardDisplayListeners(), []);
 
   useEffect(() => {
+    return window.electronAPI.sessionCanvasPanel.onApplyArmCpuWake((params) => {
+      sessionCanvasLog('App', 'apply armCpuWake from IPC', {
+        requestId: params.requestId,
+        sessionId: params.sessionId?.slice(0, 8),
+        reason: params.reason,
+      });
+      useAgentRuntimeActivityStore.getState().armCpuWake(params.sessionId, params.reason);
+      window.electronAPI.sessionCanvasPanel.sendArmCpuWakeAck({
+        requestId: params.requestId,
+        sessionId: params.sessionId,
+      });
+    });
+  }, []);
+
+  useEffect(() => {
     return window.electronAPI.sessionCanvasPanel.onVisibilityChanged((visible: boolean) => {
       sessionCanvasLog('App', 'panel visibility', { visible });
       setIsSessionCanvasPanelOpen(visible);

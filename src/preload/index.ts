@@ -801,6 +801,24 @@ const electronAPI = {
     }): void => {
       ipcRenderer.send(IPC_CHANNELS.SESSION_CANVAS_RENAME_SESSION, params);
     },
+    relayArmCpuWake: (params: {
+      requestId: string;
+      sessionId: string;
+      reason: string;
+    }): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_RELAY_ARM_CPU_WAKE, params),
+    onApplyArmCpuWake: (
+      callback: (params: { requestId: string; sessionId: string; reason: string }) => void
+    ): (() => void) => {
+      const handler = (
+        _: unknown,
+        params: { requestId: string; sessionId: string; reason: string }
+      ) => callback(params);
+      ipcRenderer.on(IPC_CHANNELS.SESSION_CANVAS_APPLY_ARM_CPU_WAKE, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.SESSION_CANVAS_APPLY_ARM_CPU_WAKE, handler);
+    },
+    sendArmCpuWakeAck: (params: { requestId: string; sessionId: string }): void => {
+      ipcRenderer.send(IPC_CHANNELS.SESSION_CANVAS_ARM_CPU_WAKE_ACK, params);
+    },
     onRenameSession: (
       callback: (params: { kind: 'agent' | 'terminal'; sessionId: string; title: string }) => void
     ): (() => void) => {

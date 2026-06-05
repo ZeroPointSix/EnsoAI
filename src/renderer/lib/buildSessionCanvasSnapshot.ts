@@ -120,6 +120,7 @@ function agentCard(session: Session, outputState: OutputState): SessionCanvasCar
     branch: resolved.branch,
     agentDisplayState: resolved.state,
     activityPhase: resolved.activityPhase,
+    activityCpuWakeArmed: activity?.cpuWakeArmed,
     activityPreviewBlock: activity?.previewBlockReason,
     hookState: hookState ?? 'none',
     outputState,

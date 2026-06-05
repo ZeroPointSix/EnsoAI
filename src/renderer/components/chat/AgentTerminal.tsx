@@ -8,12 +8,13 @@ import { useFileDrop } from '@/hooks/useFileDrop';
 import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
 import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
-import { type OutputState, useAgentSessionsStore } from '@/stores/agentSessions';
-import { useSettingsStore } from '@/stores/settings';
-import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
-import { hasTerminalPreviewReader } from '@/stores/terminalPreviewRegistry';
+import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
+import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
+import { type OutputState, useAgentSessionsStore } from '@/stores/agentSessions';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
+import { useSettingsStore } from '@/stores/settings';
+import { hasTerminalPreviewReader } from '@/stores/terminalPreviewRegistry';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 
@@ -142,11 +143,13 @@ export function AgentTerminal({
   const activityPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveIdleCountRef = useRef(0); // Count consecutive idle polls
   const ptyIdRef = useRef<string | null>(null); // Store PTY ID for activity checks
+  const pendingComposingEnterArmRef = useRef(false); // IME Enter may bypass normal arm path
   const isActiveRef = useRef(isActive); // Track latest isActive value for interval callback
   const lastCommandWasSlashCommand = useRef(false); // Track if last command was a slash command
   const setOutputState = useAgentSessionsStore((s) => s.setOutputState);
   const markSessionActive = useAgentSessionsStore((s) => s.markSessionActive);
   const appendSessionPreview = useAgentSessionsStore((s) => s.appendSessionPreview);
+  const armCpuWake = useAgentRuntimeActivityStore((s) => s.armCpuWake);
   const setSessionPtyId = useSessionPtyRegistry((s) => s.setPtyId);
   const clearSessionPtyId = useSessionPtyRegistry((s) => s.clearPtyId);
 
@@ -245,6 +248,15 @@ export function AgentTerminal({
           consecutiveIdleCountRef.current++;
           // Only mark as idle after several consecutive idle polls
           if (consecutiveIdleCountRef.current >= IDLE_CONFIRMATION_COUNT) {
+            if (terminalSessionId) {
+              sessionCanvasLog('Activity', 'poll confirmed idle → outputState idle', {
+                sessionId: shortSessionId(terminalSessionId),
+                ptyId: ptyIdRef.current,
+                consecutiveIdleCount: consecutiveIdleCountRef.current,
+                hasRecentOutput,
+                outputSinceEnter: outputSinceEnterRef.current,
+              });
+            }
             updateOutputState('idle');
             isMonitoringOutputRef.current = false;
 
@@ -504,6 +516,21 @@ export function AgentTerminal({
         startTimeRef.current = Date.now();
       }
 
+      if (pendingComposingEnterArmRef.current && terminalSessionId) {
+        sessionCanvasLog('Activity', 'ime enter deferred arm on output', {
+          sessionId: shortSessionId(terminalSessionId),
+          ptyId: ptyIdRef.current,
+          bytes: data.length,
+        });
+        pendingComposingEnterArmRef.current = false;
+        armCpuWake(terminalSessionId, 'terminal-enter-ime');
+        if (glowEffectEnabled && !isMonitoringOutputRef.current && ptyIdRef.current) {
+          isMonitoringOutputRef.current = true;
+          outputSinceEnterRef.current = 0;
+          startActivityPolling();
+        }
+      }
+
       // Mark as initialized on first data
       if (!hasInitializedRef.current && !initialized) {
         hasInitializedRef.current = true;
@@ -590,6 +617,9 @@ export function AgentTerminal({
       t,
       updateOutputState,
       appendSessionPreview,
+      armCpuWake,
+      glowEffectEnabled,
+      startActivityPolling,
     ]
   );
 
@@ -629,13 +659,17 @@ export function AgentTerminal({
 
       // Detect Enter key press (without modifiers) to activate session and start idle monitoring
       // Skip if IME is composing (e.g. selecting Chinese characters)
-      if (
-        event.key === 'Enter' &&
-        !event.shiftKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !event.isComposing
-      ) {
+      if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.altKey) {
+        if (event.isComposing) {
+          pendingComposingEnterArmRef.current = true;
+          if (terminalSessionId) {
+            sessionCanvasLog('Activity', 'terminal enter composing → defer arm', {
+              sessionId: shortSessionId(terminalSessionId),
+              ptyId,
+            });
+          }
+          return true;
+        }
         // First Enter activates the session; optionally pass current line for session name.
         if (!hasActivatedRef.current && !activated) {
           hasActivatedRef.current = true;
@@ -672,11 +706,24 @@ export function AgentTerminal({
         // Activity state is now managed by Hook notifications (PreToolUse, Stop, AskUserQuestion)
         // Enter event no longer sets activity state to avoid conflicts with other terminals
 
-        if (terminalSessionId && glowEffectEnabled) {
-          isMonitoringOutputRef.current = true;
-          outputSinceEnterRef.current = 0;
-          ptyIdRef.current = ptyId;
-          startActivityPolling();
+        if (terminalSessionId) {
+          sessionCanvasLog('Activity', 'terminal enter arm', {
+            sessionId: shortSessionId(terminalSessionId),
+            ptyId,
+            isSlashCommand,
+            hasPendingCommand,
+            glowEffectEnabled,
+          });
+          armCpuWake(terminalSessionId, 'terminal-enter');
+          // glowEffectEnabled only gates old polling / output tracking;
+          // the unified monitor (useAgentRuntimeActivityMonitor) handles the phase
+          // transition independently.
+          if (glowEffectEnabled) {
+            isMonitoringOutputRef.current = true;
+            outputSinceEnterRef.current = 0;
+            ptyIdRef.current = ptyId;
+            startActivityPolling();
+          }
         }
 
         // Clear any existing enter delay timer.
@@ -724,6 +771,7 @@ export function AgentTerminal({
       onActivated,
       onActivatedWithFirstLine,
       agentNotificationEnterDelay,
+      armCpuWake,
       startActivityPolling,
       terminalSessionId,
       glowEffectEnabled,
@@ -779,6 +827,11 @@ export function AgentTerminal({
   });
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
+
+  useEffect(() => {
+    if (!terminalSessionId || !initialPrompt) return;
+    armCpuWake(terminalSessionId, 'initial-prompt');
+  }, [armCpuWake, initialPrompt, terminalSessionId]);
 
   // Mirror the side effects that used to live in EnhancedInput.onOpenChange:
   // - Treat opening EnhancedInput as active user interaction (reset idle timers)
@@ -963,13 +1016,20 @@ export function AgentTerminal({
       // to PTY directly. Avoids xterm's terminal.paste() which converts
       // \n→\r and breaks multi-image payloads.
       const hasInternalNewlines = message.includes('\n');
+      const delay = imagePaths.length > 0 ? 800 : hasInternalNewlines ? 300 : 30;
+      sessionCanvasLog('QuickInput', 'embedded terminal sender write', {
+        sessionId: shortSessionId(terminalSessionId),
+        chars: message.length,
+        images: imagePaths.length,
+        hasInternalNewlines,
+        enterDelayMs: delay,
+      });
       if (hasInternalNewlines) {
         write(`\x1b[200~${message}\x1b[201~`);
       } else {
         write(message);
       }
 
-      const delay = imagePaths.length > 0 ? 800 : hasInternalNewlines ? 300 : 30;
       setTimeout(() => write('\r'), delay);
 
       terminal?.focus();

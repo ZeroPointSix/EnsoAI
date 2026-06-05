@@ -293,6 +293,9 @@ export const IPC_CHANNELS = {
   SESSION_CANVAS_GET_DISPLAY_MODE: 'session-canvas:panel:getDisplayMode',
   SESSION_CANVAS_WINDOW_MINIMIZE: 'session-canvas:window:minimize',
   SESSION_CANVAS_RENAME_SESSION: 'session-canvas:renameSession',
+  SESSION_CANVAS_RELAY_ARM_CPU_WAKE: 'session-canvas:relayArmCpuWake',
+  SESSION_CANVAS_APPLY_ARM_CPU_WAKE: 'session-canvas:applyArmCpuWake',
+  SESSION_CANVAS_ARM_CPU_WAKE_ACK: 'session-canvas:armCpuWakeAck',
 
   // Logging
   LOG_UPDATE_CONFIG: 'log:update-config',

@@ -5,6 +5,7 @@ import type { Session } from '@/components/chat/SessionBar';
 import { Badge } from '@/components/ui/badge';
 import { GlowCard } from '@/components/ui/glow-card';
 import { Input } from '@/components/ui/input';
+import { useSessionRuntimePhase } from '@/hooks/useAgentRuntimeActivityMonitor';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore, type OutputState } from '@/stores/agentSessions';
@@ -207,6 +208,7 @@ export function SessionCanvasCard({
   const hookDisplayState = useCanvasCardDisplayStore((s) =>
     isAgent && item.kind === 'agent' ? s.bySessionId[item.session.id] : undefined
   );
+  const runtimeDisplayState = useSessionRuntimePhase(item.session.id, isAgent);
 
   const agentDisplayState: CanvasAgentDisplayState = useMemo(() => {
     if (!isAgent || item.kind !== 'agent') return 'idle';
@@ -216,13 +218,25 @@ export function SessionCanvasCard({
       return item.agentDisplayState;
     }
 
+    if (runtimeDisplayState !== 'idle') {
+      return runtimeDisplayState;
+    }
+
     return resolveCanvasAgentDisplayState({
       outputState: item.outputState,
       previewText,
       previewRawTail: livePreviewRawTail,
       hookState: hookDisplayState,
     });
-  }, [isAgent, item, previewText, livePreviewRawTail, hookDisplayState, hasLocalAgentRuntime]);
+  }, [
+    isAgent,
+    item,
+    previewText,
+    livePreviewRawTail,
+    hookDisplayState,
+    hasLocalAgentRuntime,
+    runtimeDisplayState,
+  ]);
 
   const prevDisplayRef = useRef(agentDisplayState);
   useEffect(() => {
