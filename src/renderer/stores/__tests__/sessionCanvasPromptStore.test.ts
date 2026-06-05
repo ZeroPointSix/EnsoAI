@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SESSION_CANVAS_PROMPT_CONFIG } from '@/lib/sessionCanvasPromptDefaults';
+import { composeSessionCanvasOutgoingMessage } from '@/lib/sessionCanvasComposeMessage';
 import { mergeWithDefaults } from '../sessionCanvasPromptStore';
+
+const LEGACY_NO_MARKDOWN_RULE = '❌请记住，不要生成总结性Markdown文档';
 
 describe('sessionCanvasPromptStore mergeWithDefaults', () => {
   it('does not restore a deleted default prompt during rehydration', () => {
@@ -26,5 +29,31 @@ describe('sessionCanvasPromptStore mergeWithDefaults', () => {
     expect(merged.prompts).toHaveLength(0);
     expect(merged.promptsEnabled).toBe(false);
     expect(merged.deletedDefaultPromptIds).toEqual(allDefaultIds);
+  });
+
+  it('cleans legacy negative false branches from persisted default prompts', () => {
+    const legacyPrompt = DEFAULT_SESSION_CANVAS_PROMPT_CONFIG.prompts.find(
+      (prompt) => prompt.id === 'default_7'
+    );
+    expect(legacyPrompt).toBeDefined();
+
+    const merged = mergeWithDefaults({
+      prompts: [
+        {
+          ...legacyPrompt!,
+          currentState: false,
+          templateFalse: LEGACY_NO_MARKDOWN_RULE,
+        },
+      ],
+    });
+
+    const prompt = merged.prompts.find((p) => p.id === 'default_7');
+    expect(prompt?.templateFalse).toBe('');
+
+    const message = composeSessionCanvasOutgoingMessage('hello', {
+      prompts: merged.prompts,
+    });
+    expect(message).toBe('hello');
+    expect(message).not.toContain(LEGACY_NO_MARKDOWN_RULE);
   });
 });
