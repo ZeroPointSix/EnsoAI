@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
+import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
 import { useSettingsStore } from '@/stores/settings';
 import { EnhancedInput } from './EnhancedInput';
 
@@ -25,6 +26,7 @@ export const EnhancedInputContainer = memo(function EnhancedInputContainer({
   const setEnhancedInputContent = useAgentSessionsStore((state) => state.setEnhancedInputContent);
   const setEnhancedInputImages = useAgentSessionsStore((state) => state.setEnhancedInputImages);
   const clearEnhancedInput = useAgentSessionsStore((state) => state.clearEnhancedInput);
+  const armCpuWake = useAgentRuntimeActivityStore((state) => state.armCpuWake);
 
   // Get enhanced input mode setting
   const enhancedInputAutoPopup = useSettingsStore(
@@ -52,6 +54,9 @@ export const EnhancedInputContainer = memo(function EnhancedInputContainer({
       }}
       onSend={(sendContent, sendImagePaths) => {
         console.log('[EnhancedInput] Sending message');
+        if (sendContent.trim() || sendImagePaths.length > 0) {
+          armCpuWake(sessionId, 'enhanced-input');
+        }
         onSend(sendContent, sendImagePaths);
         clearEnhancedInput(sessionId, keepOpenAfterSend);
       }}
