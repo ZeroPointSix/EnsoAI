@@ -247,6 +247,15 @@ export function AgentTerminal({
           consecutiveIdleCountRef.current++;
           // Only mark as idle after several consecutive idle polls
           if (consecutiveIdleCountRef.current >= IDLE_CONFIRMATION_COUNT) {
+            if (terminalSessionId) {
+              sessionCanvasLog('Activity', 'poll confirmed idle → outputState idle', {
+                sessionId: shortSessionId(terminalSessionId),
+                ptyId: ptyIdRef.current,
+                consecutiveIdleCount: consecutiveIdleCountRef.current,
+                hasRecentOutput,
+                outputSinceEnter: outputSinceEnterRef.current,
+              });
+            }
             updateOutputState('idle');
             isMonitoringOutputRef.current = false;
 
@@ -675,6 +684,12 @@ export function AgentTerminal({
         // Enter event no longer sets activity state to avoid conflicts with other terminals
 
         if (terminalSessionId && glowEffectEnabled) {
+          sessionCanvasLog('Activity', 'terminal enter arm', {
+            sessionId: shortSessionId(terminalSessionId),
+            ptyId,
+            isSlashCommand,
+            hasPendingCommand,
+          });
           armCpuWake(terminalSessionId, 'terminal-enter');
           isMonitoringOutputRef.current = true;
           outputSinceEnterRef.current = 0;
