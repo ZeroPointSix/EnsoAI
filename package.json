@@ -1,6 +1,6 @@
 {
   "name": "ensoaiplus",
-  "version": "0.2.97",
+  "version": "0.2.98",
   "description": "EnsoAIPlus - Git Worktree Manager with AI Agent",
   "main": "./out/main/index.js",
   "author": {
