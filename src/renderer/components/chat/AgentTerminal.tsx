@@ -8,13 +8,13 @@ import { useFileDrop } from '@/hooks/useFileDrop';
 import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
 import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
-import { type OutputState, useAgentSessionsStore } from '@/stores/agentSessions';
-import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
-import { useSettingsStore } from '@/stores/settings';
-import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
-import { hasTerminalPreviewReader } from '@/stores/terminalPreviewRegistry';
+import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
+import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
+import { type OutputState, useAgentSessionsStore } from '@/stores/agentSessions';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
+import { useSettingsStore } from '@/stores/settings';
+import { hasTerminalPreviewReader } from '@/stores/terminalPreviewRegistry';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 
@@ -706,18 +706,24 @@ export function AgentTerminal({
         // Activity state is now managed by Hook notifications (PreToolUse, Stop, AskUserQuestion)
         // Enter event no longer sets activity state to avoid conflicts with other terminals
 
-        if (terminalSessionId && glowEffectEnabled) {
+        if (terminalSessionId) {
           sessionCanvasLog('Activity', 'terminal enter arm', {
             sessionId: shortSessionId(terminalSessionId),
             ptyId,
             isSlashCommand,
             hasPendingCommand,
+            glowEffectEnabled,
           });
           armCpuWake(terminalSessionId, 'terminal-enter');
-          isMonitoringOutputRef.current = true;
-          outputSinceEnterRef.current = 0;
-          ptyIdRef.current = ptyId;
-          startActivityPolling();
+          // glowEffectEnabled only gates old polling / output tracking;
+          // the unified monitor (useAgentRuntimeActivityMonitor) handles the phase
+          // transition independently.
+          if (glowEffectEnabled) {
+            isMonitoringOutputRef.current = true;
+            outputSinceEnterRef.current = 0;
+            ptyIdRef.current = ptyId;
+            startActivityPolling();
+          }
         }
 
         // Clear any existing enter delay timer.
