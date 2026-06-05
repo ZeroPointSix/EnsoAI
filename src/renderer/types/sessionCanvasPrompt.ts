@@ -27,4 +27,6 @@ export interface SessionCanvasPromptConfig {
   maxPrompts: number;
   prompts: SessionCanvasCustomPrompt[];
   reply: SessionCanvasReplyConfig;
+  /** Default prompt ids the user explicitly deleted; prevents rehydration from restoring them. */
+  deletedDefaultPromptIds?: string[];
 }
