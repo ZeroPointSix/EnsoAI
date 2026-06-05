@@ -987,13 +987,20 @@ export function AgentTerminal({
       // to PTY directly. Avoids xterm's terminal.paste() which converts
       // \n→\r and breaks multi-image payloads.
       const hasInternalNewlines = message.includes('\n');
+      const delay = imagePaths.length > 0 ? 800 : hasInternalNewlines ? 300 : 30;
+      sessionCanvasLog('QuickInput', 'embedded terminal sender write', {
+        sessionId: shortSessionId(terminalSessionId),
+        chars: message.length,
+        images: imagePaths.length,
+        hasInternalNewlines,
+        enterDelayMs: delay,
+      });
       if (hasInternalNewlines) {
         write(`\x1b[200~${message}\x1b[201~`);
       } else {
         write(message);
       }
 
-      const delay = imagePaths.length > 0 ? 800 : hasInternalNewlines ? 300 : 30;
       setTimeout(() => write('\r'), delay);
 
       terminal?.focus();

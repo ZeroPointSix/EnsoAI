@@ -214,6 +214,19 @@ export function SessionCanvasUnifiedQuickInput({
   const deliverMessage = useCallback(
     async (raw: string, paths: string[]) => {
       const message = composeMessage(raw);
+      const activeConditionalPrompts = conditionalPrompts
+        .map((prompt) => {
+          const template = prompt.currentState ? prompt.templateTrue : prompt.templateFalse;
+          const text = template?.trim();
+          if (!text) return null;
+          return {
+            id: prompt.id,
+            name: prompt.name,
+            currentState: prompt.currentState,
+            text,
+          };
+        })
+        .filter(Boolean);
       if (
         (!message.trim() && paths.length === 0) ||
         sendingRef.current ||
@@ -226,6 +239,18 @@ export function SessionCanvasUnifiedQuickInput({
       sendingRef.current = true;
       setSending(true);
       try {
+        sessionCanvasLog('QuickInput', 'compose before send', {
+          sessionId: shortSessionId(sessionId),
+          rawChars: raw.length,
+          finalChars: message.length,
+          images: paths.length,
+          activeConditionalPrompts,
+          includesNoMarkdownRule: message.includes('❌请记住，不要生成总结性Markdown文档'),
+          includesNoTestRule: message.includes('❌请记住，不要生成测试脚本'),
+          includesNoCompileRule: message.includes('❌请记住，不要编译，用户自己编译'),
+          includesNoRunRule: message.includes('❌请记住，不要运行，用户自己运行'),
+          preview: message.slice(0, 240),
+        });
         const sent = await sendSessionCanvasQuickInput(sessionId, message, paths, ptyIdHint);
         if (!sent) {
           toastManager.add({
@@ -244,7 +269,7 @@ export function SessionCanvasUnifiedQuickInput({
         setSending(false);
       }
     },
-    [composeMessage, sending, sessionId, ptyExists, t, ptyIdHint]
+    [composeMessage, conditionalPrompts, sending, sessionId, ptyExists, t, ptyIdHint]
   );
 
   const handleSend = useCallback(async () => {
