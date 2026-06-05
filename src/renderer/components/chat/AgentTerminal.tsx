@@ -143,6 +143,7 @@ export function AgentTerminal({
   const activityPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveIdleCountRef = useRef(0); // Count consecutive idle polls
   const ptyIdRef = useRef<string | null>(null); // Store PTY ID for activity checks
+  const pendingComposingEnterArmRef = useRef(false); // IME Enter may bypass normal arm path
   const isActiveRef = useRef(isActive); // Track latest isActive value for interval callback
   const lastCommandWasSlashCommand = useRef(false); // Track if last command was a slash command
   const setOutputState = useAgentSessionsStore((s) => s.setOutputState);
@@ -515,6 +516,21 @@ export function AgentTerminal({
         startTimeRef.current = Date.now();
       }
 
+      if (pendingComposingEnterArmRef.current && terminalSessionId) {
+        sessionCanvasLog('Activity', 'ime enter deferred arm on output', {
+          sessionId: shortSessionId(terminalSessionId),
+          ptyId: ptyIdRef.current,
+          bytes: data.length,
+        });
+        pendingComposingEnterArmRef.current = false;
+        armCpuWake(terminalSessionId, 'terminal-enter-ime');
+        if (glowEffectEnabled && !isMonitoringOutputRef.current && ptyIdRef.current) {
+          isMonitoringOutputRef.current = true;
+          outputSinceEnterRef.current = 0;
+          startActivityPolling();
+        }
+      }
+
       // Mark as initialized on first data
       if (!hasInitializedRef.current && !initialized) {
         hasInitializedRef.current = true;
@@ -601,6 +617,9 @@ export function AgentTerminal({
       t,
       updateOutputState,
       appendSessionPreview,
+      armCpuWake,
+      glowEffectEnabled,
+      startActivityPolling,
     ]
   );
 
@@ -640,13 +659,17 @@ export function AgentTerminal({
 
       // Detect Enter key press (without modifiers) to activate session and start idle monitoring
       // Skip if IME is composing (e.g. selecting Chinese characters)
-      if (
-        event.key === 'Enter' &&
-        !event.shiftKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !event.isComposing
-      ) {
+      if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.altKey) {
+        if (event.isComposing) {
+          pendingComposingEnterArmRef.current = true;
+          if (terminalSessionId) {
+            sessionCanvasLog('Activity', 'terminal enter composing → defer arm', {
+              sessionId: shortSessionId(terminalSessionId),
+              ptyId,
+            });
+          }
+          return true;
+        }
         // First Enter activates the session; optionally pass current line for session name.
         if (!hasActivatedRef.current && !activated) {
           hasActivatedRef.current = true;

@@ -22,6 +22,7 @@ const SessionCanvasSendContext = createContext<SessionCanvasSendContextValue | n
 
 export function SessionCanvasSendProvider({ children }: { children: ReactNode }) {
   const [supplement, setSupplement] = useState('');
+  const promptsEnabled = useSessionCanvasPromptStore((s) => s.promptsEnabled);
   const prompts = useSessionCanvasPromptStore((s) => s.prompts);
   const reply = useSessionCanvasPromptStore((s) => s.reply);
 
@@ -31,9 +32,9 @@ export function SessionCanvasSendProvider({ children }: { children: ReactNode })
     (body: string) =>
       composeSessionCanvasOutgoingMessage(body, {
         supplement,
-        prompts,
+        prompts: promptsEnabled ? prompts : [],
       }),
-    [supplement, prompts]
+    [supplement, prompts, promptsEnabled]
   );
 
   const value = useMemo(

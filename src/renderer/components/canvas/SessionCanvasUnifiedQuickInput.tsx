@@ -63,6 +63,7 @@ export function SessionCanvasUnifiedQuickInput({
 
   const promptsEnabled = useSessionCanvasPromptStore((s) => s.promptsEnabled);
   const prompts = useSessionCanvasPromptStore((s) => s.prompts);
+  const deletedDefaultPromptIds = useSessionCanvasPromptStore((s) => s.deletedDefaultPromptIds);
   const setConditionalState = useSessionCanvasPromptStore((s) => s.setConditionalState);
   const enableContinueReply = useSessionCanvasPromptStore((s) => s.reply.enableContinueReply);
   const continuePrompt = useSessionCanvasPromptStore((s) => s.reply.continuePrompt);
@@ -241,6 +242,8 @@ export function SessionCanvasUnifiedQuickInput({
       try {
         sessionCanvasLog('QuickInput', 'compose before send', {
           sessionId: shortSessionId(sessionId),
+          promptsEnabled,
+          deletedDefaultPromptIds,
           rawChars: raw.length,
           finalChars: message.length,
           images: paths.length,
@@ -269,7 +272,17 @@ export function SessionCanvasUnifiedQuickInput({
         setSending(false);
       }
     },
-    [composeMessage, conditionalPrompts, sending, sessionId, ptyExists, t, ptyIdHint]
+    [
+      composeMessage,
+      conditionalPrompts,
+      deletedDefaultPromptIds,
+      promptsEnabled,
+      sending,
+      sessionId,
+      ptyExists,
+      t,
+      ptyIdHint,
+    ]
   );
 
   const handleSend = useCallback(async () => {
