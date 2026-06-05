@@ -121,7 +121,10 @@ export function SessionCanvasPreview({
           className="absolute bottom-2 right-2 z-10 h-7 w-7 shadow-md"
           title={t('Scroll to bottom')}
           aria-label={t('Scroll to bottom')}
-          onClick={scrollToBottom}
+          onClick={(e) => {
+            e.stopPropagation();
+            scrollToBottom();
+          }}
         >
           <ChevronDown className="h-4 w-4" />
         </Button>

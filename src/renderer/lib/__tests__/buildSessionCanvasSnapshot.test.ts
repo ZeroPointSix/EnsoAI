@@ -8,6 +8,7 @@ const baseActivity = (phase: AgentRuntimeActivity['phase']): AgentRuntimeActivit
   lastCpuActiveAt: 0,
   lastStartedAt: 0,
   lastCompletedAt: 0,
+  cpuWakeArmed: phase === 'running',
   source: 'pty',
 });
 

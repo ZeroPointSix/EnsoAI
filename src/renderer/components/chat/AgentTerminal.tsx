@@ -9,6 +9,7 @@ import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
 import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
 import { type OutputState, useAgentSessionsStore } from '@/stores/agentSessions';
+import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
 import { useSettingsStore } from '@/stores/settings';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
@@ -147,6 +148,7 @@ export function AgentTerminal({
   const setOutputState = useAgentSessionsStore((s) => s.setOutputState);
   const markSessionActive = useAgentSessionsStore((s) => s.markSessionActive);
   const appendSessionPreview = useAgentSessionsStore((s) => s.appendSessionPreview);
+  const armCpuWake = useAgentRuntimeActivityStore((s) => s.armCpuWake);
   const setSessionPtyId = useSessionPtyRegistry((s) => s.setPtyId);
   const clearSessionPtyId = useSessionPtyRegistry((s) => s.clearPtyId);
 
@@ -673,6 +675,7 @@ export function AgentTerminal({
         // Enter event no longer sets activity state to avoid conflicts with other terminals
 
         if (terminalSessionId && glowEffectEnabled) {
+          armCpuWake(terminalSessionId);
           isMonitoringOutputRef.current = true;
           outputSinceEnterRef.current = 0;
           ptyIdRef.current = ptyId;
@@ -724,6 +727,7 @@ export function AgentTerminal({
       onActivated,
       onActivatedWithFirstLine,
       agentNotificationEnterDelay,
+      armCpuWake,
       startActivityPolling,
       terminalSessionId,
       glowEffectEnabled,
@@ -779,6 +783,11 @@ export function AgentTerminal({
   });
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
+
+  useEffect(() => {
+    if (!terminalSessionId || !initialPrompt) return;
+    armCpuWake(terminalSessionId);
+  }, [armCpuWake, initialPrompt, terminalSessionId]);
 
   // Mirror the side effects that used to live in EnhancedInput.onOpenChange:
   // - Treat opening EnhancedInput as active user interaction (reset idle timers)

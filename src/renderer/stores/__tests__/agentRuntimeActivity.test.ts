@@ -6,6 +6,24 @@ describe('agentRuntimeActivity', () => {
     useAgentRuntimeActivityStore.setState({ activities: {} });
   });
 
+  it('keeps idle when cpu is active before a send is armed', () => {
+    const sessionId = 'session-unarmed';
+
+    useAgentRuntimeActivityStore.getState().reportCpuActive(sessionId);
+
+    const activity = useAgentRuntimeActivityStore.getState().activities[sessionId];
+    expect(activity?.phase ?? 'idle').toBe('idle');
+  });
+
+  it('allows cpu to wake running after a send is armed', () => {
+    const sessionId = 'session-armed';
+
+    useAgentRuntimeActivityStore.getState().armCpuWake(sessionId);
+    useAgentRuntimeActivityStore.getState().reportCpuActive(sessionId);
+
+    expect(useAgentRuntimeActivityStore.getState().getPhase(sessionId)).toBe('running');
+  });
+
   it('transitions completed → running on terminal output', () => {
     const sessionId = 'session-a';
     useAgentRuntimeActivityStore.setState({
@@ -16,6 +34,7 @@ describe('agentRuntimeActivity', () => {
           lastCpuActiveAt: 0,
           lastStartedAt: 1000,
           lastCompletedAt: 5000,
+          cpuWakeArmed: false,
           source: 'inferred',
         },
       },
@@ -43,6 +62,7 @@ describe('agentRuntimeActivity', () => {
           lastCpuActiveAt: now - 10_000,
           lastStartedAt: now - 20_000,
           lastCompletedAt: 0,
+          cpuWakeArmed: true,
           source: 'output',
         },
       },
@@ -66,6 +86,7 @@ describe('agentRuntimeActivity', () => {
           lastCpuActiveAt: 0,
           lastStartedAt: now - 20_000,
           lastCompletedAt: 0,
+          cpuWakeArmed: true,
           source: 'output',
         },
       },
@@ -87,6 +108,7 @@ describe('agentRuntimeActivity', () => {
           lastCpuActiveAt: now - 10_000,
           lastStartedAt: now - 20_000,
           lastCompletedAt: now - 3_000,
+          cpuWakeArmed: false,
           source: 'inferred',
         },
       },
@@ -108,6 +130,7 @@ describe('agentRuntimeActivity', () => {
           lastCpuActiveAt: now - 6_000,
           lastStartedAt: now - 20_000,
           lastCompletedAt: 0,
+          cpuWakeArmed: true,
           source: 'pty',
         },
       },

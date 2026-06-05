@@ -1,4 +1,5 @@
 import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
+import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
 import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 
@@ -100,6 +101,7 @@ export async function sendSessionCanvasQuickInput(
   inFlightBySession.add(sessionId);
   try {
     const message = buildPayload(trimmed, imagePaths);
+    useAgentRuntimeActivityStore.getState().armCpuWake(sessionId);
     sessionCanvasLog('QuickInput', 'send', {
       sessionId: shortSessionId(sessionId),
       ptyId,

@@ -28,6 +28,8 @@ export interface AgentRuntimeActivity {
   lastCpuActiveAt: number;
   lastStartedAt: number;
   lastCompletedAt: number;
+  /** 只有明确发送过一轮请求后，CPU 信号才允许把 idle 唤醒成 running */
+  cpuWakeArmed: boolean;
   source: ActivitySource;
   /** 预览推断的 blocked 原因（ansi_red / numbered_menu 等） */
   previewBlockReason?: string;
@@ -65,12 +67,16 @@ function promoteCompletedToRunning(
     lastCpuActiveAt: now,
     lastOutputAt: source === 'output' ? now : current.lastOutputAt,
     lastStartedAt: now,
+    cpuWakeArmed: true,
     source,
   };
 }
 
 interface AgentRuntimeActivityState {
   activities: Record<string, AgentRuntimeActivity>;
+
+  /** 用户明确发送了一轮请求后，允许 CPU 信号唤醒本轮 running */
+  armCpuWake: (sessionId: string) => void;
 
   /** PTY 进程活跃 → running */
   reportCpuActive: (sessionId: string) => void;
@@ -123,6 +129,7 @@ function defaultActivity(): AgentRuntimeActivity {
     lastCpuActiveAt: 0,
     lastStartedAt: 0,
     lastCompletedAt: 0,
+    cpuWakeArmed: false,
     source: 'manual',
   };
 }
@@ -140,6 +147,23 @@ function logPhaseIfChanged(
 
 export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((set, get) => ({
   activities: {},
+
+  armCpuWake: (sessionId) => {
+    set((prev) => {
+      const current = prev.activities[sessionId] ?? defaultActivity();
+      if (current.cpuWakeArmed) return prev;
+      return {
+        activities: {
+          ...prev.activities,
+          [sessionId]: {
+            ...current,
+            cpuWakeArmed: true,
+            source: current.source === 'manual' ? 'inferred' : current.source,
+          },
+        },
+      };
+    });
+  },
 
   reportCpuActive: (sessionId) => {
     const now = Date.now();
@@ -175,11 +199,22 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
       if (current.phase === 'running') {
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastCpuActiveAt: now } } };
       }
+      if (!current.cpuWakeArmed) {
+        sessionCanvasLogThrottled(
+          `activity-cpu-skip-unarmed-${sessionId}`,
+          5000,
+          'Activity',
+          'cpu ignored (unarmed idle)',
+          { sessionId: sessionId.slice(0, 8) }
+        );
+        return prev;
+      }
       const next: AgentRuntimeActivity = {
         ...current,
         phase: 'running',
         lastCpuActiveAt: now,
         lastStartedAt: now,
+        cpuWakeArmed: true,
         source: 'pty',
       };
       logPhaseIfChanged(sessionId, current.phase, 'running', 'cpu');
@@ -212,6 +247,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         phase: 'running',
         lastOutputAt: now,
         lastStartedAt: now,
+        cpuWakeArmed: true,
         source: 'output',
       };
       logPhaseIfChanged(sessionId, current.phase, 'running', 'output');
@@ -232,6 +268,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         phase: 'running',
         lastCpuActiveAt: now,
         lastStartedAt: now,
+        cpuWakeArmed: true,
         source: 'hook',
       };
       logPhaseIfChanged(sessionId, current.phase, 'running', 'hook:PreToolUse');
@@ -248,6 +285,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         ...current,
         phase: 'blocked',
         lastOutputAt: now,
+        cpuWakeArmed: true,
         source: 'hook',
         previewBlockReason: undefined,
       };
@@ -275,6 +313,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         ...current,
         phase: 'blocked',
         lastOutputAt: now,
+        cpuWakeArmed: true,
         source: 'inferred',
         previewBlockReason: reason,
       };
@@ -321,6 +360,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         ...current,
         phase: 'completed',
         lastCompletedAt: now,
+        cpuWakeArmed: false,
         source: 'hook',
       };
       logPhaseIfChanged(sessionId, current.phase, 'completed', 'hook:Stop');
@@ -344,6 +384,7 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
             ...activity,
             phase: 'completed',
             lastCompletedAt: now,
+            cpuWakeArmed: false,
             source: 'inferred',
           };
           logPhaseIfChanged(sessionId, 'running', 'completed', 'tickIdleCheck', {
