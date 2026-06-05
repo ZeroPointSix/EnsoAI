@@ -122,6 +122,7 @@ export const DEFAULT_SESSION_CANVAS_PROMPT_CONFIG: SessionCanvasPromptConfig = {
   promptsEnabled: true,
   maxPrompts: 50,
   prompts: DEFAULT_SESSION_CANVAS_PROMPTS,
+  deletedDefaultPromptIds: [],
   reply: {
     enableContinueReply: true,
     continuePrompt: '请按照最佳实践继续',
