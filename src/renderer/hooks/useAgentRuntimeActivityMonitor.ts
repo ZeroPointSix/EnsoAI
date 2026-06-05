@@ -31,6 +31,26 @@ function resolveEnsoSessionId(incomingSessionId: string, cwd?: string): string |
   return null;
 }
 
+function resolveDebugCandidates(cwd?: string): Array<Record<string, unknown>> {
+  const normalizedCwd = cwd ? normalizePath(cwd) : null;
+  return useAgentSessionsStore
+    .getState()
+    .sessions.slice(-8)
+    .map((session) => ({
+      id: shortSessionId(session.id),
+      claudeSessionId: session.sessionId ? shortSessionId(session.sessionId) : null,
+      cwd: session.cwd,
+      cwdMatch: normalizedCwd ? normalizePath(session.cwd) === normalizedCwd : false,
+    }));
+}
+
+function ptySummary(): Record<string, string> {
+  const ptyMap = useSessionPtyRegistry.getState().ptyBySessionId;
+  return Object.fromEntries(
+    Object.entries(ptyMap).map(([sessionId, ptyId]) => [shortSessionId(sessionId), ptyId])
+  );
+}
+
 /** 绿态下终端碎片输出（光标/进度条）不拉回黄 */
 const MIN_COMPLETED_WAKE_BYTES = MIN_OUTPUT_ACTIVITY_BYTES;
 
@@ -120,6 +140,7 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
         cpuActive,
         phaseSummary,
         armedSummary,
+        ptySummary: ptySummary(),
       });
     };
 
@@ -145,10 +166,13 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
       if (!data) return;
       const ptyMap = useSessionPtyRegistry.getState().ptyBySessionId;
       const agentIds = new Set(useAgentSessionsStore.getState().sessions.map((s) => s.id));
+      let matchedPtySessionId: string | null = null;
       for (const [sessionId, ptyId] of Object.entries(ptyMap)) {
         if (ptyId !== id) continue;
+        matchedPtySessionId = sessionId;
         if (agentIds.has(sessionId)) {
-          const phase = useAgentRuntimeActivityStore.getState().getPhase(sessionId);
+          const activityBefore = useAgentRuntimeActivityStore.getState().activities[sessionId];
+          const phase = activityBefore?.phase ?? useAgentRuntimeActivityStore.getState().getPhase(sessionId);
           const bytes = data.length;
           if (phase === 'idle' && bytes < MIN_IDLE_WAKE_BYTES) {
             sessionCanvasLogThrottled(
@@ -156,7 +180,13 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
               3000,
               'Monitor',
               'onData skipped (idle, small chunk)',
-              { sessionId: shortSessionId(sessionId), bytes, minBytes: MIN_IDLE_WAKE_BYTES }
+              {
+                sessionId: shortSessionId(sessionId),
+                ptyId,
+                bytes,
+                minBytes: MIN_IDLE_WAKE_BYTES,
+                armed: activityBefore?.cpuWakeArmed ?? false,
+              }
             );
             break;
           }
@@ -168,22 +198,50 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
               'onData skipped (completed-hold, small chunk)',
               {
                 sessionId: shortSessionId(sessionId),
+                ptyId,
                 bytes,
                 minBytes: MIN_COMPLETED_WAKE_BYTES,
+                armed: activityBefore?.cpuWakeArmed ?? false,
               }
             );
             break;
           }
           reportOutput(sessionId, bytes);
+          const activityAfter = useAgentRuntimeActivityStore.getState().activities[sessionId];
           sessionCanvasLogThrottled(
             `monitor-ondata-${sessionId}`,
             3000,
             'Monitor',
             'terminal.onData → reportOutput',
-            { sessionId: shortSessionId(sessionId), ptyId, bytes, phase }
+            {
+              sessionId: shortSessionId(sessionId),
+              ptyId,
+              bytes,
+              phaseBefore: phase,
+              armedBefore: activityBefore?.cpuWakeArmed ?? false,
+              phaseAfter: activityAfter?.phase ?? 'none',
+              armedAfter: activityAfter?.cpuWakeArmed ?? false,
+            }
+          );
+        } else {
+          sessionCanvasLogThrottled(
+            `monitor-ondata-non-agent-${sessionId}`,
+            3000,
+            'Monitor',
+            'terminal.onData skipped (pty maps to non-agent session)',
+            { sessionId: shortSessionId(sessionId), ptyId, bytes: data.length }
           );
         }
         break;
+      }
+      if (!matchedPtySessionId) {
+        sessionCanvasLogThrottled(
+          `monitor-ondata-no-pty-match-${id}`,
+          3000,
+          'Monitor',
+          'terminal.onData skipped (no session pty match)',
+          { ptyId: id, bytes: data.length, ptySummary: ptySummary() }
+        );
       }
     });
   }, [enabled]);
@@ -201,12 +259,15 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
         reportHookRunning(sessionId);
         sessionCanvasLog('Monitor', 'hook PreToolUse → running', {
           sessionId: shortSessionId(sessionId),
+          incomingSessionId: data.sessionId?.slice(0, 8),
+          cwd: data.cwd,
           toolName: data.toolName,
         });
       } else {
         sessionCanvasLog('Monitor', 'hook PreToolUse resolve failed', {
           incomingSessionId: data.sessionId?.slice(0, 8),
           cwd: data.cwd,
+          candidates: resolveDebugCandidates(data.cwd),
         });
       }
     });
@@ -217,12 +278,14 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
         reportHookBlocked(sessionId);
         sessionCanvasLog('Monitor', 'hook AskUserQuestion → blocked', {
           sessionId: shortSessionId(sessionId),
+          incomingSessionId: data.sessionId?.slice(0, 8),
           cwd: data.cwd,
         });
       } else {
         sessionCanvasLog('Monitor', 'hook AskUserQuestion resolve failed', {
           incomingSessionId: data.sessionId?.slice(0, 8),
           cwd: data.cwd,
+          candidates: resolveDebugCandidates(data.cwd),
         });
       }
     });
@@ -233,11 +296,14 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
         reportHookCompleted(sessionId);
         sessionCanvasLog('Monitor', 'hook Stop → completed', {
           sessionId: shortSessionId(sessionId),
+          incomingSessionId: data.sessionId?.slice(0, 8),
+          cwd: data.cwd,
         });
       } else {
         sessionCanvasLog('Monitor', 'hook Stop resolve failed', {
           incomingSessionId: data.sessionId?.slice(0, 8),
           cwd: data.cwd,
+          candidates: resolveDebugCandidates(data.cwd),
         });
       }
     });
