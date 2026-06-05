@@ -20,6 +20,17 @@ import {
 } from '../windows/SessionCanvasWindow';
 import { sessionCanvasLog } from '../utils/sessionCanvasLog';
 
+interface SessionCanvasArmCpuWakeParams {
+  requestId: string;
+  sessionId: string;
+  reason: string;
+}
+
+interface SessionCanvasArmCpuWakeAck {
+  requestId: string;
+  sessionId: string;
+}
+
 export function registerSessionCanvasPanelHandlers(mainWindow: BrowserWindow): void {
   setSessionCanvasMainWindowRef(mainWindow);
   sessionCanvasLog('IPC', 'registerSessionCanvasPanelHandlers');
@@ -119,6 +130,44 @@ export function registerSessionCanvasPanelHandlers(mainWindow: BrowserWindow): v
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IPC_CHANNELS.SESSION_CANVAS_RENAME_SESSION, params);
       }
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.SESSION_CANVAS_RELAY_ARM_CPU_WAKE,
+    async (_event, params: SessionCanvasArmCpuWakeParams) => {
+      sessionCanvasLog('IPC', 'relayArmCpuWake → main', {
+        requestId: params.requestId,
+        sessionId: params.sessionId?.slice(0, 8),
+        reason: params.reason,
+      });
+
+      if (mainWindow.isDestroyed()) return false;
+
+      return await new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(() => {
+          ipcMain.off(IPC_CHANNELS.SESSION_CANVAS_ARM_CPU_WAKE_ACK, onAck);
+          sessionCanvasLog('IPC', 'relayArmCpuWake ack timeout', {
+            requestId: params.requestId,
+            sessionId: params.sessionId?.slice(0, 8),
+          });
+          resolve(false);
+        }, 2000);
+
+        const onAck = (_ackEvent: Electron.IpcMainEvent, ack: SessionCanvasArmCpuWakeAck) => {
+          if (ack.requestId !== params.requestId) return;
+          clearTimeout(timeout);
+          ipcMain.off(IPC_CHANNELS.SESSION_CANVAS_ARM_CPU_WAKE_ACK, onAck);
+          sessionCanvasLog('IPC', 'relayArmCpuWake acked', {
+            requestId: ack.requestId,
+            sessionId: ack.sessionId?.slice(0, 8),
+          });
+          resolve(true);
+        };
+
+        ipcMain.on(IPC_CHANNELS.SESSION_CANVAS_ARM_CPU_WAKE_ACK, onAck);
+        mainWindow.webContents.send(IPC_CHANNELS.SESSION_CANVAS_APPLY_ARM_CPU_WAKE, params);
+      });
     }
   );
 }

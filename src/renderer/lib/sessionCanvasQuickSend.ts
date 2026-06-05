@@ -22,6 +22,10 @@ function buildPayload(content: string, imagePaths: string[]): string {
   return message;
 }
 
+function buildRelayRequestId(sessionId: string): string {
+  return `sc-arm-${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 async function writeChunks(
   sessionId: string,
   ptyId: string,
@@ -101,6 +105,21 @@ export async function sendSessionCanvasQuickInput(
   inFlightBySession.add(sessionId);
   try {
     const message = buildPayload(trimmed, imagePaths);
+    const requestId = buildRelayRequestId(sessionId);
+    sessionCanvasLog('QuickInput', 'relay armCpuWake start', {
+      requestId,
+      sessionId: shortSessionId(sessionId),
+    });
+    const relayed = await window.electronAPI.sessionCanvasPanel.relayArmCpuWake({
+      requestId,
+      sessionId,
+      reason: 'quick-input',
+    });
+    sessionCanvasLog('QuickInput', 'relay armCpuWake done', {
+      requestId,
+      sessionId: shortSessionId(sessionId),
+      relayed,
+    });
     useAgentRuntimeActivityStore.getState().armCpuWake(sessionId, 'quick-input');
     sessionCanvasLog('QuickInput', 'send', {
       sessionId: shortSessionId(sessionId),

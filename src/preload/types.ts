@@ -9,9 +9,18 @@ import type { ElectronAPI } from './index';
 export type SessionCanvasPanelBridge = {
   toggle: () => Promise<boolean>;
   focusSession: (params: SessionCanvasFocusParams) => void;
+  relayArmCpuWake: (params: {
+    requestId: string;
+    sessionId: string;
+    reason: string;
+  }) => Promise<boolean>;
   getSnapshot: () => Promise<boolean | null>;
   onSnapshotResponse: (callback: (snapshot: SessionCanvasSnapshot) => void) => (() => void);
   onSync: (callback: (snapshot: SessionCanvasSnapshot) => void) => (() => void);
+  onApplyArmCpuWake: (
+    callback: (params: { requestId: string; sessionId: string; reason: string }) => void
+  ) => (() => void);
+  sendArmCpuWakeAck: (params: { requestId: string; sessionId: string }) => void;
   onFocusSession: (callback: (params: SessionCanvasFocusParams) => void) => (() => void);
   resetBounds: () => Promise<void>;
   toggleFullscreen: () => Promise<boolean>;
