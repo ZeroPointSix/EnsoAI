@@ -89,7 +89,7 @@ export const DEFAULT_SESSION_CANVAS_PROMPTS: SessionCanvasCustomPrompt[] = [
     '是否生成总结性Markdown文档',
     '是否生成总结性Markdown文档',
     '✔️请记住，帮我生成总结性Markdown文档',
-    '❌请记住，不要生成总结性Markdown文档',
+    '',
     7
   ),
   conditional(
@@ -97,7 +97,7 @@ export const DEFAULT_SESSION_CANVAS_PROMPTS: SessionCanvasCustomPrompt[] = [
     '是否生成测试脚本',
     '是否生成测试脚本',
     '✔️请记住，帮我生成测试脚本',
-    '❌请记住，不要生成测试脚本',
+    '',
     8
   ),
   conditional(
@@ -105,7 +105,7 @@ export const DEFAULT_SESSION_CANVAS_PROMPTS: SessionCanvasCustomPrompt[] = [
     '是否主动编译',
     '是否主动编译',
     '✔️请记住，帮我编译',
-    '❌请记住，不要编译，用户自己编译',
+    '',
     9
   ),
   conditional(
@@ -113,7 +113,7 @@ export const DEFAULT_SESSION_CANVAS_PROMPTS: SessionCanvasCustomPrompt[] = [
     '是否主动运行',
     '是否主动运行',
     '✔️请记住，帮我运行',
-    '❌请记住，不要运行，用户自己运行',
+    '',
     10
   ),
 ];
