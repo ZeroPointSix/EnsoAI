@@ -19,6 +19,12 @@ interface SessionCanvasPromptState extends SessionCanvasPromptConfig {
 }
 
 const DEFAULT_PROMPT_IDS = new Set(DEFAULT_SESSION_CANVAS_PROMPT_CONFIG.prompts.map((p) => p.id));
+const LEGACY_DEFAULT_FALSE_TEMPLATES = new Map([
+  ['default_7', '❌请记住，不要生成总结性Markdown文档'],
+  ['default_8', '❌请记住，不要生成测试脚本'],
+  ['default_9', '❌请记住，不要编译，用户自己编译'],
+  ['default_10', '❌请记住，不要运行，用户自己运行'],
+]);
 
 function deletedDefaultPromptIdsFrom(
   parsed: Partial<SessionCanvasPromptConfig>,
@@ -39,6 +45,18 @@ function deletedDefaultPromptIdsFrom(
     .map((prompt) => prompt.id);
 }
 
+function mergeDefaultPrompt(
+  def: SessionCanvasCustomPrompt,
+  saved: SessionCanvasCustomPrompt
+): SessionCanvasCustomPrompt {
+  const merged = { ...def, ...saved, type: saved.type ?? def.type };
+  const legacyFalseTemplate = LEGACY_DEFAULT_FALSE_TEMPLATES.get(saved.id);
+  if (legacyFalseTemplate && saved.templateFalse?.trim() === legacyFalseTemplate) {
+    return { ...merged, templateFalse: def.templateFalse };
+  }
+  return merged;
+}
+
 export function mergeWithDefaults(
   parsed: Partial<SessionCanvasPromptConfig>
 ): SessionCanvasPromptConfig {
@@ -52,7 +70,7 @@ export function mergeWithDefaults(
   for (const p of saved) {
     if (defaultById.has(p.id) && deletedDefaults.has(p.id)) continue;
     const def = defaultById.get(p.id);
-    mergedPrompts.push(def ? { ...def, ...p, type: p.type ?? def.type } : p);
+    mergedPrompts.push(def ? mergeDefaultPrompt(def, p) : p);
   }
   for (const def of defaults.prompts) {
     if (deletedDefaults.has(def.id)) continue;
@@ -158,7 +176,7 @@ export const useSessionCanvasPromptStore = create<SessionCanvasPromptState>()(
     }),
     {
       name: 'ensoai.sessionCanvas.promptConfig',
-      version: 3,
+      version: 4,
       migrate: (persisted) => {
         const parsed = (persisted ?? {}) as Partial<SessionCanvasPromptConfig>;
         return mergeWithDefaults(parsed);
