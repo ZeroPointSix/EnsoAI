@@ -101,7 +101,7 @@ export async function sendSessionCanvasQuickInput(
   inFlightBySession.add(sessionId);
   try {
     const message = buildPayload(trimmed, imagePaths);
-    useAgentRuntimeActivityStore.getState().armCpuWake(sessionId);
+    useAgentRuntimeActivityStore.getState().armCpuWake(sessionId, 'quick-input');
     sessionCanvasLog('QuickInput', 'send', {
       sessionId: shortSessionId(sessionId),
       ptyId,

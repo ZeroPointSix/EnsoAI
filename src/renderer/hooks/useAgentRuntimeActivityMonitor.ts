@@ -109,6 +109,9 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
       const phaseSummary = Object.fromEntries(
         Object.entries(phases).map(([id, a]) => [shortSessionId(id), a.phase])
       );
+      const armedSummary = Object.fromEntries(
+        Object.entries(phases).map(([id, a]) => [shortSessionId(id), a.cpuWakeArmed])
+      );
 
       sessionCanvasLogThrottled('monitor-poll-summary', 2000, 'Monitor', 'poll tick', {
         agentCount: sessions.length,
@@ -116,6 +119,7 @@ export function useAgentRuntimeActivityMonitor(enabled: boolean): void {
         noPty,
         cpuActive,
         phaseSummary,
+        armedSummary,
       });
     };
 

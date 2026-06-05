@@ -675,7 +675,7 @@ export function AgentTerminal({
         // Enter event no longer sets activity state to avoid conflicts with other terminals
 
         if (terminalSessionId && glowEffectEnabled) {
-          armCpuWake(terminalSessionId);
+          armCpuWake(terminalSessionId, 'terminal-enter');
           isMonitoringOutputRef.current = true;
           outputSinceEnterRef.current = 0;
           ptyIdRef.current = ptyId;
@@ -786,7 +786,7 @@ export function AgentTerminal({
 
   useEffect(() => {
     if (!terminalSessionId || !initialPrompt) return;
-    armCpuWake(terminalSessionId);
+    armCpuWake(terminalSessionId, 'initial-prompt');
   }, [armCpuWake, initialPrompt, terminalSessionId]);
 
   // Mirror the side effects that used to live in EnhancedInput.onOpenChange:

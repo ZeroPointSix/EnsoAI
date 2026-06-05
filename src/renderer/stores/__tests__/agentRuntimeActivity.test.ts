@@ -24,7 +24,24 @@ describe('agentRuntimeActivity', () => {
     expect(useAgentRuntimeActivityStore.getState().getPhase(sessionId)).toBe('running');
   });
 
-  it('transitions completed → running on terminal output', () => {
+  it('keeps idle when large output arrives before a send is armed', () => {
+    const sessionId = 'session-output-unarmed';
+
+    useAgentRuntimeActivityStore.getState().reportOutput(sessionId, 466);
+
+    expect(useAgentRuntimeActivityStore.getState().getPhase(sessionId)).toBe('idle');
+  });
+
+  it('allows large output to wake running after a send is armed', () => {
+    const sessionId = 'session-output-armed';
+
+    useAgentRuntimeActivityStore.getState().armCpuWake(sessionId);
+    useAgentRuntimeActivityStore.getState().reportOutput(sessionId, 466);
+
+    expect(useAgentRuntimeActivityStore.getState().getPhase(sessionId)).toBe('running');
+  });
+
+  it('transitions completed → running on terminal output after next turn is armed', () => {
     const sessionId = 'session-a';
     useAgentRuntimeActivityStore.setState({
       activities: {
@@ -34,7 +51,7 @@ describe('agentRuntimeActivity', () => {
           lastCpuActiveAt: 0,
           lastStartedAt: 1000,
           lastCompletedAt: 5000,
-          cpuWakeArmed: false,
+          cpuWakeArmed: true,
           source: 'inferred',
         },
       },

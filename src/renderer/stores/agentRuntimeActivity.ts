@@ -76,7 +76,7 @@ interface AgentRuntimeActivityState {
   activities: Record<string, AgentRuntimeActivity>;
 
   /** 用户明确发送了一轮请求后，允许 CPU 信号唤醒本轮 running */
-  armCpuWake: (sessionId: string) => void;
+  armCpuWake: (sessionId: string, reason?: string) => void;
 
   /** PTY 进程活跃 → running */
   reportCpuActive: (sessionId: string) => void;
@@ -148,10 +148,16 @@ function logPhaseIfChanged(
 export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((set, get) => ({
   activities: {},
 
-  armCpuWake: (sessionId) => {
+  armCpuWake: (sessionId, reason = 'manual') => {
     set((prev) => {
       const current = prev.activities[sessionId] ?? defaultActivity();
       if (current.cpuWakeArmed) return prev;
+      sessionCanvasLog('Activity', 'cpu wake armed', {
+        sessionId: sessionId.slice(0, 8),
+        reason,
+        phase: current.phase,
+        source: current.source,
+      });
       return {
         activities: {
           ...prev.activities,
@@ -233,6 +239,16 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
       }
       if (current.phase === 'completed') {
         if (!countsAsOutput) return prev;
+        if (!current.cpuWakeArmed) {
+          sessionCanvasLogThrottled(
+            `activity-output-skip-completed-unarmed-${sessionId}`,
+            5000,
+            'Activity',
+            'output ignored (completed, unarmed)',
+            { sessionId: sessionId.slice(0, 8), byteLength }
+          );
+          return prev;
+        }
         const next = promoteCompletedToRunning(sessionId, current, now, 'output');
         logPhaseIfChanged(sessionId, 'completed', 'running', 'output');
         return { activities: { ...prev.activities, [sessionId]: next } };
@@ -242,6 +258,16 @@ export const useAgentRuntimeActivityStore = create<AgentRuntimeActivityState>((s
         return { activities: { ...prev.activities, [sessionId]: { ...current, lastOutputAt: now } } };
       }
       if (!countsAsOutput) return prev;
+      if (!current.cpuWakeArmed) {
+        sessionCanvasLogThrottled(
+          `activity-output-skip-idle-unarmed-${sessionId}`,
+          5000,
+          'Activity',
+          'output ignored (idle, unarmed)',
+          { sessionId: sessionId.slice(0, 8), byteLength }
+        );
+        return prev;
+      }
       const next: AgentRuntimeActivity = {
         ...current,
         phase: 'running',
