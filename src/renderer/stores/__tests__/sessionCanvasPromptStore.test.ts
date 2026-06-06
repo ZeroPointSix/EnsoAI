@@ -3,7 +3,12 @@ import { DEFAULT_SESSION_CANVAS_PROMPT_CONFIG } from '@/lib/sessionCanvasPromptD
 import { composeSessionCanvasOutgoingMessage } from '@/lib/sessionCanvasComposeMessage';
 import { mergeWithDefaults } from '../sessionCanvasPromptStore';
 
-const LEGACY_NO_MARKDOWN_RULE = '❌请记住，不要生成总结性Markdown文档';
+const LEGACY_DEFAULT_FALSE_TEMPLATES = [
+  ['default_7', '❌请记住，不要生成总结性Markdown文档'],
+  ['default_8', '❌请记住，不要生成测试脚本'],
+  ['default_9', '❌请记住，不要编译，用户自己编译'],
+  ['default_10', '❌请记住，不要运行，用户自己运行'],
+] as const;
 
 describe('sessionCanvasPromptStore mergeWithDefaults', () => {
   it('does not restore a deleted default prompt during rehydration', () => {
@@ -32,28 +37,32 @@ describe('sessionCanvasPromptStore mergeWithDefaults', () => {
   });
 
   it('cleans legacy negative false branches from persisted default prompts', () => {
-    const legacyPrompt = DEFAULT_SESSION_CANVAS_PROMPT_CONFIG.prompts.find(
-      (prompt) => prompt.id === 'default_7'
-    );
-    expect(legacyPrompt).toBeDefined();
-
     const merged = mergeWithDefaults({
-      prompts: [
-        {
+      prompts: LEGACY_DEFAULT_FALSE_TEMPLATES.map(([id, templateFalse]) => {
+        const legacyPrompt = DEFAULT_SESSION_CANVAS_PROMPT_CONFIG.prompts.find(
+          (prompt) => prompt.id === id
+        );
+        expect(legacyPrompt).toBeDefined();
+        return {
           ...legacyPrompt!,
           currentState: false,
-          templateFalse: LEGACY_NO_MARKDOWN_RULE,
-        },
-      ],
+          templateFalse,
+        };
+      }),
     });
 
-    const prompt = merged.prompts.find((p) => p.id === 'default_7');
-    expect(prompt?.templateFalse).toBe('');
+    for (const [id, legacyTemplate] of LEGACY_DEFAULT_FALSE_TEMPLATES) {
+      const prompt = merged.prompts.find((p) => p.id === id);
+      expect(prompt?.templateFalse).toBe('');
+      expect(prompt?.templateFalse).not.toBe(legacyTemplate);
+    }
 
     const message = composeSessionCanvasOutgoingMessage('hello', {
       prompts: merged.prompts,
     });
     expect(message).toBe('hello');
-    expect(message).not.toContain(LEGACY_NO_MARKDOWN_RULE);
+    for (const [, legacyTemplate] of LEGACY_DEFAULT_FALSE_TEMPLATES) {
+      expect(message).not.toContain(legacyTemplate);
+    }
   });
 });
