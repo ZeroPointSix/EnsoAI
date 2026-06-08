@@ -273,7 +273,7 @@ export function AgentTerminal({
         // Error checking activity, ignore
       }
     }, ACTIVITY_POLL_INTERVAL_MS);
-  }, [updateOutputState]);
+  }, [updateOutputState, terminalSessionId]);
 
   // Stop polling for process activity
   const stopActivityPolling = useCallback(() => {
@@ -1024,6 +1024,17 @@ export function AgentTerminal({
         hasInternalNewlines,
         enterDelayMs: delay,
       });
+
+      if (message.trim() || imagePaths.length > 0) {
+        armCpuWake(terminalSessionId, 'embedded-terminal-send');
+
+        if (glowEffectEnabled && !isMonitoringOutputRef.current && ptyIdRef.current) {
+          isMonitoringOutputRef.current = true;
+          outputSinceEnterRef.current = 0;
+          dataSinceEnterRef.current = 0;
+          startActivityPolling();
+        }
+      }
       if (hasInternalNewlines) {
         write(`\x1b[200~${message}\x1b[201~`);
       } else {
@@ -1034,7 +1045,7 @@ export function AgentTerminal({
 
       terminal?.focus();
     },
-    [write, terminalSessionId, terminal]
+    [write, terminalSessionId, terminal, armCpuWake, glowEffectEnabled, startActivityPolling]
   );
 
   useEffect(() => {
