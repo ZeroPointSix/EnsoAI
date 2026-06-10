@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useAgentRuntimeActivityStore } from './agentRuntimeActivity';
 
 type WriteFunction = (data: string) => void;
 type FocusFunction = () => void;
@@ -14,6 +15,15 @@ interface TerminalWriteStore {
   writeToActive: (data: string) => boolean;
   focus: (sessionId: string) => void;
   focusActive: () => void;
+}
+
+function isSubmittedTerminalWrite(data: string): boolean {
+  return data.includes('\r') || data.includes('\n');
+}
+
+function armSubmittedTerminalWrite(sessionId: string, data: string): void {
+  if (!isSubmittedTerminalWrite(data)) return;
+  useAgentRuntimeActivityStore.getState().armCpuWake(sessionId, 'terminal-write');
 }
 
 /**
@@ -56,6 +66,7 @@ export const useTerminalWriteStore = create<TerminalWriteStore>((set, get) => ({
   write: (sessionId, data) => {
     const writer = get().writers.get(sessionId);
     if (writer) {
+      armSubmittedTerminalWrite(sessionId, data);
       writer(data);
     }
   },
@@ -65,6 +76,7 @@ export const useTerminalWriteStore = create<TerminalWriteStore>((set, get) => ({
     if (!activeSessionId) return false;
     const writer = writers.get(activeSessionId);
     if (writer) {
+      armSubmittedTerminalWrite(activeSessionId, data);
       writer(data);
       return true;
     }
