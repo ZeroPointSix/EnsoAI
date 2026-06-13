@@ -27,6 +27,12 @@ function hasVisibleContent(data: string): boolean {
   return stripTerminalOutput(data).trim().length > 0;
 }
 
+export interface TerminalExitEvent {
+  id: string;
+  exitCode: number;
+  signal?: number;
+}
+
 export interface UseXtermOptions {
   cwd?: string;
   command?: {
@@ -36,7 +42,7 @@ export interface UseXtermOptions {
   env?: Record<string, string>;
   isActive?: boolean;
   initialCommand?: string;
-  onExit?: () => void;
+  onExit?: (event: TerminalExitEvent) => void;
   onData?: (data: string) => void;
   onCustomKey?: (
     event: KeyboardEvent,
@@ -669,7 +675,7 @@ export function useXterm({
               onDataRef.current?.(bufferedData);
               writeBufferRef.current = '';
             }
-            onExitRef.current?.();
+            onExitRef.current?.(event);
           }, 30);
         }
       });

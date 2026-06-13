@@ -6,8 +6,9 @@ import {
 } from '@/components/terminal/TerminalSearchBar';
 import { useFileDrop } from '@/hooks/useFileDrop';
 import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
-import { useXterm } from '@/hooks/useXterm';
+import { type TerminalExitEvent, useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
+import { createAgentPtyExitDiagnostic } from '@/lib/agentPtyExit';
 import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
@@ -43,7 +44,6 @@ interface AgentTerminalProps {
   onActivated?: () => void;
   /** Called when session is activated with the current line content (for session name fallback). */
   onActivatedWithFirstLine?: (line: string) => void;
-  onExit?: () => void;
   onTerminalTitleChange?: (title: string) => void;
   onSplit?: () => void;
   onMerge?: () => void;
@@ -55,7 +55,6 @@ interface AgentTerminalProps {
   onUnregisterEnhancedInputSender?: (sessionId: string) => void;
 }
 
-const MIN_RUNTIME_FOR_AUTO_CLOSE = 10000; // 10 seconds
 const MIN_OUTPUT_FOR_NOTIFICATION = 100; // Minimum chars to consider agent is doing work
 const MIN_OUTPUT_FOR_INDICATOR = 200; // Minimum chars to show "outputting" indicator (higher to avoid noise)
 const ACTIVITY_POLL_INTERVAL_MS = 1000; // Poll process activity every 1000ms
@@ -82,7 +81,6 @@ export function AgentTerminal({
   onInitialized,
   onActivated,
   onActivatedWithFirstLine,
-  onExit,
   onTerminalTitleChange,
   onSplit,
   onMerge,
@@ -273,7 +271,7 @@ export function AgentTerminal({
         // Error checking activity, ignore
       }
     }, ACTIVITY_POLL_INTERVAL_MS);
-  }, [updateOutputState]);
+  }, [updateOutputState, terminalSessionId]);
 
   // Stop polling for process activity
   const stopActivityPolling = useCallback(() => {
@@ -477,21 +475,33 @@ export function AgentTerminal({
     terminalSessionId,
   ]);
 
-  // Handle exit with auto-close logic
-  const handleExit = useCallback(() => {
-    if (terminalSessionId) {
-      clearSessionPtyId(terminalSessionId);
-    }
-    const runtime = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
-    const isSessionNotFound = outputBufferRef.current.includes(
-      'No conversation found with session ID'
-    );
+  // PTY exit only ends the process. The Agent tab remains until the user closes it.
+  const handleExit = useCallback(
+    (event: TerminalExitEvent) => {
+      const runtime = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+      const diagnostic = createAgentPtyExitDiagnostic({
+        runtimeMs: runtime,
+        outputTail: outputBufferRef.current,
+      });
+      const ptyId = ptyIdRef.current;
 
-    if (runtime >= MIN_RUNTIME_FOR_AUTO_CLOSE || isSessionNotFound) {
-      onExit?.();
-    }
-    // Quick exit without session error - keep tab open for debugging
-  }, [onExit, terminalSessionId, clearSessionPtyId]);
+      stopActivityPolling();
+      isMonitoringOutputRef.current = false;
+      ptyIdRef.current = null;
+
+      if (terminalSessionId) {
+        clearSessionPtyId(terminalSessionId);
+        sessionCanvasLog('PtyRegistry', 'AgentTerminal pty exit retained tab', {
+          sessionId: shortSessionId(terminalSessionId),
+          ptyId,
+          exitCode: event.exitCode,
+          signal: event.signal,
+          ...diagnostic,
+        });
+      }
+    },
+    [terminalSessionId, clearSessionPtyId, stopActivityPolling]
+  );
 
   const handlePtyInit = useCallback(
     (ptyId: string) => {

@@ -1709,7 +1709,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 onInitialized={() => handleInitialized(sessionId)}
                 onActivated={() => handleActivated(sessionId)}
                 onActivatedWithFirstLine={(line) => handleActivatedWithFirstLine(sessionId, line)}
-                onExit={() => handleCloseSession(sessionId, groupId || undefined)}
                 onTerminalTitleChange={(title) => {
                   if (session.userRenamed) return;
                   const syncName =
