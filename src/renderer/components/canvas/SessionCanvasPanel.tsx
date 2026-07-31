@@ -1,9 +1,10 @@
-import { getPathBasename } from '@shared/utils/path';
 import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
+import { getPathBasename } from '@shared/utils/path';
 import { ArrowLeft, LayoutGrid, Search, Settings, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TabId } from '@/App/constants';
 import type { Session } from '@/components/chat/SessionBar';
+import { Button } from '@/components/ui/button';
 import {
   Empty,
   EmptyDescription,
@@ -11,8 +12,9 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAgentRuntimeActivityMonitor } from '@/hooks/useAgentRuntimeActivityMonitor';
+import { useCanvasPtyPreviewFanIn } from '@/hooks/useCanvasPtyPreviewFanIn';
 import { useI18n } from '@/i18n';
 import {
   CANVAS_CARD_DEFAULT_HEIGHT,
@@ -20,14 +22,16 @@ import {
   computeArrangedCanvasHeight,
   computeArrangedPositions,
 } from '@/lib/arrangeSessionCanvasCards';
-import { resolveSessionCanvasCardClickIntent } from '@/lib/sessionCanvasCardClick';
-import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
-import { useCanvasPtyPreviewFanIn } from '@/hooks/useCanvasPtyPreviewFanIn';
 import { refreshAllCanvasPreviews } from '@/lib/refreshCanvasPreviews';
 import { scheduleCanvasPreviewRefresh } from '@/lib/scheduleCanvasPreviewRefresh';
-import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
+import { resolveSessionCanvasCardClickIntent } from '@/lib/sessionCanvasCardClick';
+import { getSessionCanvasCardKey } from '@/lib/sessionCanvasCardKey';
+import { sessionCanvasLog } from '@/lib/sessionCanvasLog';
+import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
+import { getResolvedSessionPreview } from '@/stores/sessionPreviewCache';
+import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { type CanvasCardItem, SessionCanvasCard } from './SessionCanvasCard';
@@ -35,13 +39,8 @@ import {
   SessionCanvasContextMenu,
   type SessionCanvasContextMenuState,
 } from './SessionCanvasContextMenu';
-import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
-import { getDefaultCardPosition } from './useSessionCanvasCardDrag';
-import { getSessionCanvasCardKey } from '@/lib/sessionCanvasCardKey';
-import { resolveSessionPtyId } from '@/stores/sessionPtyRegistry';
 import { SessionCanvasPromptSettings } from './SessionCanvasPromptSettings';
-import { useAgentRuntimeActivityMonitor } from '@/hooks/useAgentRuntimeActivityMonitor';
-import { sessionCanvasLog } from '@/lib/sessionCanvasLog';
+import { resolveSessionCanvasCardTitle } from './sessionCanvasTitle';
 
 interface SessionCanvasPanelProps {
   variant?: 'embedded' | 'floating';
@@ -169,9 +168,7 @@ export function SessionCanvasPanel({
     const q = searchQuery.toLowerCase();
     return allItems.filter((item) => {
       const cwd = item.session.cwd.toLowerCase();
-      const repo = (
-        item.kind === 'agent' ? item.session.repoPath : item.session.cwd
-      ).toLowerCase();
+      const repo = (item.kind === 'agent' ? item.session.repoPath : item.session.cwd).toLowerCase();
       const title = resolveSessionCanvasCardTitle(item, t('Terminal')).toLowerCase();
       const preview = (item.previewText ?? '').toLowerCase();
       return (
@@ -421,75 +418,85 @@ export function SessionCanvasPanel({
         </div>
       </div>
 
-      <div
-        ref={canvasRef}
-        className="relative flex-1 overflow-y-auto p-4"
-        onContextMenu={(e) => openContextMenu(e, null)}
-      >
-        {filteredItems.length === 0 ? (
-          <div className="flex h-full min-h-[320px] items-center justify-center">
-            <Empty className="border-0">
-              <EmptyMedia variant="icon">
-                <LayoutGrid className="h-4.5 w-4.5" />
-              </EmptyMedia>
-              <EmptyHeader>
-                <EmptyTitle>
-                  {allItems.length === 0
-                    ? t('No active sessions')
-                    : t('No matching sessions')}
-                </EmptyTitle>
-                <EmptyDescription>
-                  {allItems.length === 0
-                    ? t('Open Agent or Terminal tabs to start sessions, then view them here.')
-                    : t('Try a different search term.')}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          </div>
-        ) : (
-          <div className="relative w-full" style={{ minHeight: canvasMinHeight }}>
-            {filteredItems.map((item, index) => {
-              const key = getSessionCanvasCardKey(item);
-              if (focusedCardKey === key) {
-                return null;
-              }
-              const isSoftDimmed = Boolean(focusedCardKey);
-              return (
-                <SessionCanvasCard
-                  key={`${item.kind}-${item.session.id}`}
-                  item={item}
-                  index={index}
-                  isActive={isActive}
-                  isFocused={false}
-                  isDimmed={isSoftDimmed}
-                  disableDrag={false}
-                  onCardClick={(e) => handleCardClick(item, e)}
-                  onRenameSession={handleRenameSession}
-                  onContextMenu={(e) => openContextMenu(e, item)}
-                  renameRequestToken={
-                    renameTargetKey === key && focusedCardKey !== key ? renameToken : undefined
-                  }
-                />
-              );
-            })}
-          </div>
-        )}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={canvasRef}
+          className={cn(
+            'h-full p-4 [scrollbar-gutter:stable]',
+            focusedItem ? 'overflow-hidden' : 'overflow-y-auto'
+          )}
+          onContextMenu={(e) => openContextMenu(e, null)}
+        >
+          {filteredItems.length === 0 ? (
+            <div className="flex h-full min-h-[320px] items-center justify-center">
+              <Empty className="border-0">
+                <EmptyMedia variant="icon">
+                  <LayoutGrid className="h-4.5 w-4.5" />
+                </EmptyMedia>
+                <EmptyHeader>
+                  <EmptyTitle>
+                    {allItems.length === 0 ? t('No active sessions') : t('No matching sessions')}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {allItems.length === 0
+                      ? t('Open Agent or Terminal tabs to start sessions, then view them here.')
+                      : t('Try a different search term.')}
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            </div>
+          ) : (
+            <div className="relative w-full" style={{ minHeight: canvasMinHeight }}>
+              {filteredItems.map((item, index) => {
+                const key = getSessionCanvasCardKey(item);
+                if (focusedCardKey === key) {
+                  return null;
+                }
+                const isSoftDimmed = Boolean(focusedCardKey);
+                return (
+                  <SessionCanvasCard
+                    key={`${item.kind}-${item.session.id}`}
+                    item={item}
+                    index={index}
+                    isActive={isActive}
+                    isFocused={false}
+                    isDimmed={isSoftDimmed}
+                    disableDrag={false}
+                    onCardClick={(e) => handleCardClick(item, e)}
+                    onRenameSession={handleRenameSession}
+                    onContextMenu={(e) => openContextMenu(e, item)}
+                    renameRequestToken={
+                      renameTargetKey === key && focusedCardKey !== key ? renameToken : undefined
+                    }
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {focusedItem ? (
           <div
-            className="absolute inset-0 z-40 overflow-y-auto overscroll-y-contain bg-black/55 p-3"
+            className="absolute inset-0 z-40 flex overflow-y-auto overscroll-y-contain bg-black/55 p-3"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 sessionCanvasLog('Focus', 'backdrop click → clear focus');
                 setFocusedCardKey(null);
               }
             }}
-            onContextMenu={(e) => e.preventDefault()}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation();
+                sessionCanvasLog('Focus', 'Escape → clear focus');
+                setContextMenu(null);
+                setFocusedCardKey(null);
+              }
+            }}
+            onContextMenu={(e) => openContextMenu(e, null)}
           >
             <div
-              className="pointer-events-auto relative mx-auto flex min-h-0 max-w-full flex-col"
-              style={{ width: focusSize.width, maxHeight: focusSize.height }}
-              onClick={(e) => e.stopPropagation()}
+              className="pointer-events-auto relative m-auto shrink-0 max-h-full max-w-full [&>div]:!h-full [&>div]:!w-full"
+              style={{ width: focusSize.width, height: focusSize.height }}
             >
               <SessionCanvasCard
                 item={focusedItem}
@@ -502,9 +509,7 @@ export function SessionCanvasPanel({
                 onRenameSession={handleRenameSession}
                 onContextMenu={(e) => openContextMenu(e, focusedItem)}
                 renameRequestToken={
-                  renameTargetKey === getSessionCanvasCardKey(focusedItem)
-                    ? renameToken
-                    : undefined
+                  renameTargetKey === getSessionCanvasCardKey(focusedItem) ? renameToken : undefined
                 }
               />
             </div>

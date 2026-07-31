@@ -3,12 +3,11 @@ import type { SessionCanvasCardKind } from '@shared/types/sessionCanvas';
 import { Paperclip, Send, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { toastManager } from '@/components/ui/toast';
 import { Switch } from '@/components/ui/switch';
+import { toastManager } from '@/components/ui/toast';
 import { useSessionCanvasPtyExists } from '@/hooks/useSessionCanvasPtyExists';
 import { useI18n } from '@/i18n';
 import { toLocalFileUrl } from '@/lib/localFileUrl';
-import { getConditionalPromptDescription } from '@/lib/sessionCanvasComposeMessage';
 import {
   CANVAS_MAX_IMAGES,
   extractMentionQuery,
@@ -17,8 +16,9 @@ import {
   isImageFilePath,
   saveCanvasInputImageToTemp,
 } from '@/lib/sessionCanvasClaudeInputUtils';
-import { sendSessionCanvasQuickInput } from '@/lib/sessionCanvasQuickSend';
+import { getConditionalPromptDescription } from '@/lib/sessionCanvasComposeMessage';
 import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
+import { sendSessionCanvasQuickInput } from '@/lib/sessionCanvasQuickSend';
 import { cn } from '@/lib/utils';
 import {
   selectConditionalPrompts,
@@ -71,6 +71,7 @@ export function SessionCanvasUnifiedQuickInput({
   const normalPrompts = selectNormalPrompts(prompts);
   const conditionalPrompts = selectConditionalPrompts(prompts);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Refocus when the active session changes.
   useEffect(() => {
     if (!ptyExists || checkingPty) return;
     const frame = requestAnimationFrame(() => textareaRef.current?.focus());
@@ -228,12 +229,7 @@ export function SessionCanvasUnifiedQuickInput({
           };
         })
         .filter(Boolean);
-      if (
-        (!message.trim() && paths.length === 0) ||
-        sendingRef.current ||
-        sending ||
-        !ptyExists
-      ) {
+      if ((!message.trim() && paths.length === 0) || sendingRef.current || sending || !ptyExists) {
         return false;
       }
 
@@ -389,6 +385,9 @@ export function SessionCanvasUnifiedQuickInput({
         className
       )}
       onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') e.stopPropagation();
+      }}
       onPointerDown={(e) => {
         e.stopPropagation();
         textareaRef.current?.focus();
@@ -528,9 +527,7 @@ export function SessionCanvasUnifiedQuickInput({
           className={cn(
             'w-full resize-y rounded-md px-2.5 py-2 font-mono text-[11px] leading-snug',
             'bg-background/90 placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            expanded
-              ? 'min-h-[8rem] flex-1 max-h-none'
-              : 'min-h-[88px] max-h-48 shrink-0',
+            expanded ? 'min-h-[8rem] flex-1 max-h-none' : 'min-h-[88px] max-h-48 shrink-0',
             useInputPanel ? 'border-0 shadow-none' : 'border border-border/80',
             disabled && 'cursor-not-allowed opacity-60'
           )}
@@ -559,9 +556,12 @@ export function SessionCanvasUnifiedQuickInput({
             }
           }}
           onKeyDown={(e) => {
+            const hasMentionMenu = claudeMode && mentionQuery !== null && mentionResults.length > 0;
+            if (e.key === 'Escape' && !hasMentionMenu) return;
+
             e.stopPropagation();
 
-            if (claudeMode && mentionQuery !== null && mentionResults.length > 0) {
+            if (hasMentionMenu) {
               if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 setMentionIndex((prev) => (prev + 1) % mentionResults.length);
@@ -590,12 +590,7 @@ export function SessionCanvasUnifiedQuickInput({
 
             const composing = composingRef.current || e.nativeEvent.isComposing;
 
-            if (
-              e.ctrlKey &&
-              e.shiftKey &&
-              enableContinueReply &&
-              continuePrompt.trim()
-            ) {
+            if (e.ctrlKey && e.shiftKey && enableContinueReply && continuePrompt.trim()) {
               e.preventDefault();
               void handleContinue();
               return;
