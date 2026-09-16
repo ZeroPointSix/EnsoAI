@@ -369,7 +369,10 @@ export class PtyManager {
     let shell: string;
     let args: string[];
 
-    if (options.shell) {
+    if (options.sshHost) {
+      shell = isWindows ? 'ssh.exe' : 'ssh';
+      args = ['-tt', options.sshHost];
+    } else if (options.shell) {
       shell = options.shell;
       args = options.args || [];
     } else if (options.shellConfig) {
@@ -389,7 +392,7 @@ export class PtyManager {
     }
 
     const initialCommand = options.initialCommand?.trim();
-    if (initialCommand) {
+    if (initialCommand && !options.sshHost) {
       if (isWindows) {
         const isPowerShell =
           shell.toLowerCase().includes('powershell') || shell.toLowerCase().includes('pwsh');

@@ -106,6 +106,7 @@ export const IPC_CHANNELS = {
   TERMINAL_DATA: 'terminal:data',
   TERMINAL_EXIT: 'terminal:exit',
   TERMINAL_GET_ACTIVITY: 'terminal:getActivity',
+  TERMINAL_LIST_SSH_HOSTS: 'terminal:listSshHosts',
 
   // Agent
   AGENT_LIST: 'agent:list',

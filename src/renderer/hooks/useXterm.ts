@@ -36,6 +36,7 @@ export interface UseXtermOptions {
   env?: Record<string, string>;
   isActive?: boolean;
   initialCommand?: string;
+  sshHost?: string;
   onExit?: () => void;
   onData?: (data: string) => void;
   onCustomKey?: (
@@ -120,6 +121,7 @@ export function useXterm({
   env,
   isActive = true,
   initialCommand,
+  sshHost,
   onExit,
   onData,
   onCustomKey,
@@ -595,6 +597,7 @@ export function useXterm({
         rows: terminal.rows,
         env,
         initialCommand: initialCommandRef.current,
+        sshHost,
       });
 
       if (isUnmountedRef.current || createRequestId !== createRequestIdRef.current) {
@@ -692,7 +695,7 @@ export function useXterm({
       terminal.writeln(`\x1b[31mFailed to start terminal.\x1b[0m`);
       terminal.writeln(`\x1b[33mError: ${error}\x1b[0m`);
     }
-  }, [cwd, command, shellConfig, commandKey, terminalRenderer]);
+  }, [cwd, command, shellConfig, commandKey, terminalRenderer, sshHost]);
 
   useEffect(() => {
     const shouldActivate = isActive || initialCommandRef.current;
@@ -752,7 +755,7 @@ export function useXterm({
   useEffect(() => {
     if (!previewReaderSessionId) return;
     return registerXtermPreviewReader(previewReaderSessionId, () => terminalRef.current);
-  }, [previewReaderSessionId, isLoading]);
+  }, [previewReaderSessionId]);
 
   // Update settings dynamically
   useEffect(() => {
