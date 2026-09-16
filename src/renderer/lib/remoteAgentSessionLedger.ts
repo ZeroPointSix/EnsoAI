@@ -8,3 +8,7 @@ export function shouldPersistAgentSession(session: PersistableAgentSession): boo
   if (session.remoteHost) return true;
   return Boolean(session.activated && session.agentCommand?.startsWith('claude'));
 }
+
+export function shouldRenderPtyOutput(remoteHost?: string): boolean {
+  return !remoteHost?.trim();
+}

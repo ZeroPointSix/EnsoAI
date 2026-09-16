@@ -98,8 +98,12 @@ describe('RemoteAgentSessionService', () => {
     expect(buildStopCommand(options.sessionName, 'tmux', true)).toContain('137');
     expect(buildLaunchCommand(options, 'tmux')).toContain('previous_state');
     expect(buildLaunchCommand(options, 'tmux')).toContain('printf stopped');
-    expect(buildStatusCommand(options.sessionName, 'tmux')).not.toContain('$state" != starting');
-    expect(buildStatusCommand(options.sessionName, 'psmux')).toContain("$state -eq 'disconnected'");
+    const tmuxStatus = buildStatusCommand(options.sessionName, 'tmux');
+    const psmuxStatus = buildStatusCommand(options.sessionName, 'psmux');
+    expect(tmuxStatus).toContain('has_session=0');
+    expect(tmuxStatus).toContain('state=disconnected');
+    expect(psmuxStatus).toContain('$hasSession = $LASTEXITCODE -eq 0');
+    expect(psmuxStatus).toContain("$state = 'disconnected'");
   });
 
   it('fails explicitly when neither tmux nor psmux is available', async () => {

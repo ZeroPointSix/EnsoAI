@@ -154,7 +154,8 @@ export function buildStatusCommand(sessionName: string, backend: RemoteAgentMuxB
     return [
       `state=$(cat ${dir.slice(0, -1)}/state" 2>/dev/null || printf disconnected)`,
       `exit_code=$(cat ${dir.slice(0, -1)}/exit-code" 2>/dev/null || true)`,
-      `if tmux -L enso has-session -t ${quotePosix(sessionName)} 2>/dev/null && { [ "$state" = starting ] || [ "$state" = disconnected ]; }; then state=working; fi`,
+      `if tmux -L enso has-session -t ${quotePosix(sessionName)} 2>/dev/null; then has_session=1; else has_session=0; fi`,
+      `if [ "$has_session" = 1 ] && { [ "$state" = starting ] || [ "$state" = disconnected ]; }; then state=working; elif [ "$has_session" = 0 ] && { [ "$state" = starting ] || [ "$state" = working ] || [ "$state" = waiting_input ] || [ "$state" = stopping ]; } && [ -z "$exit_code" ]; then state=disconnected; fi`,
       `printf '${STATUS_MARKER}%s|%s|tmux\\n' "$state" "$exit_code"`,
     ].join('; ');
   }
@@ -165,7 +166,8 @@ export function buildStatusCommand(sessionName: string, backend: RemoteAgentMuxB
     `$state = if (Test-Path $statePath) { Get-Content $statePath -Raw } else { 'disconnected' }`,
     `$exitCode = if (Test-Path $exitPath) { Get-Content $exitPath -Raw } else { '' }`,
     `& psmux -L enso has-session -t ${quotePowerShell(sessionName)} 2>$null`,
-    `if ($LASTEXITCODE -eq 0 -and ($state -eq 'starting' -or $state -eq 'disconnected')) { $state = 'working' }`,
+    '$hasSession = $LASTEXITCODE -eq 0',
+    `if ($hasSession -and ($state -eq 'starting' -or $state -eq 'disconnected')) { $state = 'working' } elseif (-not $hasSession -and @('starting','working','waiting_input','stopping') -contains $state -and [string]::IsNullOrEmpty($exitCode)) { $state = 'disconnected' }`,
     `Write-Output ("${STATUS_MARKER}{0}|{1}|psmux" -f $state,$exitCode)`,
   ].join('; ');
 }

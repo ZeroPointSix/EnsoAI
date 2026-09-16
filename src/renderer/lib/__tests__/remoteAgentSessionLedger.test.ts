@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { shouldPersistAgentSession } from '../remoteAgentSessionLedger';
+import {
+  shouldPersistAgentSession,
+  shouldRenderPtyOutput,
+} from '../remoteAgentSessionLedger';
 
 describe('shouldPersistAgentSession', () => {
   it('keeps a remote session before the local terminal becomes activated', () => {
@@ -18,5 +21,11 @@ describe('shouldPersistAgentSession', () => {
     expect(shouldPersistAgentSession({ agentCommand: 'custom-agent', activated: true })).toBe(
       false
     );
+  });
+
+  it('uses the remote journal as the only rendered output source', () => {
+    expect(shouldRenderPtyOutput()).toBe(true);
+    expect(shouldRenderPtyOutput('')).toBe(true);
+    expect(shouldRenderPtyOutput('build-box')).toBe(false);
   });
 });

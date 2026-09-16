@@ -8,6 +8,7 @@ import { Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
+import { shouldRenderPtyOutput } from '@/lib/remoteAgentSessionLedger';
 import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
 import '@xterm/xterm/css/xterm.css';
@@ -644,7 +645,11 @@ export function useXterm({
                 const shouldLockViewport = offsetFromBottom > 0;
                 const savedOffsetFromBottom = shouldLockViewport ? offsetFromBottom : 0;
 
-                terminal.write(bufferedData);
+                if (shouldRenderPtyOutput(remoteAgent?.host)) {
+
+                  terminal.write(bufferedData);
+
+                }
 
                 // Restore viewport if it was moved by the write
                 if (shouldLockViewport) {
@@ -680,7 +685,9 @@ export function useXterm({
             // Flush any remaining buffered data
             if (writeBufferRef.current.length > 0) {
               const bufferedData = writeBufferRef.current;
-              terminal.write(bufferedData);
+              if (shouldRenderPtyOutput(remoteAgent?.host)) {
+                terminal.write(bufferedData);
+              }
               onDataRef.current?.(bufferedData);
               writeBufferRef.current = '';
             }
