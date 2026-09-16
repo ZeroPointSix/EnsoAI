@@ -769,6 +769,7 @@ export function useXterm({
     };
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isLoading re-registers after terminal initialization.
   useEffect(() => {
     if (!previewReaderSessionId) return;
     return registerXtermPreviewReader(previewReaderSessionId, () => terminalRef.current);
