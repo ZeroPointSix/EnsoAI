@@ -74,7 +74,17 @@ function BuiltinAgentForm({
   React.useEffect(() => {
     if (window.electronAPI.env.platform !== 'win32') return;
     void window.electronAPI.ssh.listHosts().then((result) => {
-      setSshHosts(result.hosts.map((host) => ({ alias: host.alias, label: host.label })));
+      setSshHosts(
+        result.hosts.map((host) => {
+          const endpoint = host.hostName
+            ? `${host.user ? `${host.user}@` : ''}${host.hostName}${host.port ? `:${host.port}` : ''}`
+            : '';
+          return {
+            alias: host.alias,
+            label: endpoint ? `${host.alias} - ${endpoint}` : host.alias,
+          };
+        })
+      );
     });
   }, []);
 
