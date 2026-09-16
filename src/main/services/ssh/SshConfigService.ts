@@ -2,7 +2,12 @@ import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join, parse, resolve } from 'node:path';
-import type { SshHost, SshHostDiscoveryResult, SshTerminalLaunch } from '@shared/types';
+import type {
+  RemoteAgentLaunchOptions,
+  SshHost,
+  SshHostDiscoveryResult,
+  SshTerminalLaunch,
+} from '@shared/types';
 
 interface DiscoverSshHostsOptions {
   platform?: NodeJS.Platform;
@@ -326,6 +331,44 @@ export function getSshTerminalLaunch(
 
   return {
     shell: 'ssh.exe',
-    args: ['-tt', normalizedAlias],
+    args: ['-tt', '--', normalizedAlias],
+  };
+}
+
+function quotePosixShell(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+export function getSshAgentLaunch(
+  options: RemoteAgentLaunchOptions,
+  platform: NodeJS.Platform = process.platform
+): SshTerminalLaunch {
+  const { host, workspace, sessionName, command } = options;
+  const base = getSshTerminalLaunch(host, platform);
+  const normalizedWorkspace = workspace.trim();
+  const normalizedCommand = command.trim();
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(sessionName)) {
+    throw new Error('Invalid remote Agent session name');
+  }
+  if (
+    !normalizedWorkspace ||
+    !normalizedCommand ||
+    /[\r\n\0]/.test(normalizedWorkspace) ||
+    /[\r\n\0]/.test(normalizedCommand)
+  ) {
+    throw new Error('Invalid remote Agent launch options');
+  }
+
+  const remoteCommand = [
+    'env -u TMUX tmux -L enso -f /dev/null new-session -A',
+    `-s ${quotePosixShell(sessionName)}`,
+    `-c ${quotePosixShell(normalizedWorkspace)}`,
+    quotePosixShell(normalizedCommand),
+  ].join(' ');
+
+  return {
+    shell: base.shell,
+    args: [...base.args, remoteCommand],
   };
 }
