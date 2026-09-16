@@ -183,7 +183,7 @@ function saveToStorage(sessions: Session[], activeIds: Record<string, string | n
   // 1. Using agents that support resumption (e.g., claude)
   // 2. Activated (user has pressed Enter at least once)
   const persistableSessions = sessions.filter(
-    (s) => isResumableAgent(s.agentCommand) && s.activated
+    (s) => (Boolean(s.remoteHost) || isResumableAgent(s.agentCommand)) && s.activated
   );
   const persistableIds = new Set(persistableSessions.map((s) => s.id));
   // Only keep activeIds that reference persistable sessions
