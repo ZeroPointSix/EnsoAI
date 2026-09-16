@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  shouldPersistAgentSession,
-  shouldRenderPtyOutput,
-} from '../remoteAgentSessionLedger';
+import { shouldPersistAgentSession, shouldRenderPtyOutput } from '../remoteAgentSessionLedger';
 
 describe('shouldPersistAgentSession', () => {
   it('keeps a remote session before the local terminal becomes activated', () => {

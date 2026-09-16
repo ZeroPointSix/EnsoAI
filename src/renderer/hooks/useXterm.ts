@@ -646,9 +646,7 @@ export function useXterm({
                 const savedOffsetFromBottom = shouldLockViewport ? offsetFromBottom : 0;
 
                 if (shouldRenderPtyOutput(remoteAgent?.host)) {
-
                   terminal.write(bufferedData);
-
                 }
 
                 // Restore viewport if it was moved by the write
