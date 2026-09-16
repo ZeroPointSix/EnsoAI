@@ -37,6 +37,8 @@ export interface Session {
   agentCommand: string; // the CLI command to run (e.g., 'claude', 'codex')
   customPath?: string; // custom absolute path to the agent CLI (overrides agentCommand lookup)
   customArgs?: string; // additional arguments to pass to the agent
+  remoteHost?: string; // SSH Host alias used to run the agent remotely
+  remoteWorkspace?: string; // workspace path on the remote host
   initialized: boolean; // true after first run, use --resume to restore
   activated?: boolean; // true after user presses Enter, only activated sessions are persisted
   repoPath: string; // repository path this session belongs to
