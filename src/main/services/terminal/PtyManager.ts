@@ -370,8 +370,11 @@ export class PtyManager {
     let args: string[];
 
     if (options.sshHost) {
-      shell = isWindows ? 'ssh.exe' : 'ssh';
-      args = ['-tt', options.sshHost];
+      if (!isWindows) {
+        throw new Error('SSH remote terminals are only supported on Windows');
+      }
+      shell = 'ssh.exe';
+      args = ['-tt', '--', options.sshHost];
     } else if (options.shell) {
       shell = options.shell;
       args = options.args || [];
