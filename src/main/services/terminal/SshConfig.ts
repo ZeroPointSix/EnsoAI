@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, parse, resolve } from 'node:path';
+import { isAbsolute, join, parse, resolve } from 'node:path';
 import type { SshHostConfig } from '@shared/types';
 
 const MAX_INCLUDE_DEPTH = 16;
@@ -144,15 +144,11 @@ function expandHomePath(pattern: string, home: string): string {
   return pattern;
 }
 
-async function expandIncludePattern(
-  pattern: string,
-  baseDirectory: string,
-  home: string
-): Promise<string[]> {
+async function expandIncludePattern(pattern: string, home: string): Promise<string[]> {
   const expanded = expandHomePath(pattern, home);
   const absolutePattern = isAbsolute(expanded)
     ? resolve(expanded)
-    : resolve(baseDirectory, expanded);
+    : resolve(home, '.ssh', expanded);
   const root = parse(absolutePattern).root;
   const segments = absolutePattern
     .slice(root.length)
@@ -231,7 +227,7 @@ async function readSshConfigLines(
       }
 
       for (const pattern of splitArguments(directive.value)) {
-        const includedPaths = await expandIncludePattern(pattern, dirname(resolvedPath), home);
+        const includedPaths = await expandIncludePattern(pattern, home);
         for (const includedPath of includedPaths) {
           lines.push(...(await readSshConfigLines(includedPath, home, includeStack, depth + 1)));
         }
