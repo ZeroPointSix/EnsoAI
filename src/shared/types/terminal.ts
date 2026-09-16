@@ -14,6 +14,8 @@ export interface TerminalCreateOptions {
   shellConfig?: import('./shell').ShellConfig;
   /** Command to execute after shell is ready */
   initialCommand?: string;
+  /** Concrete Host alias from the user's SSH config. */
+  sshHost?: string;
 }
 
 export interface TerminalResizeOptions {

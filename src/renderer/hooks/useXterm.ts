@@ -36,6 +36,7 @@ export interface UseXtermOptions {
   env?: Record<string, string>;
   isActive?: boolean;
   initialCommand?: string;
+  sshHost?: string;
   onExit?: () => void;
   onData?: (data: string) => void;
   onCustomKey?: (
@@ -120,6 +121,7 @@ export function useXterm({
   env,
   isActive = true,
   initialCommand,
+  sshHost,
   onExit,
   onData,
   onCustomKey,
@@ -177,10 +179,12 @@ export function useXterm({
   // Memoize command key to avoid dependency array issues
   const commandKey = useMemo(
     () =>
-      command
-        ? `${command.shell}:${command.args.join(' ')}`
-        : `shellConfig:${shellConfig.shellType}`,
-    [command, shellConfig.shellType]
+      sshHost
+        ? `ssh:${sshHost}`
+        : command
+          ? `${command.shell}:${command.args.join(' ')}`
+          : `shellConfig:${shellConfig.shellType}`,
+    [command, shellConfig.shellType, sshHost]
   );
   // rAF write buffer for smooth rendering
   const writeBufferRef = useRef('');
@@ -589,8 +593,12 @@ export function useXterm({
       const ptyId = await window.electronAPI.terminal.create({
         cwd: cwd || window.electronAPI.env.HOME,
         // If command is provided (e.g., for agent), use shell/args directly
-        // Otherwise, use shellConfig from settings
-        ...(command ? { shell: command.shell, args: command.args } : { shellConfig }),
+        // Otherwise, use an SSH alias or shellConfig from settings.
+        ...(sshHost
+          ? { sshHost }
+          : command
+            ? { shell: command.shell, args: command.args }
+            : { shellConfig }),
         cols: terminal.cols,
         rows: terminal.rows,
         env,
@@ -692,7 +700,7 @@ export function useXterm({
       terminal.writeln(`\x1b[31mFailed to start terminal.\x1b[0m`);
       terminal.writeln(`\x1b[33mError: ${error}\x1b[0m`);
     }
-  }, [cwd, command, shellConfig, commandKey, terminalRenderer]);
+  }, [cwd, command, shellConfig, commandKey, terminalRenderer, sshHost]);
 
   useEffect(() => {
     const shouldActivate = isActive || initialCommandRef.current;

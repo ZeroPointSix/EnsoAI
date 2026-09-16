@@ -272,6 +272,8 @@ export const zhTranslations: Record<string, string> = {
   'New Session': '新建 Session',
   'New Tab': '新建标签',
   'New Terminal': '新建终端',
+  'Local Terminal': '本地终端',
+  'SSH Hosts': 'SSH 主机',
   'New Worktree': '新建 Worktree',
   'No branches found': '未找到分支',
   'No branches available': '暂无可用分支',
@@ -305,6 +307,9 @@ export const zhTranslations: Record<string, string> = {
   'No agent sessions': '暂无 Agent Session',
   'No enabled agents': '没有已启用的 Agent',
   'No terminals open': '暂无终端',
+  'No SSH hosts found': '未找到 SSH 主机',
+  'SSH config not found': '未找到 SSH 配置',
+  'Could not read SSH config': '无法读取 SSH 配置',
   'Create a terminal to start working': '创建终端以开始工作',
   'Create a session to start using AI Agent': '创建 Session 以开始使用 AI Agent',
   'File Explorer': '文件浏览器',
@@ -434,8 +439,7 @@ export const zhTranslations: Record<string, string> = {
   'Session not running': '会话未运行',
   'Open the session with Ctrl+click to start its terminal first.':
     '请先 Ctrl+点击打开会话以启动终端。',
-  'Send a Claude prompt… (@ file, images supported)':
-    '发送 Claude 提示…（支持 @ 文件与图片）',
+  'Send a Claude prompt… (@ file, images supported)': '发送 Claude 提示…（支持 @ 文件与图片）',
   'Enter to send · Shift+Enter for newline · @ to mention files':
     'Enter 发送 · Shift+Enter 换行 · @ 引用文件',
   'Supplementary note (optional)': '补充说明（可选）',
@@ -455,8 +459,7 @@ export const zhTranslations: Record<string, string> = {
   'Manage quick templates and context append — same model as 寸止':
     '管理快捷模板与上下文追加，与寸止相同的配置模型',
   'Enable quick templates': '启用快捷模板',
-  'Show chips and context switches on canvas cards':
-    '在看板卡片输入区显示快捷芯片与上下文开关',
+  'Show chips and context switches on canvas cards': '在看板卡片输入区显示快捷芯片与上下文开关',
   'Continue reply': '继续回复',
   'Enable continue reply': '启用继续回复',
   'Show Continue button': '启用继续回复',

@@ -30,6 +30,7 @@ import { registerNotificationHandlers } from './notification';
 import { registerSearchHandlers } from './search';
 import { registerSettingsHandlers } from './settings';
 import { registerShellHandlers } from './shell';
+import { registerSshHandlers } from './ssh';
 import { registerTempWorkspaceHandlers } from './tempWorkspace';
 import {
   destroyAllTerminals,
@@ -52,6 +53,7 @@ export function registerIpcHandlers(): void {
   registerAppHandlers();
   registerCliHandlers();
   registerShellHandlers();
+  registerSshHandlers();
   registerSettingsHandlers();
   registerLogHandlers();
   registerNotificationHandlers();
