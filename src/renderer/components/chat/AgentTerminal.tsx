@@ -277,7 +277,7 @@ export function AgentTerminal({
         // Error checking activity, ignore
       }
     }, ACTIVITY_POLL_INTERVAL_MS);
-  }, [updateOutputState]);
+  }, [terminalSessionId, updateOutputState]);
 
   // Stop polling for process activity
   const stopActivityPolling = useCallback(() => {
