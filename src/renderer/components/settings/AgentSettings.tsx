@@ -5,6 +5,13 @@ import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogPopup, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -37,7 +44,14 @@ interface BuiltinAgentFormProps {
   agentName: string;
   customPath?: string;
   customArgs?: string;
-  onSubmit: (config: { customPath?: string; customArgs?: string }) => void;
+  remoteHost?: string;
+  remoteWorkspace?: string;
+  onSubmit: (config: {
+    customPath?: string;
+    customArgs?: string;
+    remoteHost?: string;
+    remoteWorkspace?: string;
+  }) => void;
   onCancel: () => void;
 }
 
@@ -45,23 +59,79 @@ function BuiltinAgentForm({
   agentName,
   customPath: initialPath,
   customArgs: initialArgs,
+  remoteHost: initialRemoteHost,
+  remoteWorkspace: initialRemoteWorkspace,
   onSubmit,
   onCancel,
 }: BuiltinAgentFormProps) {
   const { t } = useI18n();
   const [customPath, setCustomPath] = React.useState(initialPath ?? '');
   const [customArgs, setCustomArgs] = React.useState(initialArgs ?? '');
+  const [remoteHost, setRemoteHost] = React.useState(initialRemoteHost ?? '');
+  const [remoteWorkspace, setRemoteWorkspace] = React.useState(initialRemoteWorkspace ?? '~');
+  const [sshHosts, setSshHosts] = React.useState<Array<{ alias: string; label: string }>>([]);
+
+  React.useEffect(() => {
+    if (window.electronAPI.env.platform !== 'win32') return;
+    void window.electronAPI.ssh.listHosts().then((result) => {
+      setSshHosts(result.hosts.map((host) => ({ alias: host.alias, label: host.label })));
+    });
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
       customPath: customPath.trim() || undefined,
       customArgs: customArgs.trim() || undefined,
+      remoteHost: remoteHost || undefined,
+      remoteWorkspace: remoteHost ? remoteWorkspace.trim() || '~' : undefined,
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="mt-3 space-y-3">
+      {window.electronAPI.env.platform === 'win32' && (
+        <>
+          <div className="space-y-1">
+            <label htmlFor="agent-remote-host" className="text-sm font-medium">
+              {t('Run on')}
+            </label>
+            <Select
+              value={remoteHost || '__local__'}
+              onValueChange={(value) => setRemoteHost(value === '__local__' ? '' : value || '')}
+            >
+              <SelectTrigger id="agent-remote-host">
+                <SelectValue>{remoteHost || t('This computer')}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="__local__">{t('This computer')}</SelectItem>
+                {sshHosts.map((host) => (
+                  <SelectItem key={host.alias} value={host.alias}>
+                    {host.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {t('Remote agents stay running in tmux when this app disconnects')}
+            </p>
+          </div>
+          {remoteHost && (
+            <div className="space-y-1">
+              <label htmlFor="agent-remote-workspace" className="text-sm font-medium">
+                {t('Remote workspace')}
+              </label>
+              <Input
+                id="agent-remote-workspace"
+                value={remoteWorkspace}
+                onChange={(event) => setRemoteWorkspace(event.target.value)}
+                placeholder="~/workspace"
+                required
+              />
+            </div>
+          )}
+        </>
+      )}
       <div className="space-y-1">
         <label htmlFor="agent-path" className="text-sm font-medium">
           {t('Absolute path')}{' '}
@@ -873,6 +943,8 @@ export function AgentSettings() {
                 }
                 customPath={agentSettings[editingBuiltinAgent]?.customPath}
                 customArgs={agentSettings[editingBuiltinAgent]?.customArgs}
+                remoteHost={agentSettings[editingBuiltinAgent]?.remoteHost}
+                remoteWorkspace={agentSettings[editingBuiltinAgent]?.remoteWorkspace}
                 onSubmit={(config) => {
                   setAgentCustomConfig(editingBuiltinAgent, config);
                   setEditingBuiltinAgent(null);
