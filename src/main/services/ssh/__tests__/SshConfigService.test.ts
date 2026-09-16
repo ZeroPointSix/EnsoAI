@@ -174,7 +174,6 @@ describe('getSshTerminalLaunch', () => {
   });
 });
 
-
 describe('getSshAgentLaunch', () => {
   it('launches a persistent tmux Agent session with shell-quoted values', () => {
     const launch = getSshAgentLaunch(
