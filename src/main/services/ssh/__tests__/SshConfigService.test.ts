@@ -212,7 +212,7 @@ describe('getSshTerminalLaunch', () => {
 });
 
 describe('getSshAgentLaunch', () => {
-  it('launches a persistent tmux Agent session with shell-quoted values', () => {
+  it('only attaches to the stable session created by the remote Agent adapter', () => {
     const launch = getSshAgentLaunch(
       {
         host: 'production',
@@ -224,9 +224,10 @@ describe('getSshAgentLaunch', () => {
     );
     expect(launch.shell).toBe('ssh.exe');
     expect(launch.args.slice(0, 3)).toEqual(['-tt', '--', 'production']);
-    expect(launch.args[3]).toContain("new-session -A -s 'enso-session_123'");
-    expect(launch.args[3]).toContain("-c '/srv/team'\\''s app'");
-    expect(launch.args[3]).toContain("'claude --prompt '\\''hello'\\'''");
+    expect(launch.args[3]).toContain("attach-session -t 'enso-session_123'");
+    expect(launch.args[3]).not.toContain('new-session');
+    expect(launch.args[3]).not.toContain("/srv/team's app");
+    expect(launch.args[3]).not.toContain('claude');
   });
 
   it('rejects unsafe or incomplete remote launch options', () => {

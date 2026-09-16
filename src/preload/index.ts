@@ -34,6 +34,11 @@ import type {
   ProxySettings,
   PullRequest,
   RecentEditorProject,
+  RemoteAgentCapability,
+  RemoteAgentLaunchOptions,
+  RemoteAgentLogChunk,
+  RemoteAgentResult,
+  RemoteAgentSessionStatus,
   ShellConfig,
   ShellInfo,
   SshHostDiscoveryResult,
@@ -544,6 +549,36 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.TMUX_CHECK, forceRefresh),
     killSession: (name: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.TMUX_KILL_SESSION, name),
+  },
+
+  remoteAgent: {
+    capability: (
+      options: RemoteAgentLaunchOptions
+    ): Promise<RemoteAgentResult<RemoteAgentCapability>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_AGENT_CAPABILITY, options),
+    launch: (
+      options: RemoteAgentLaunchOptions
+    ): Promise<RemoteAgentResult<RemoteAgentSessionStatus>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_AGENT_LAUNCH, options),
+    status: (
+      options: RemoteAgentLaunchOptions
+    ): Promise<RemoteAgentResult<RemoteAgentSessionStatus>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_AGENT_STATUS, options),
+    logs: (
+      options: RemoteAgentLaunchOptions,
+      outputOffset: number
+    ): Promise<RemoteAgentResult<RemoteAgentLogChunk>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_AGENT_LOGS, options, outputOffset),
+    detach: (ptyId: string): Promise<RemoteAgentResult<void>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_AGENT_DETACH, ptyId),
+    stop: (
+      options: RemoteAgentLaunchOptions
+    ): Promise<RemoteAgentResult<RemoteAgentSessionStatus>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_AGENT_STOP, options),
+    forceStop: (
+      options: RemoteAgentLaunchOptions
+    ): Promise<RemoteAgentResult<RemoteAgentSessionStatus>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_AGENT_FORCE_STOP, options),
   },
 
   // Settings

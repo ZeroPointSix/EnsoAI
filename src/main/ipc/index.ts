@@ -27,6 +27,7 @@ export { autoStartHapi };
 
 import { registerLogHandlers } from './log';
 import { registerNotificationHandlers } from './notification';
+import { registerRemoteAgentHandlers } from './remoteAgent';
 import { registerSearchHandlers } from './search';
 import { registerSettingsHandlers } from './settings';
 import { registerShellHandlers } from './shell';
@@ -54,6 +55,7 @@ export function registerIpcHandlers(): void {
   registerCliHandlers();
   registerShellHandlers();
   registerSshHandlers();
+  registerRemoteAgentHandlers();
   registerSettingsHandlers();
   registerLogHandlers();
   registerNotificationHandlers();

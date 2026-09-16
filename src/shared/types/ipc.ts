@@ -110,6 +110,15 @@ export const IPC_CHANNELS = {
   // SSH
   SSH_LIST_HOSTS: 'ssh:listHosts',
 
+  // Remote Agent Session Adapter
+  REMOTE_AGENT_CAPABILITY: 'remoteAgent:capability',
+  REMOTE_AGENT_LAUNCH: 'remoteAgent:launch',
+  REMOTE_AGENT_STATUS: 'remoteAgent:status',
+  REMOTE_AGENT_LOGS: 'remoteAgent:logs',
+  REMOTE_AGENT_DETACH: 'remoteAgent:detach',
+  REMOTE_AGENT_STOP: 'remoteAgent:stop',
+  REMOTE_AGENT_FORCE_STOP: 'remoteAgent:forceStop',
+
   // Agent
   AGENT_LIST: 'agent:list',
   AGENT_STOP_NOTIFICATION: 'agent:stop:notification',

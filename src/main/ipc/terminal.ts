@@ -4,6 +4,7 @@ import {
   type TerminalResizeOptions,
 } from '@shared/types';
 import { ipcMain, type WebContents } from 'electron';
+import { remoteAgentSessionService } from '../services/ssh/RemoteAgentSessionService';
 import { discoverSshHosts, isConfiguredSshHost } from '../services/ssh/SshConfigService';
 import { PtyManager } from '../services/terminal/PtyManager';
 
@@ -47,6 +48,13 @@ export function registerTerminalHandlers(): void {
         if (!isConfiguredSshHost(discovery, requestedSshHost)) {
           throw new Error('SSH host is not present in the local OpenSSH config');
         }
+      }
+      if (options.remoteAgent) {
+        const launched = await remoteAgentSessionService.launch(options.remoteAgent);
+        options = {
+          ...options,
+          remoteAgent: { ...options.remoteAgent, backend: launched.backend },
+        };
       }
 
       ensureTerminalCleanup(event.sender);

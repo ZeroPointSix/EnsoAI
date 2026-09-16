@@ -1,4 +1,5 @@
-import { ArrowDown } from 'lucide-react';
+import type { RemoteAgentMuxBackend, RemoteAgentSessionStatus } from '@shared/types';
+import { ArrowDown, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   TerminalSearchBar,
@@ -28,6 +29,9 @@ interface AgentTerminalProps {
   customArgs?: string; // additional arguments to pass to the agent
   remoteHost?: string;
   remoteWorkspace?: string;
+  remoteBackend?: RemoteAgentMuxBackend;
+  remoteOutputOffset?: number;
+  remoteDetached?: boolean;
   environment?: 'native' | 'hapi' | 'happy';
   initialized?: boolean;
   activated?: boolean;
@@ -46,6 +50,10 @@ interface AgentTerminalProps {
   /** Called when session is activated with the current line content (for session name fallback). */
   onActivatedWithFirstLine?: (line: string) => void;
   onExit?: () => void;
+  onRemoteStatus?: (status: RemoteAgentSessionStatus, outputOffset?: number) => void;
+  onRemoteDisconnected?: () => void;
+  onRemoteDetached?: () => void;
+  onRemoteReconnect?: () => void;
   onTerminalTitleChange?: (title: string) => void;
   onSplit?: () => void;
   onMerge?: () => void;
@@ -74,6 +82,9 @@ export function AgentTerminal({
   customArgs,
   remoteHost,
   remoteWorkspace,
+  remoteBackend,
+  remoteOutputOffset = 0,
+  remoteDetached = false,
   environment = 'native',
   initialized,
   activated,
@@ -87,6 +98,10 @@ export function AgentTerminal({
   onActivated,
   onActivatedWithFirstLine,
   onExit,
+  onRemoteStatus,
+  onRemoteDisconnected,
+  onRemoteDetached,
+  onRemoteReconnect,
   onTerminalTitleChange,
   onSplit,
   onMerge,
@@ -423,6 +438,7 @@ export function AgentTerminal({
           workspace: remoteWorkspace || '~',
           sessionName: `enso-${terminalSessionId}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
           command: fullCommand,
+          backend: remoteBackend,
         },
       };
     }
@@ -496,12 +512,17 @@ export function AgentTerminal({
     terminalSessionId,
     remoteHost,
     remoteWorkspace,
+    remoteBackend,
   ]);
 
   // Handle exit with auto-close logic
   const handleExit = useCallback(() => {
     if (terminalSessionId) {
       clearSessionPtyId(terminalSessionId);
+    }
+    if (remoteHost) {
+      onRemoteDisconnected?.();
+      return;
     }
     const runtime = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
     const isSessionNotFound = outputBufferRef.current.includes(
@@ -512,7 +533,7 @@ export function AgentTerminal({
       onExit?.();
     }
     // Quick exit without session error - keep tab open for debugging
-  }, [onExit, terminalSessionId, clearSessionPtyId]);
+  }, [onExit, onRemoteDisconnected, remoteHost, terminalSessionId, clearSessionPtyId]);
 
   const handlePtyInit = useCallback(
     (ptyId: string) => {
@@ -816,9 +837,19 @@ export function AgentTerminal({
     if (environment === 'hapi' && hapiGlobalInstalled === null) {
       return false;
     }
+    if (remoteDetached) {
+      return false;
+    }
     // Force activation when there's a pending command (auto-execute)
     return isActive || hasPendingCommand;
-  }, [environment, hapiGlobalInstalled, isActive, resolvedShell, hasPendingCommand]);
+  }, [
+    environment,
+    hapiGlobalInstalled,
+    isActive,
+    resolvedShell,
+    hasPendingCommand,
+    remoteDetached,
+  ]);
 
   const {
     containerRef,
@@ -847,6 +878,49 @@ export function AgentTerminal({
     canMerge,
     previewReaderSessionId: terminalSessionId,
   });
+
+  useEffect(() => {
+    if (!remoteAgent || !terminal || remoteDetached) return;
+
+    let disposed = false;
+    let offset = remoteOutputOffset;
+    const syncRemoteSession = async () => {
+      const statusResult = await window.electronAPI.remoteAgent.status(remoteAgent);
+      if (disposed) return;
+      if (!statusResult.ok) {
+        if (statusResult.error.code === 'ssh-failed') {
+          onRemoteDisconnected?.();
+        }
+        return;
+      }
+
+      const logsResult = await window.electronAPI.remoteAgent.logs(remoteAgent, offset);
+      if (disposed) return;
+      if (logsResult.ok) {
+        if (logsResult.value.data) {
+          terminal.write(logsResult.value.data);
+        }
+        offset = logsResult.value.outputOffset;
+        onRemoteStatus?.(statusResult.value, offset);
+      } else {
+        onRemoteStatus?.(statusResult.value);
+      }
+    };
+
+    void syncRemoteSession();
+    const interval = setInterval(() => void syncRemoteSession(), 2000);
+    return () => {
+      disposed = true;
+      clearInterval(interval);
+    };
+  }, [
+    remoteAgent,
+    terminal,
+    remoteDetached,
+    remoteOutputOffset,
+    onRemoteStatus,
+    onRemoteDisconnected,
+  ]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
 
@@ -922,6 +996,14 @@ export function AgentTerminal({
         { id: 'clear', label: t('Clear terminal') },
         { id: 'refresh', label: t('Refresh terminal') },
         { id: 'separator-1', label: '', type: 'separator' as const },
+        ...(remoteAgent
+          ? [
+              { id: 'detachRemote', label: t('Detach remote Agent') },
+              { id: 'stopRemote', label: t('Stop remote Agent') },
+              { id: 'forceStopRemote', label: t('Force stop remote Agent') },
+              { id: 'separator-remote', label: '', type: 'separator' as const },
+            ]
+          : []),
         { id: 'copy', label: t('Copy'), disabled: !terminal?.hasSelection() },
         { id: 'paste', label: t('Paste') },
         { id: 'selectAll', label: t('Select all') },
@@ -967,6 +1049,24 @@ export function AgentTerminal({
         case 'selectAll':
           terminal?.selectAll();
           break;
+        case 'detachRemote':
+          if (ptyIdRef.current) {
+            await window.electronAPI.remoteAgent.detach(ptyIdRef.current);
+          }
+          onRemoteDetached?.();
+          break;
+        case 'stopRemote':
+          if (remoteAgent) {
+            const result = await window.electronAPI.remoteAgent.stop(remoteAgent);
+            if (result.ok) onRemoteStatus?.(result.value);
+          }
+          break;
+        case 'forceStopRemote':
+          if (remoteAgent) {
+            const result = await window.electronAPI.remoteAgent.forceStop(remoteAgent);
+            if (result.ok) onRemoteStatus?.(result.value);
+          }
+          break;
         case 'copyTmuxRestore':
           if (tmuxSessionNameRef.current) {
             const restoreCmd = `tmux -L enso attach-session -t ${tmuxSessionNameRef.current}`;
@@ -975,7 +1075,19 @@ export function AgentTerminal({
           break;
       }
     },
-    [terminal, clear, refreshRenderer, t, onSplit, canMerge, onMerge, onFocus]
+    [
+      terminal,
+      clear,
+      refreshRenderer,
+      t,
+      onSplit,
+      canMerge,
+      onMerge,
+      onFocus,
+      remoteAgent,
+      onRemoteDetached,
+      onRemoteStatus,
+    ]
   );
 
   useEffect(() => {
@@ -1081,6 +1193,18 @@ export function AgentTerminal({
       onClick={handleClick}
     >
       <div ref={containerRef} className="h-full w-full" />
+      {remoteDetached && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80">
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded border bg-background px-3 py-2 text-sm hover:bg-accent"
+            onClick={onRemoteReconnect}
+          >
+            <RefreshCw className="h-4 w-4" />
+            {t('Reconnect remote Agent')}
+          </button>
+        </div>
+      )}
       <TerminalSearchBar
         ref={searchBarRef}
         isOpen={isSearchOpen}

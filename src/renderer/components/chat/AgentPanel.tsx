@@ -1,4 +1,4 @@
-import type { AIProvider } from '@shared/types';
+import type { AIProvider, RemoteAgentSessionStatus } from '@shared/types';
 import { Plus, Settings, Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEMP_REPO_ID } from '@/App/constants';
@@ -22,6 +22,7 @@ import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { initAgentStatusListener } from '@/stores/agentStatus';
 import { useAgentTasksStore } from '@/stores/agentTasks';
 import { useCodeReviewContinueStore } from '@/stores/codeReviewContinue';
+import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
 import { BUILTIN_AGENT_IDS, useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
@@ -156,6 +157,10 @@ function createSession(
     customArgs,
     remoteHost,
     remoteWorkspace,
+    remoteState: remoteHost ? 'starting' : undefined,
+    remoteOutputOffset: remoteHost ? 0 : undefined,
+    remoteDetached: false,
+    remoteReconnectKey: 0,
     initialized: false,
     repoPath,
     cwd,
@@ -707,6 +712,15 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       const session = allSessions.find((s) => s.id === id);
       if (!session) return;
 
+      if (session.remoteHost) {
+        const ptyId = useSessionPtyRegistry.getState().getPtyId(id);
+        if (ptyId) {
+          void window.electronAPI.remoteAgent.detach(ptyId);
+        }
+        updateSession(id, { remoteDetached: true, remoteState: 'disconnected' });
+        return;
+      }
+
       // Remove the session from Zustand store
       removeSession(id);
 
@@ -768,7 +782,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         };
       });
     },
-    [allSessions, removeSession, clearTask, updateCurrentGroupState]
+    [allSessions, removeSession, clearTask, updateCurrentGroupState, updateSession]
   );
 
   // Handle session selection
@@ -1708,6 +1722,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 <div className="absolute inset-0 z-10 bg-background/10 pointer-events-none" />
               )}
               <AgentTerminal
+                key={`${sessionId}:${session.remoteReconnectKey ?? 0}`}
                 id={session.id}
                 cwd={session.cwd}
                 sessionId={session.sessionId || session.id}
@@ -1717,6 +1732,9 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 customArgs={session.customArgs}
                 remoteHost={session.remoteHost}
                 remoteWorkspace={session.remoteWorkspace}
+                remoteBackend={session.remoteBackend}
+                remoteOutputOffset={session.remoteOutputOffset}
+                remoteDetached={session.remoteDetached}
                 environment={session.environment || 'native'}
                 initialized={session.initialized}
                 activated={session.activated}
@@ -1727,6 +1745,30 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 onActivated={() => handleActivated(sessionId)}
                 onActivatedWithFirstLine={(line) => handleActivatedWithFirstLine(sessionId, line)}
                 onExit={() => handleCloseSession(sessionId, groupId || undefined)}
+                onRemoteStatus={(status: RemoteAgentSessionStatus, outputOffset) => {
+                  updateSession(sessionId, {
+                    remoteBackend: status.backend,
+                    remoteState: status.state,
+                    remoteExitCode: status.exitCode,
+                    ...(outputOffset !== undefined ? { remoteOutputOffset: outputOffset } : {}),
+                  });
+                }}
+                onRemoteDisconnected={() => {
+                  updateSession(sessionId, { remoteState: 'disconnected' });
+                }}
+                onRemoteDetached={() => {
+                  updateSession(sessionId, {
+                    remoteDetached: true,
+                    remoteState: 'disconnected',
+                  });
+                }}
+                onRemoteReconnect={() => {
+                  updateSession(sessionId, {
+                    remoteDetached: false,
+                    remoteState: 'starting',
+                    remoteReconnectKey: (session.remoteReconnectKey ?? 0) + 1,
+                  });
+                }}
                 onTerminalTitleChange={(title) => {
                   if (session.userRenamed) return;
                   const syncName =

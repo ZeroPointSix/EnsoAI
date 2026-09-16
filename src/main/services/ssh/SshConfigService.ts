@@ -357,7 +357,7 @@ export function getSshAgentLaunch(
   options: RemoteAgentLaunchOptions,
   platform: NodeJS.Platform = process.platform
 ): SshTerminalLaunch {
-  const { host, workspace, sessionName, command } = options;
+  const { host, workspace, sessionName, command, backend = 'tmux' } = options;
   const base = getSshTerminalLaunch(host, platform);
   const normalizedWorkspace = workspace.trim();
   const normalizedCommand = command.trim();
@@ -374,11 +374,14 @@ export function getSshAgentLaunch(
     throw new Error('Invalid remote Agent launch options');
   }
 
+  if (backend !== 'tmux' && backend !== 'psmux') {
+    throw new Error('Invalid remote Agent multiplexer');
+  }
+
   const remoteCommand = [
-    'env -u TMUX tmux -L enso -f /dev/null new-session -A',
-    `-s ${quotePosixShell(sessionName)}`,
-    `-c ${quotePosixShell(normalizedWorkspace)}`,
-    quotePosixShell(normalizedCommand),
+    backend === 'tmux' ? 'env -u TMUX tmux -L enso' : 'psmux -L enso',
+    'attach-session',
+    `-t ${quotePosixShell(sessionName)}`,
   ].join(' ');
 
   return {
