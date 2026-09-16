@@ -110,7 +110,14 @@ function createSession(
   customAgents: Array<{ id: string; name: string; command: string }>,
   agentSettings: Record<
     string,
-    { enabled: boolean; isDefault: boolean; customPath?: string; customArgs?: string }
+    {
+      enabled: boolean;
+      isDefault: boolean;
+      customPath?: string;
+      customArgs?: string;
+      remoteHost?: string;
+      remoteWorkspace?: string;
+    }
   >
 ): Session {
   // Handle Hapi and Happy agent IDs
@@ -135,6 +142,8 @@ function createSession(
   const agentConfig = agentSettings[baseId];
   const customPath = agentConfig?.customPath;
   const customArgs = agentConfig?.customArgs;
+  const remoteHost = agentConfig?.remoteHost;
+  const remoteWorkspace = agentConfig?.remoteWorkspace;
 
   const id = crypto.randomUUID();
   return {
@@ -145,6 +154,8 @@ function createSession(
     agentCommand: info.command,
     customPath,
     customArgs,
+    remoteHost,
+    remoteWorkspace,
     initialized: false,
     repoPath,
     cwd,
@@ -1021,6 +1032,8 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       const agentConfig = agentSettings[baseId];
       const customPath = agentConfig?.customPath;
       const customArgs = agentConfig?.customArgs;
+      const remoteHost = agentConfig?.remoteHost;
+      const remoteWorkspace = agentConfig?.remoteWorkspace;
 
       const id = crypto.randomUUID();
       const newSession: Session = {
@@ -1031,6 +1044,8 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         agentCommand,
         customPath,
         customArgs,
+        remoteHost,
+        remoteWorkspace,
         initialized: false,
         repoPath,
         cwd,
@@ -1700,6 +1715,8 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 agentCommand={session.agentCommand || 'claude'}
                 customPath={session.customPath}
                 customArgs={session.customArgs}
+                remoteHost={session.remoteHost}
+                remoteWorkspace={session.remoteWorkspace}
                 environment={session.environment || 'native'}
                 initialized={session.initialized}
                 activated={session.activated}
