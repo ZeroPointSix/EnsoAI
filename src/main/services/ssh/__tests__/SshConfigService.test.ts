@@ -6,6 +6,7 @@ import {
   discoverSshHosts,
   getSshAgentLaunch,
   getSshTerminalLaunch,
+  isConfiguredSshHost,
   parseSshConfig,
 } from '../SshConfigService';
 
@@ -110,6 +111,26 @@ describe('discoverSshHosts', () => {
     expect(result.hosts).toEqual([{ alias: 'shared', hostName: 'shared.example.com' }]);
   });
 
+  it('caps deeply nested Includes', async () => {
+    const homeDir = await createTempDirectory();
+    const sshDirectory = join(homeDir, '.ssh');
+    const configPath = join(sshDirectory, 'config');
+    await mkdir(sshDirectory, { recursive: true });
+    await writeFile(configPath, 'Include level-0.conf');
+
+    for (let index = 0; index < 18; index += 1) {
+      const content =
+        index === 17
+          ? ['Host too-deep', '  HostName hidden.example.com'].join('\n')
+          : `Include level-${index + 1}.conf`;
+      await writeFile(join(sshDirectory, `level-${index}.conf`), content);
+    }
+
+    const result = await discoverSshHosts({ platform: 'win32', homeDir, configPath });
+
+    expect(result.hosts).toEqual([]);
+  });
+
   it('does not advertise aliases from conditional Includes', async () => {
     const homeDir = await createTempDirectory();
     const sshDirectory = join(homeDir, '.ssh');
@@ -152,6 +173,22 @@ describe('discoverSshHosts', () => {
       configPath,
       errorCode: 'config-not-found',
     });
+  });
+});
+
+describe('isConfiguredSshHost', () => {
+  it('accepts only aliases returned by supported discovery', () => {
+    const discovery = {
+      supported: true,
+      configPath: 'C:\\Users\\test\\.ssh\\config',
+      hosts: [{ alias: 'Production', hostName: 'prod.example.com' }],
+    };
+
+    expect(isConfiguredSshHost(discovery, 'production')).toBe(true);
+    expect(isConfiguredSshHost(discovery, 'other-host')).toBe(false);
+    expect(isConfiguredSshHost({ ...discovery, supported: false, hosts: [] }, 'Production')).toBe(
+      false
+    );
   });
 });
 

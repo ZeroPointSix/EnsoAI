@@ -27,6 +27,7 @@ interface IncludeContext {
 }
 
 const WILDCARD_PATTERN = /[*?]/;
+const MAX_INCLUDE_DEPTH = 16;
 
 function stripComment(line: string): string {
   let quote: '"' | "'" | null = null;
@@ -241,8 +242,10 @@ async function readExpandedConfig(
   configPath: string,
   homeDir: string,
   context: IncludeContext = { isUnconditional: true },
-  activePaths = new Set<string>()
+  activePaths = new Set<string>(),
+  depth = 0
 ): Promise<string> {
+  if (depth > MAX_INCLUDE_DEPTH) return '';
   const normalizedPath = resolve(configPath);
   if (activePaths.has(normalizedPath)) return '';
 
@@ -269,7 +272,9 @@ async function readExpandedConfig(
         const includePaths = await expandIncludePattern(resolvedPattern);
         for (const includePath of includePaths) {
           try {
-            output.push(await readExpandedConfig(includePath, homeDir, context, activePaths));
+            output.push(
+              await readExpandedConfig(includePath, homeDir, context, activePaths, depth + 1)
+            );
           } catch {
             // OpenSSH ignores include globs that do not resolve to readable files.
           }
@@ -311,6 +316,15 @@ export async function discoverSshHosts(
       errorCode: code === 'ENOENT' ? 'config-not-found' : 'config-unreadable',
     };
   }
+}
+
+export function isConfiguredSshHost(discovery: SshHostDiscoveryResult, alias: string): boolean {
+  const normalizedAlias = alias.trim().toLocaleLowerCase();
+  return (
+    discovery.supported &&
+    Boolean(normalizedAlias) &&
+    discovery.hosts.some((host) => host.alias.toLocaleLowerCase() === normalizedAlias)
+  );
 }
 
 export function getSshTerminalLaunch(
