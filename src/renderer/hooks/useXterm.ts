@@ -1,3 +1,4 @@
+import type { RemoteAgentLaunchOptions } from '@shared/types';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
@@ -37,6 +38,7 @@ export interface UseXtermOptions {
   isActive?: boolean;
   initialCommand?: string;
   sshHost?: string;
+  remoteAgent?: RemoteAgentLaunchOptions;
   onExit?: () => void;
   onData?: (data: string) => void;
   onCustomKey?: (
@@ -122,6 +124,7 @@ export function useXterm({
   isActive = true,
   initialCommand,
   sshHost,
+  remoteAgent,
   onExit,
   onData,
   onCustomKey,
@@ -179,12 +182,14 @@ export function useXterm({
   // Memoize command key to avoid dependency array issues
   const commandKey = useMemo(
     () =>
-      sshHost
-        ? `ssh:${sshHost}`
-        : command
-          ? `${command.shell}:${command.args.join(' ')}`
-          : `shellConfig:${shellConfig.shellType}`,
-    [command, shellConfig.shellType, sshHost]
+      remoteAgent
+        ? `remote-agent:${remoteAgent.host}:${remoteAgent.sessionName}`
+        : sshHost
+          ? `ssh:${sshHost}`
+          : command
+            ? `${command.shell}:${command.args.join(' ')}`
+            : `shellConfig:${shellConfig.shellType}`,
+    [command, remoteAgent, shellConfig.shellType, sshHost]
   );
   // rAF write buffer for smooth rendering
   const writeBufferRef = useRef('');
@@ -594,11 +599,13 @@ export function useXterm({
         cwd: cwd || window.electronAPI.env.HOME,
         // If command is provided (e.g., for agent), use shell/args directly
         // Otherwise, use an SSH alias or shellConfig from settings.
-        ...(sshHost
-          ? { sshHost }
-          : command
-            ? { shell: command.shell, args: command.args }
-            : { shellConfig }),
+        ...(remoteAgent
+          ? { remoteAgent }
+          : sshHost
+            ? { sshHost }
+            : command
+              ? { shell: command.shell, args: command.args }
+              : { shellConfig }),
         cols: terminal.cols,
         rows: terminal.rows,
         env,
@@ -700,7 +707,7 @@ export function useXterm({
       terminal.writeln(`\x1b[31mFailed to start terminal.\x1b[0m`);
       terminal.writeln(`\x1b[33mError: ${error}\x1b[0m`);
     }
-  }, [cwd, command, shellConfig, commandKey, terminalRenderer, sshHost]);
+  }, [cwd, command, shellConfig, commandKey, terminalRenderer, sshHost, remoteAgent]);
 
   useEffect(() => {
     const shouldActivate = isActive || initialCommandRef.current;
