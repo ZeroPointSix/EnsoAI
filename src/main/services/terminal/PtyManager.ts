@@ -8,7 +8,7 @@ import pidtree from 'pidtree';
 import pidusage from 'pidusage';
 import { killProcessTree } from '../../utils/processUtils';
 import { getProxyEnvVars } from '../proxy/ProxyConfig';
-import { getSshTerminalLaunch } from '../ssh/SshConfigService';
+import { getSshAgentLaunch, getSshTerminalLaunch } from '../ssh/SshConfigService';
 import { detectShell, shellDetector } from './ShellDetector';
 
 const isWindows = process.platform === 'win32';
@@ -370,7 +370,11 @@ export class PtyManager {
     let shell: string;
     let args: string[];
 
-    if (options.sshHost) {
+    if (options.remoteAgent) {
+      const launch = getSshAgentLaunch(options.remoteAgent);
+      shell = launch.shell;
+      args = launch.args;
+    } else if (options.sshHost) {
       const launch = getSshTerminalLaunch(options.sshHost);
       shell = launch.shell;
       args = launch.args;
@@ -393,7 +397,8 @@ export class PtyManager {
       args = adjustArgsForShell(shell, args);
     }
 
-    const initialCommand = options.sshHost ? undefined : options.initialCommand?.trim();
+    const initialCommand =
+      options.sshHost || options.remoteAgent ? undefined : options.initialCommand?.trim();
     if (initialCommand) {
       if (isWindows) {
         const isPowerShell =
