@@ -26,6 +26,8 @@ interface AgentTerminalProps {
   agentCommand?: string;
   customPath?: string; // custom absolute path to the agent CLI
   customArgs?: string; // additional arguments to pass to the agent
+  remoteHost?: string;
+  remoteWorkspace?: string;
   environment?: 'native' | 'hapi' | 'happy';
   initialized?: boolean;
   activated?: boolean;
@@ -70,6 +72,8 @@ export function AgentTerminal({
   agentCommand = 'claude',
   customPath,
   customArgs,
+  remoteHost,
+  remoteWorkspace,
   environment = 'native',
   initialized,
   activated,
@@ -300,7 +304,7 @@ export function AgentTerminal({
   }, []);
 
   // Build command with session args
-  const { command, env } = useMemo(() => {
+  const { command, env, remoteAgent } = useMemo(() => {
     // Wait for shell config to be resolved
     if (!resolvedShell) {
       return { command: undefined, env: undefined };
@@ -408,6 +412,21 @@ export function AgentTerminal({
     // Safe: all interpolated values (effectiveCommand, agentArgs, tmuxSessionName) are
     // derived from internal app config / controlled constants, not from arbitrary user input.
     const fullCommand = `${effectiveCommand} ${agentArgs.join(' ')}`.trim();
+
+    if (remoteHost && terminalSessionId) {
+      tmuxSessionNameRef.current = null;
+      return {
+        command: undefined,
+        env: envVars,
+        remoteAgent: {
+          host: remoteHost,
+          workspace: remoteWorkspace || '~',
+          sessionName: `enso-${terminalSessionId}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+          command: fullCommand,
+        },
+      };
+    }
+
     const shellName = resolvedShell.shell.toLowerCase();
 
     // Determine if tmux wrapping should be applied
@@ -475,6 +494,8 @@ export function AgentTerminal({
     resolvedShell,
     claudeCodeIntegration.tmuxEnabled,
     terminalSessionId,
+    remoteHost,
+    remoteWorkspace,
   ]);
 
   // Handle exit with auto-close logic
@@ -814,6 +835,7 @@ export function AgentTerminal({
     cwd,
     command,
     env,
+    remoteAgent,
     isActive: effectiveIsActive,
     onExit: handleExit,
     onData: handleData,
