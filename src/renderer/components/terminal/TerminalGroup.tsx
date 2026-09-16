@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion';
-import { List, Plus, Terminal, X } from 'lucide-react';
+import { Cloud, List, Plus, Terminal, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { springFast } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
+import { RemoteTerminalPicker } from './RemoteTerminalPicker';
 import type { TerminalGroup as TerminalGroupType, TerminalTab } from './types';
 import { getNextTabName } from './types';
 
@@ -51,6 +52,19 @@ export function TerminalGroup({
     };
     onTabsChange(group.id, [...tabs, newTab], newTab.id);
   }, [tabs, cwd, group.id, onTabsChange]);
+
+  const handleNewRemoteTab = useCallback(
+    (host: { alias: string }) => {
+      const newTab: TerminalTab = {
+        id: crypto.randomUUID(),
+        name: host.alias,
+        cwd,
+        sshHost: host.alias,
+      };
+      onTabsChange(group.id, [...tabs, newTab], newTab.id);
+    },
+    [tabs, cwd, group.id, onTabsChange]
+  );
 
   const handleCloseTab = useCallback(
     (id: string) => {
@@ -314,7 +328,11 @@ export function TerminalGroup({
                     isDropTarget && 'ring-2 ring-primary ring-inset'
                   )}
                 >
-                  <List className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  {tab.sshHost ? (
+                    <Cloud className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  ) : (
+                    <List className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  )}
                   {editingId === tab.id ? (
                     <input
                       ref={inputRef}
@@ -359,6 +377,7 @@ export function TerminalGroup({
 
           {/* New Tab Button */}
           <div className="flex items-center border-l border-border px-1">
+            <RemoteTerminalPicker onSelect={handleNewRemoteTab} />
             <button
               type="button"
               onClick={(e) => {

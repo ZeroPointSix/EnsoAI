@@ -1,3 +1,4 @@
+import type { SshHostConfig } from '@shared/types';
 import { Plus, Terminal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEMP_REPO_ID } from '@/App/constants';
@@ -18,6 +19,7 @@ import { useInitScriptStore } from '@/stores/initScript';
 import { useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
+import { RemoteTerminalPicker } from './RemoteTerminalPicker';
 import { ResizeHandle } from './ResizeHandle';
 import { ShellTerminal } from './ShellTerminal';
 import { TerminalGroup } from './TerminalGroup';
@@ -620,6 +622,41 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
     });
   }, [cwd, updateCurrentState]);
 
+  const handleNewRemoteTerminal = useCallback(
+    (host: SshHostConfig) => {
+      if (!cwd) return;
+
+      updateCurrentState((state) => {
+        const newTab: TerminalTab = {
+          id: crypto.randomUUID(),
+          name: host.alias,
+          cwd,
+          sshHost: host.alias,
+        };
+
+        if (state.groups.length > 0) {
+          const targetGroupId = state.activeGroupId || state.groups[0].id;
+          return {
+            ...state,
+            groups: state.groups.map((group) =>
+              group.id === targetGroupId
+                ? { ...group, tabs: [...group.tabs, newTab], activeTabId: newTab.id }
+                : group
+            ),
+          };
+        }
+
+        const newGroup: TerminalGroupType = {
+          id: crypto.randomUUID(),
+          tabs: [newTab],
+          activeTabId: newTab.id,
+        };
+        return { groups: [newGroup], activeGroupId: newGroup.id, flexPercents: [100] };
+      });
+    },
+    [cwd, updateCurrentState]
+  );
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -838,10 +875,13 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
               <EmptyTitle>{t('No terminals open')}</EmptyTitle>
               <EmptyDescription>{t('Create a terminal to start working')}</EmptyDescription>
             </EmptyHeader>
-            <Button variant="outline" size="sm" onClick={handleNewTerminal}>
-              <Plus className="mr-2 h-4 w-4" />
-              {t('New Terminal')}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleNewTerminal}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t('New Terminal')}
+              </Button>
+              <RemoteTerminalPicker onSelect={handleNewRemoteTerminal} showLabel />
+            </div>
           </Empty>
         </div>
       )}
@@ -942,6 +982,7 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
                       isActive={isTerminalActive}
                       canMerge={state.groups.length > 1}
                       initialCommand={info.tab.initialCommand}
+                      sshHost={info.tab.sshHost}
                       onExit={() => handleTerminalClose(tabId)}
                       onTitleChange={(title) => handleTitleChange(tabId, title)}
                       onSplit={() => handleSplit(info.group.id)}
