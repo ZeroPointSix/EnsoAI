@@ -125,6 +125,10 @@ export interface AgentConfig {
   customPath?: string;
   /** Additional arguments to pass to the agent CLI */
   customArgs?: string;
+  /** SSH Host alias for persistent remote execution. */
+  remoteHost?: string;
+  /** Working directory on the remote host. */
+  remoteWorkspace?: string;
 }
 
 export type AgentSettings = Record<string, AgentConfig>;
@@ -455,7 +459,12 @@ export interface SettingsState {
   setAgentDefault: (agentId: string) => void;
   setAgentCustomConfig: (
     agentId: string,
-    config: { customPath?: string; customArgs?: string }
+    config: {
+      customPath?: string;
+      customArgs?: string;
+      remoteHost?: string;
+      remoteWorkspace?: string;
+    }
   ) => void;
   setAgentDetectionStatus: (agentId: string, info: AgentDetectionInfo) => void;
   clearAgentDetectionStatus: (agentId: string) => void;
