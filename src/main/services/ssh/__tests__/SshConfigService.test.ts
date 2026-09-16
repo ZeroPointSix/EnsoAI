@@ -2,7 +2,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { discoverSshHosts, getSshTerminalLaunch, parseSshConfig } from '../SshConfigService';
+import {
+  discoverSshHosts,
+  getSshAgentLaunch,
+  getSshTerminalLaunch,
+  parseSshConfig,
+} from '../SshConfigService';
 
 const tempDirectories: string[] = [];
 
@@ -154,7 +159,7 @@ describe('getSshTerminalLaunch', () => {
   it('uses a direct argv entry for the configured host alias', () => {
     expect(getSshTerminalLaunch('production', 'win32')).toEqual({
       shell: 'ssh.exe',
-      args: ['-tt', 'production'],
+      args: ['-tt', '--', 'production'],
     });
   });
 
@@ -166,5 +171,40 @@ describe('getSshTerminalLaunch', () => {
       'Invalid SSH host alias'
     );
     expect(() => getSshTerminalLaunch('two hosts', 'win32')).toThrow('Invalid SSH host alias');
+  });
+});
+
+
+describe('getSshAgentLaunch', () => {
+  it('launches a persistent tmux Agent session with shell-quoted values', () => {
+    const launch = getSshAgentLaunch(
+      {
+        host: 'production',
+        workspace: "/srv/team's app",
+        sessionName: 'enso-session_123',
+        command: "claude --prompt 'hello'",
+      },
+      'win32'
+    );
+    expect(launch.shell).toBe('ssh.exe');
+    expect(launch.args.slice(0, 3)).toEqual(['-tt', '--', 'production']);
+    expect(launch.args[3]).toContain("new-session -A -s 'enso-session_123'");
+    expect(launch.args[3]).toContain("-c '/srv/team'\\''s app'");
+    expect(launch.args[3]).toContain("'claude --prompt '\\''hello'\\'''");
+  });
+
+  it('rejects unsafe or incomplete remote launch options', () => {
+    const valid = {
+      host: 'production',
+      workspace: '/srv/app',
+      sessionName: 'enso-session',
+      command: 'claude',
+    };
+    expect(() => getSshAgentLaunch({ ...valid, sessionName: 'bad;name' }, 'win32')).toThrow(
+      'Invalid remote Agent session name'
+    );
+    expect(() => getSshAgentLaunch({ ...valid, workspace: 'bad\npath' }, 'win32')).toThrow(
+      'Invalid remote Agent launch options'
+    );
   });
 });
