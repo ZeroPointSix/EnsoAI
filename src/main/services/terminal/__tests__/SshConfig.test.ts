@@ -90,7 +90,7 @@ describe('parseSshConfig', () => {
       ),
       writeFile(
         join(configDirectory, 'a.conf'),
-        'Host included-a\n  HostName a.example.com\nInclude nested/*.conf\n'
+        'Host included-a\n  HostName a.example.com\nInclude conf.d/nested/*.conf\n'
       ),
       writeFile(join(configDirectory, 'b.conf'), 'HOST included-b\n  Port 2202\n'),
       writeFile(join(nestedDirectory, 'c.conf'), 'Host nested\n  User deploy\n'),
@@ -123,6 +123,66 @@ describe('parseSshConfig', () => {
         configPath: join(sshDirectory, 'config'),
       },
     ]);
+  });
+
+  it('resolves nested relative Includes from the user SSH directory', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'ensoai-ssh-'));
+    tempDirectories.push(home);
+    const sshDirectory = join(home, '.ssh');
+    const nestedDirectory = join(sshDirectory, 'nested');
+    await mkdir(nestedDirectory, { recursive: true });
+    await Promise.all([
+      writeFile(join(sshDirectory, 'config'), 'Include nested/hosts.conf\n'),
+      writeFile(join(nestedDirectory, 'hosts.conf'), 'Host nested-relative\n'),
+    ]);
+
+    await expect(listConfiguredSshHosts('win32', home)).resolves.toEqual([
+      {
+        alias: 'nested-relative',
+        configPath: join(nestedDirectory, 'hosts.conf'),
+      },
+    ]);
+  });
+
+  it('handles Include cycles without duplicating hosts', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'ensoai-ssh-'));
+    tempDirectories.push(home);
+    const sshDirectory = join(home, '.ssh');
+    await mkdir(sshDirectory, { recursive: true });
+    await Promise.all([
+      writeFile(join(sshDirectory, 'config'), 'Include cycle.conf\nHost root\n'),
+      writeFile(join(sshDirectory, 'cycle.conf'), 'Include config\nHost cycle\n'),
+    ]);
+
+    await expect(listConfiguredSshHosts('win32', home)).resolves.toEqual([
+      { alias: 'cycle', configPath: join(sshDirectory, 'cycle.conf') },
+      { alias: 'root', configPath: join(sshDirectory, 'config') },
+    ]);
+  });
+
+  it('rejects Include chains beyond the depth limit', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'ensoai-ssh-'));
+    tempDirectories.push(home);
+    const sshDirectory = join(home, '.ssh');
+    await mkdir(sshDirectory, { recursive: true });
+    const includePaths = Array.from({ length: 17 }, (_, index) =>
+      join(sshDirectory, `depth-${index}.conf`)
+    );
+    await writeFile(join(sshDirectory, 'config'), 'Include depth-0.conf\n');
+    await Promise.all(
+      includePaths.map((path, index) =>
+        writeFile(
+          path,
+          index === includePaths.length - 1
+            ? 'Host unreachable\n'
+            : `Include depth-${index + 1}.conf\n`
+        )
+      )
+    );
+
+    await expect(listConfiguredSshHosts('win32', home)).rejects.toThrow(
+      'SSH config Include depth exceeds 16'
+    );
   });
 
   it('returns an empty list when the Windows config does not exist', async () => {
