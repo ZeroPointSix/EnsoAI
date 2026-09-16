@@ -4,6 +4,13 @@ export interface TerminalSession {
   cwd: string;
 }
 
+export interface RemoteAgentLaunchOptions {
+  host: string;
+  workspace: string;
+  sessionName: string;
+  command: string;
+}
+
 export interface TerminalCreateOptions {
   cwd?: string;
   shell?: string;
@@ -16,6 +23,8 @@ export interface TerminalCreateOptions {
   initialCommand?: string;
   /** Concrete Host alias from the user's SSH config. */
   sshHost?: string;
+  /** Remote Agent command attached to a persistent tmux session over SSH. */
+  remoteAgent?: RemoteAgentLaunchOptions;
 }
 
 export interface TerminalResizeOptions {
