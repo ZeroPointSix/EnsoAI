@@ -62,6 +62,7 @@ jobs:
   # Produce a downloadable Windows installer for PR testing. Do not publish a GitHub Release.
   package-windows:
     needs: build
+    if: github.event_name == 'pull_request'
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -102,9 +103,24 @@ jobs:
           restore-keys: ${{ runner.os }}-electron-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Actions GITHUB_TOKEN can make @vscode/ripgrep download a non-zip payload.
+          GITHUB_TOKEN: ''
+        run: |
+          cache_dir="${LOCALAPPDATA:-$HOME/AppData/Local}/Temp"
+          install_deps() {
+            rm -rf "$cache_dir"/vscode-ripgrep-cache-* || true
+            pnpm install --frozen-lockfile
+          }
+          for attempt in 1 2 3; do
+            if install_deps; then
+              exit 0
+            fi
+            echo "pnpm install failed (attempt ${attempt}), retrying..."
+            sleep 8
+          done
+          exit 1
 
       - name: Package Windows installer
         run: npx electron-builder --win --x64 --publish never
