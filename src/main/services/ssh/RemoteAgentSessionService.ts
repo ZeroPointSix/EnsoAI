@@ -135,6 +135,9 @@ export function buildLaunchCommand(
     const logFile = `${dir.slice(0, -1)}/output.log"`;
     const wrapper = [
       `printf working > ${stateFile}`,
+      `trap ${quotePosix(
+        `printf 130 > ${exitFile}; printf stopped > ${stateFile}; exit 130`
+      )} INT TERM HUP`,
       options.command,
       'code=$?',
       `previous_state=$(cat ${stateFile} 2>/dev/null || true)`,

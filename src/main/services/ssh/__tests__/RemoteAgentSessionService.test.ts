@@ -143,6 +143,8 @@ describe('RemoteAgentSessionService', () => {
     expect(psmuxForceStop).toContain('$LASTEXITCODE -ne 0');
     expect(psmuxForceStop).toContain('137');
     expect(buildLaunchCommand(options, 'tmux')).toContain('previous_state');
+    expect(buildLaunchCommand(options, 'tmux')).toContain('trap');
+    expect(buildLaunchCommand(options, 'tmux')).toContain('printf 130');
     expect(buildLaunchCommand(options, 'tmux')).toContain('printf stopped');
     const tmuxStatus = buildStatusCommand(options.sessionName, 'tmux');
     const psmuxStatus = buildStatusCommand(options.sessionName, 'psmux');
