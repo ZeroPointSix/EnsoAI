@@ -1,4 +1,4 @@
-import type { RemoteAgentLaunchOptions } from '@shared/types';
+import type { RemoteAgentConnectionMode, RemoteAgentLaunchOptions } from '@shared/types';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
@@ -40,6 +40,7 @@ export interface UseXtermOptions {
   initialCommand?: string;
   sshHost?: string;
   remoteAgent?: RemoteAgentLaunchOptions;
+  remoteAgentMode?: RemoteAgentConnectionMode;
   onExit?: () => void;
   onData?: (data: string) => void;
   onCustomKey?: (
@@ -126,6 +127,7 @@ export function useXterm({
   initialCommand,
   sshHost,
   remoteAgent,
+  remoteAgentMode,
   onExit,
   onData,
   onCustomKey,
@@ -184,13 +186,13 @@ export function useXterm({
   const commandKey = useMemo(
     () =>
       remoteAgent
-        ? `remote-agent:${remoteAgent.host}:${remoteAgent.sessionName}`
+        ? `remote-agent:${remoteAgent.host}:${remoteAgent.sessionName}:${remoteAgentMode}`
         : sshHost
           ? `ssh:${sshHost}`
           : command
             ? `${command.shell}:${command.args.join(' ')}`
             : `shellConfig:${shellConfig.shellType}`,
-    [command, remoteAgent, shellConfig.shellType, sshHost]
+    [command, remoteAgent, remoteAgentMode, shellConfig.shellType, sshHost]
   );
   // rAF write buffer for smooth rendering
   const writeBufferRef = useRef('');
@@ -601,7 +603,7 @@ export function useXterm({
         // If command is provided (e.g., for agent), use shell/args directly
         // Otherwise, use an SSH alias or shellConfig from settings.
         ...(remoteAgent
-          ? { remoteAgent }
+          ? { remoteAgent, remoteAgentMode }
           : sshHost
             ? { sshHost }
             : command
@@ -712,7 +714,16 @@ export function useXterm({
       terminal.writeln(`\x1b[31mFailed to start terminal.\x1b[0m`);
       terminal.writeln(`\x1b[33mError: ${error}\x1b[0m`);
     }
-  }, [cwd, command, shellConfig, commandKey, terminalRenderer, sshHost, remoteAgent]);
+  }, [
+    cwd,
+    command,
+    shellConfig,
+    commandKey,
+    terminalRenderer,
+    sshHost,
+    remoteAgent,
+    remoteAgentMode,
+  ]);
 
   useEffect(() => {
     const shouldActivate = isActive || initialCommandRef.current;

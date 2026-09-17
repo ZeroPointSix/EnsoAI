@@ -35,12 +35,41 @@ export class RemoteAgentSessionError extends Error {
   }
 }
 
+export function classifySshError(detail: string): RemoteAgentErrorCode {
+  if (/permission denied|authentication failed|no supported authentication methods/i.test(detail)) {
+    return 'auth-failed';
+  }
+  if (/host key verification failed|remote host identification has changed/i.test(detail)) {
+    return 'host-key-failed';
+  }
+  if (
+    /could not resolve hostname|connection (?:timed out|refused|closed)|no route to host|network is unreachable/i.test(
+      detail
+    )
+  ) {
+    return 'host-unreachable';
+  }
+  return 'ssh-failed';
+}
+
 function defaultExecutor(file: string, args: string[]): Promise<ExecuteResult> {
   return new Promise((resolve, reject) => {
     execFile(file, args, { timeout: 15_000, windowsHide: true }, (error, stdout, stderr) => {
       if (error) {
+        const detail = stderr || error.message;
+        const code = classifySshError(detail);
         reject(
-          new RemoteAgentSessionError('ssh-failed', 'SSH command failed', stderr || error.message)
+          new RemoteAgentSessionError(
+            code,
+            code === 'auth-failed'
+              ? 'SSH authentication failed'
+              : code === 'host-key-failed'
+                ? 'SSH host key verification failed'
+                : code === 'host-unreachable'
+                  ? 'SSH host is unreachable'
+                  : 'SSH command failed',
+            detail
+          )
         );
         return;
       }
@@ -109,10 +138,14 @@ export function buildLaunchCommand(
     return [
       `dir=${dir}`,
       'mkdir -p "$dir"',
+      `workspace=${quotePosix(options.workspace)}`,
+      'case "$workspace" in "~") workspace="$HOME" ;; "~/"*) workspace="$HOME/$' +
+        '{workspace#~/}" ;; esac',
       `if tmux -L enso has-session -t ${quotePosix(sessionName)} 2>/dev/null; then printf '${STATUS_MARKER}working||tmux\\n'; exit 0; fi`,
+      `if [ -f ${stateFile} ]; then state=$(cat ${stateFile} 2>/dev/null || printf disconnected); exit_code=$(cat ${exitFile} 2>/dev/null || true); case "$state" in starting|working|waiting_input|stopping) state=disconnected ;; esac; printf '${STATUS_MARKER}%s|%s|tmux\\n' "$state" "$exit_code"; exit 0; fi`,
       `printf starting > ${stateFile}`,
       `: > ${logFile}`,
-      `env -u TMUX tmux -L enso -f /dev/null new-session -d -s ${quotePosix(sessionName)} -c ${quotePosix(options.workspace)} sh -lc ${quotePosix(wrapper)}`,
+      `env -u TMUX tmux -L enso -f /dev/null new-session -d -s ${quotePosix(sessionName)} -c "$workspace" sh -lc ${quotePosix(wrapper)}`,
       `tmux -L enso pipe-pane -o -t ${quotePosix(sessionName)} ${quotePosix(`cat >> ${logFile}`)}`,
       `printf '${STATUS_MARKER}starting||tmux\\n'`,
     ].join('; ');
@@ -138,6 +171,7 @@ export function buildLaunchCommand(
     'New-Item -ItemType Directory -Force -Path $dir | Out-Null',
     `& psmux -L enso has-session -t ${quotePowerShell(sessionName)} 2>$null`,
     `if ($LASTEXITCODE -eq 0) { Write-Output '${STATUS_MARKER}working||psmux'; exit 0 }`,
+    `if (Test-Path ${stateFile}) { $state = Get-Content ${stateFile} -Raw; $exitCode = if (Test-Path ${exitFile}) { Get-Content ${exitFile} -Raw } else { '' }; if (@('starting','working','waiting_input','stopping') -contains $state) { $state = 'disconnected' }; Write-Output ("${STATUS_MARKER}{0}|{1}|psmux" -f $state,$exitCode); exit 0 }`,
     `Set-Content -LiteralPath ${stateFile} -Value starting -NoNewline`,
     `Set-Content -LiteralPath ${logFile} -Value '' -NoNewline`,
     `& psmux -L enso new-session -d -s ${quotePowerShell(sessionName)} powershell -NoProfile -Command ${quotePowerShell(wrapper)}`,
@@ -189,9 +223,10 @@ export function buildLogsCommand(
     return [
       `log=${logFile}`,
       'size=$(wc -c < "$log" 2>/dev/null || printf 0)',
+      `count=$((size - ${outputOffset}))`,
       `printf '${LOG_OFFSET_MARKER}%s\\n' "$size"`,
       `printf '${LOG_DATA_MARKER}'`,
-      `if [ "$size" -gt ${outputOffset} ]; then dd if="$log" bs=1 skip=${outputOffset} 2>/dev/null | base64 | tr -d '\\r\\n'; fi`,
+      `if [ "$count" -gt 0 ]; then dd if="$log" bs=1 skip=${outputOffset} count="$count" 2>/dev/null | base64 | tr -d '\\r\\n'; fi`,
       "printf '\\n'",
     ].join('; ');
   }
@@ -228,6 +263,24 @@ export function buildStopCommand(
   return force
     ? `& psmux -L enso kill-session -t ${quotePowerShell(sessionName)}; Set-Content ${stateFile} stopped -NoNewline; Set-Content ${exitFile} 137 -NoNewline`
     : `Set-Content ${stateFile} stopping -NoNewline; & psmux -L enso send-keys -t ${quotePowerShell(sessionName)} C-c`;
+}
+
+function completeUtf8ByteLength(bytes: Buffer): number {
+  if (bytes.length === 0) return 0;
+
+  let leadIndex = bytes.length - 1;
+  while (leadIndex >= 0 && (bytes[leadIndex] & 0xc0) === 0x80) {
+    leadIndex -= 1;
+  }
+  if (leadIndex < 0) return 0;
+
+  const lead = bytes[leadIndex];
+  const expectedLength =
+    (lead & 0x80) === 0 ? 1 : (lead & 0xe0) === 0xc0 ? 2 : (lead & 0xf0) === 0xe0 ? 3 : 4;
+  if (expectedLength > 1 && bytes.length - leadIndex < expectedLength) {
+    return leadIndex;
+  }
+  return bytes.length;
 }
 
 function parseStatus(
@@ -399,10 +452,20 @@ export class RemoteAgentSessionService {
         'Remote Agent returned an invalid log offset'
       );
     }
+    const bytes = Buffer.from(dataLine.slice(LOG_DATA_MARKER.length), 'base64');
+    const reportedByteCount = nextOffset - outputOffset;
+    if (bytes.length > reportedByteCount) {
+      throw new RemoteAgentSessionError(
+        'protocol-error',
+        'Remote Agent returned log data beyond the reported offset'
+      );
+    }
+    const completeLength = completeUtf8ByteLength(bytes);
+    const completeBytes = bytes.subarray(0, completeLength);
     return {
       sessionId: options.sessionName,
-      outputOffset: nextOffset,
-      data: Buffer.from(dataLine.slice(LOG_DATA_MARKER.length), 'base64').toString('utf8'),
+      outputOffset: outputOffset + completeLength,
+      data: completeBytes.toString('utf8'),
     };
   }
 

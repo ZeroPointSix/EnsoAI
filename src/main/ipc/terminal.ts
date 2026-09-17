@@ -50,10 +50,13 @@ export function registerTerminalHandlers(): void {
         }
       }
       if (options.remoteAgent) {
-        const launched = await remoteAgentSessionService.launch(options.remoteAgent);
+        const remoteStatus =
+          options.remoteAgentMode === 'attach'
+            ? await remoteAgentSessionService.status(options.remoteAgent)
+            : await remoteAgentSessionService.launch(options.remoteAgent);
         options = {
           ...options,
-          remoteAgent: { ...options.remoteAgent, backend: launched.backend },
+          remoteAgent: { ...options.remoteAgent, backend: remoteStatus.backend },
         };
       }
 

@@ -9,6 +9,10 @@ import { useFileDrop } from '@/hooks/useFileDrop';
 import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
 import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
+import {
+  getRemoteAgentConnectionMode,
+  isRemoteAgentConnectionError,
+} from '@/lib/remoteAgentSessionLedger';
 import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
@@ -867,6 +871,7 @@ export function AgentTerminal({
     command,
     env,
     remoteAgent,
+    remoteAgentMode: remoteAgent ? getRemoteAgentConnectionMode(remoteBackend) : undefined,
     isActive: effectiveIsActive,
     onExit: handleExit,
     onData: handleData,
@@ -888,7 +893,7 @@ export function AgentTerminal({
       const statusResult = await window.electronAPI.remoteAgent.status(remoteAgent);
       if (disposed) return;
       if (!statusResult.ok) {
-        if (statusResult.error.code === 'ssh-failed') {
+        if (isRemoteAgentConnectionError(statusResult.error.code)) {
           onRemoteDisconnected?.();
         }
         return;
@@ -1062,7 +1067,10 @@ export function AgentTerminal({
           }
           break;
         case 'forceStopRemote':
-          if (remoteAgent) {
+          if (
+            remoteAgent &&
+            window.confirm(t('Force stop this remote Agent? Unsaved remote state may be lost.'))
+          ) {
             const result = await window.electronAPI.remoteAgent.forceStop(remoteAgent);
             if (result.ok) onRemoteStatus?.(result.value);
           }

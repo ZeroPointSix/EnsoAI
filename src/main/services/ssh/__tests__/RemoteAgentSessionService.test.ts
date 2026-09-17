@@ -5,6 +5,7 @@ import {
   buildLogsCommand,
   buildStatusCommand,
   buildStopCommand,
+  classifySshError,
   RemoteAgentSessionError,
   RemoteAgentSessionService,
 } from '../RemoteAgentSessionService';
@@ -57,6 +58,10 @@ describe('RemoteAgentSessionService', () => {
     expect(calls[1][3]).toContain('.ensoai/sessions/enso-session_123');
     expect(calls[1][3]).toContain('pipe-pane');
     expect(calls[1][3]).toContain('new-session -d');
+    expect(calls[1][3]).toContain('if [ -f "$HOME/.ensoai/sessions/enso-session_123/state" ]');
+    expect(calls[1][3]).toContain('workspace="$HOME/$' + '{workspace#~/}"');
+    expect(calls[1][3]).toContain('-c "$workspace"');
+    expect(buildLaunchCommand(options, 'psmux')).toContain('if (Test-Path');
   });
 
   it('returns only bytes after output_offset and advances the stable offset', async () => {
@@ -74,6 +79,33 @@ describe('RemoteAgentSessionService', () => {
       outputOffset: 11,
     });
     expect(executor.mock.calls.at(-1)?.[1].at(-1)).toContain('skip=6');
+    expect(executor.mock.calls.at(-1)?.[1].at(-1)).toContain('count="$count"');
+  });
+
+  it('does not advance output_offset across a partial UTF-8 character', async () => {
+    const character = Buffer.from('你');
+    let logRead = 0;
+    const executor = vi.fn(async (_file: string, args: string[]) => {
+      if (args.at(-1) === 'tmux -V') return { stdout: 'tmux 3.4', stderr: '' };
+      logRead += 1;
+      const bytes = logRead === 1 ? character.subarray(0, 2) : character;
+      return {
+        stdout: `__ENSO_LOG_OFFSET__${bytes.length}\n__ENSO_LOG_DATA__${bytes.toString('base64')}\n`,
+        stderr: '',
+      };
+    });
+    const service = new RemoteAgentSessionService('win32', executor, async () => discovery);
+
+    await expect(service.logs(options, 0)).resolves.toEqual({
+      sessionId: options.sessionName,
+      data: '',
+      outputOffset: 0,
+    });
+    await expect(service.logs(options, 0)).resolves.toEqual({
+      sessionId: options.sessionName,
+      data: '你',
+      outputOffset: 3,
+    });
   });
 
   it('returns the authoritative remote state and exit code', async () => {
@@ -125,6 +157,14 @@ describe('RemoteAgentSessionService', () => {
       detail: 'Connection timed out',
     });
     expect(executor).toHaveBeenCalledTimes(1);
+  });
+
+  it('classifies actionable SSH transport failures', () => {
+    expect(classifySshError('Permission denied (publickey)')).toBe('auth-failed');
+    expect(classifySshError('Host key verification failed')).toBe('host-key-failed');
+    expect(classifySshError('ssh: connect to host example port 22: Connection timed out')).toBe(
+      'host-unreachable'
+    );
   });
 
   it('builds attach-safe launch, offset and PowerShell psmux commands', () => {

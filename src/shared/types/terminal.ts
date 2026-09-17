@@ -13,6 +13,8 @@ export interface RemoteAgentLaunchOptions {
   backend?: RemoteAgentMuxBackend;
 }
 
+export type RemoteAgentConnectionMode = 'launch' | 'attach';
+
 export type RemoteAgentMuxBackend = 'tmux' | 'psmux';
 
 export type RemoteAgentSessionState =
@@ -33,6 +35,9 @@ export type RemoteAgentErrorCode =
   | 'host-not-allowed'
   | 'invalid-options'
   | 'ssh-failed'
+  | 'auth-failed'
+  | 'host-unreachable'
+  | 'host-key-failed'
   | 'mux-unavailable'
   | 'protocol-error';
 
@@ -76,6 +81,8 @@ export interface TerminalCreateOptions {
   sshHost?: string;
   /** Remote Agent command attached to a persistent tmux session over SSH. */
   remoteAgent?: RemoteAgentLaunchOptions;
+  /** Launch only for a new session; reconnects attach to the existing remote journal. */
+  remoteAgentMode?: RemoteAgentConnectionMode;
 }
 
 export interface TerminalResizeOptions {

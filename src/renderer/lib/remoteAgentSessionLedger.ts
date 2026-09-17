@@ -1,3 +1,9 @@
+import type {
+  RemoteAgentConnectionMode,
+  RemoteAgentErrorCode,
+  RemoteAgentMuxBackend,
+} from '@shared/types';
+
 export interface PersistableAgentSession {
   remoteHost?: string;
   agentCommand?: string;
@@ -11,4 +17,19 @@ export function shouldPersistAgentSession(session: PersistableAgentSession): boo
 
 export function shouldRenderPtyOutput(remoteHost?: string): boolean {
   return !remoteHost?.trim();
+}
+
+export function getRemoteAgentConnectionMode(
+  backend?: RemoteAgentMuxBackend
+): RemoteAgentConnectionMode {
+  return backend ? 'attach' : 'launch';
+}
+
+export function isRemoteAgentConnectionError(code: RemoteAgentErrorCode): boolean {
+  return (
+    code === 'ssh-failed' ||
+    code === 'auth-failed' ||
+    code === 'host-unreachable' ||
+    code === 'host-key-failed'
+  );
 }

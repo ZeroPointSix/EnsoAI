@@ -626,23 +626,62 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   // Register close handler for external close requests
   useEffect(() => {
     const handleCloseAll = (worktreePath: string) => {
-      // Close every session for the worktree, including uninitialized ones, to avoid orphaned state.
       const worktreeSessions = allSessions.filter((s) => pathsEqual(s.cwd, worktreePath));
       if (worktreeSessions.length === 0) return;
 
+      const remoteSessions = worktreeSessions.filter((session) => session.remoteHost);
+      const remoteIds = new Set(remoteSessions.map((session) => session.id));
       for (const session of worktreeSessions) {
-        removeSession(session.id);
+        if (session.remoteHost) {
+          const ptyId = useSessionPtyRegistry.getState().getPtyId(session.id);
+          if (ptyId) {
+            void window.electronAPI.remoteAgent.detach(ptyId);
+          }
+          updateSession(session.id, { remoteDetached: true, remoteState: 'disconnected' });
+        } else {
+          removeSession(session.id);
+        }
       }
 
-      // Remove group state for this worktree
-      removeGroupState(worktreePath);
-
-      // Set count to 0
-      setAgentCount(worktreePath, 0);
+      if (remoteSessions.length === 0) {
+        removeGroupState(worktreePath);
+      } else {
+        updateGroupState(worktreePath, (state) => {
+          const groups = state.groups.flatMap((group): AgentGroupType[] => {
+            const sessionIds = group.sessionIds.filter((id) => remoteIds.has(id));
+            if (sessionIds.length === 0) return [];
+            return [
+              {
+                ...group,
+                sessionIds,
+                activeSessionId: sessionIds.includes(group.activeSessionId ?? '')
+                  ? group.activeSessionId
+                  : sessionIds[0],
+              },
+            ];
+          });
+          return {
+            groups,
+            activeGroupId: groups.some((group) => group.id === state.activeGroupId)
+              ? state.activeGroupId
+              : (groups[0]?.id ?? null),
+            flexPercents: groups.map(() => 100 / groups.length),
+          };
+        });
+      }
+      setAgentCount(worktreePath, remoteSessions.length);
     };
 
     return registerAgentCloseHandler(handleCloseAll);
-  }, [registerAgentCloseHandler, setAgentCount, allSessions, removeSession, removeGroupState]);
+  }, [
+    registerAgentCloseHandler,
+    setAgentCount,
+    allSessions,
+    removeSession,
+    updateSession,
+    updateGroupState,
+    removeGroupState,
+  ]);
 
   // Handle new session in active group
   const handleNewSession = useCallback(
