@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildLaunchCommand,
   buildLogsCommand,
+  buildPsmuxJournalPipeScript,
   buildStatusCommand,
   buildStopCommand,
   classifySshError,
@@ -153,6 +154,11 @@ describe('RemoteAgentSessionService', () => {
     expect(buildLaunchCommand(options, 'tmux')).toContain('trap');
     expect(buildLaunchCommand(options, 'tmux')).toContain('printf 130');
     expect(buildLaunchCommand(options, 'tmux')).toContain('printf stopped');
+    const psmuxLaunch = buildLaunchCommand(options, 'psmux');
+    expect(psmuxLaunch).toContain('trap [System.Management.Automation.PipelineStoppedException]');
+    expect(psmuxLaunch).toContain('TreatControlCAsInput');
+    expect(psmuxLaunch).toContain('-Value 130');
+    expect(psmuxLaunch).toContain('-Value stopped');
     const tmuxStatus = buildStatusCommand(options.sessionName, 'tmux');
     const psmuxStatus = buildStatusCommand(options.sessionName, 'psmux');
     expect(tmuxStatus).toContain('has_session=0');
@@ -245,7 +251,18 @@ describe('RemoteAgentSessionService', () => {
 
   it('builds attach-safe launch, offset and PowerShell psmux commands', () => {
     expect(buildLaunchCommand(options, 'tmux')).toContain('new-session -d');
-    expect(buildLaunchCommand(options, 'psmux')).toContain("$pipeCommand = 'cat >> ' + $logPath");
+    const psmuxLaunch = buildLaunchCommand(options, 'psmux');
+    expect(psmuxLaunch).not.toContain('cat >>');
+    expect(psmuxLaunch).toContain(buildPsmuxJournalPipeScript());
+    expect(psmuxLaunch).toContain('OpenStandardInput');
+    expect(psmuxLaunch).toContain('[IO.File]::Open($path, [IO.FileMode]::Append');
+    expect(psmuxLaunch).toContain('FileShare]::ReadWrite');
+    expect(psmuxLaunch).toContain(
+      "$pipeCommand = 'powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand '"
+    );
+    expect(psmuxLaunch).toContain(
+      '[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($pipeScript))'
+    );
     const tmuxLogs = buildLogsCommand(options.sessionName, 'tmux', 42);
     const psmuxLogs = buildLogsCommand(options.sessionName, 'psmux', 42);
     expect(tmuxLogs).toContain('skip=42');

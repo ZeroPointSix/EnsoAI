@@ -107,6 +107,22 @@ export function wrapRemoteAgentCommand(command: string, backend: RemoteAgentMuxB
   return `powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ${encodedCommand}`;
 }
 
+export function buildPsmuxJournalPipeScript(): string {
+  return [
+    '$stdin = [Console]::OpenStandardInput()',
+    '$fs = [IO.File]::Open($path, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite)',
+    'try { $buf = [byte[]]::new(8192); while (($n = $stdin.Read($buf, 0, $buf.Length)) -gt 0) { $fs.Write($buf, 0, $n); $fs.Flush() } } finally { $fs.Dispose(); $stdin.Dispose() }',
+  ].join('; ');
+}
+
+function buildPsmuxJournalPipeAssignment(): string {
+  return [
+    '$escapedPath = $logPath.Replace([string][char]39, ([string][char]39 + [char]39))',
+    `$pipeScript = '$path = ' + [char]39 + $escapedPath + [char]39 + '; ${buildPsmuxJournalPipeScript()}'`,
+    "$pipeCommand = 'powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($pipeScript))",
+  ].join('; ');
+}
+
 export function validateRemoteAgentOptions(options: RemoteAgentLaunchOptions): void {
   if (!SESSION_NAME_PATTERN.test(options.sessionName)) {
     throw new RemoteAgentSessionError('invalid-options', 'Invalid remote Agent session id');
@@ -181,6 +197,8 @@ export function buildLaunchCommand(
   const exitFile = `(Join-Path ${dir} 'exit-code')`;
   const logFile = `(Join-Path ${dir} 'output.log')`;
   const wrapper = [
+    `trap [System.Management.Automation.PipelineStoppedException] { Set-Content -LiteralPath ${exitFile} -Value 130 -NoNewline; Set-Content -LiteralPath ${stateFile} -Value stopped -NoNewline; exit 130 }`,
+    '[Console]::TreatControlCAsInput = $false',
     `Set-Location -LiteralPath ${quotePowerShell(options.workspace)}`,
     `Set-Content -LiteralPath ${stateFile} -Value working -NoNewline`,
     `$script = [ScriptBlock]::Create(${quotePowerShell(options.command)})`,
@@ -202,7 +220,7 @@ export function buildLaunchCommand(
     '[IO.File]::WriteAllBytes($logPath, [byte[]]@())',
     `& psmux -L enso new-session -d -s ${quotePowerShell(sessionName)} powershell.exe -NoLogo -NoProfile -Command ${quotePowerShell('Start-Sleep -Seconds 2147483647')}`,
     `if ($LASTEXITCODE -ne 0) { Set-Content -LiteralPath ${stateFile} -Value failed -NoNewline; exit $LASTEXITCODE }`,
-    `$pipeCommand = 'cat >> ' + $logPath`,
+    buildPsmuxJournalPipeAssignment(),
     `& psmux -L enso pipe-pane -o -t ${quotePowerShell(sessionName)} $pipeCommand`,
     `if ($LASTEXITCODE -ne 0) { $launchCode = $LASTEXITCODE; & psmux -L enso kill-session -t ${quotePowerShell(sessionName)} 2>$null; Set-Content -LiteralPath ${stateFile} -Value failed -NoNewline; exit $launchCode }`,
     `& psmux -L enso respawn-pane -k -t ${quotePowerShell(sessionName)} -- powershell.exe -NoLogo -NoProfile -Command ${quotePowerShell(wrapper)}`,
