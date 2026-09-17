@@ -21,6 +21,7 @@ import {
   type RemoteAgentConfig,
 } from '@/lib/remoteAgentConfig';
 import { cn } from '@/lib/utils';
+import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
 import { BUILTIN_AGENT_INFO, BUILTIN_AGENTS } from './constants';
 
@@ -126,7 +127,7 @@ function BuiltinAgentForm({
               <SelectTrigger id="agent-remote-host">
                 <SelectValue>{remoteHost || t('This computer')}</SelectValue>
               </SelectTrigger>
-              <SelectPopup>
+              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                 <SelectItem value="__local__">{t('This computer')}</SelectItem>
                 {sshHosts.map((host) => (
                   <SelectItem key={host.alias} value={host.alias}>
@@ -269,7 +270,7 @@ function AgentForm({
               <SelectTrigger id="custom-agent-remote-host">
                 <SelectValue>{remoteHost || t('This computer')}</SelectValue>
               </SelectTrigger>
-              <SelectPopup>
+              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                 <SelectItem value="__local__">{t('This computer')}</SelectItem>
                 {sshHosts.map((host) => (
                   <SelectItem key={host.alias} value={host.alias}>
