@@ -13,6 +13,7 @@ export * from './prompts';
 export * from './search';
 export * from './sessionCanvas';
 export * from './shell';
+export * from './ssh';
 export * from './tempWorkspace';
 export * from './terminal';
 export * from './worktree';

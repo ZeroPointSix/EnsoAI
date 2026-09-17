@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { List, Plus, Terminal, X } from 'lucide-react';
+import { List, Plus, Server, Terminal, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
@@ -16,6 +16,7 @@ interface TerminalGroupProps {
   onTabsChange: (groupId: string, tabs: TerminalTab[], activeTabId: string | null) => void;
   onGroupClick: () => void;
   onGroupEmpty: (groupId: string) => void;
+  onNewTabRequest?: (groupId: string) => void;
   onTabMoveToGroup?: (
     tabId: string,
     sourceGroupId: string,
@@ -31,6 +32,7 @@ export function TerminalGroup({
   onTabsChange,
   onGroupClick,
   onGroupEmpty,
+  onNewTabRequest,
   onTabMoveToGroup,
 }: TerminalGroupProps) {
   const { t } = useI18n();
@@ -51,6 +53,14 @@ export function TerminalGroup({
     };
     onTabsChange(group.id, [...tabs, newTab], newTab.id);
   }, [tabs, cwd, group.id, onTabsChange]);
+
+  const handleNewTabRequest = useCallback(() => {
+    if (onNewTabRequest) {
+      onNewTabRequest(group.id);
+      return;
+    }
+    handleNewTab();
+  }, [group.id, handleNewTab, onNewTabRequest]);
 
   const handleCloseTab = useCallback(
     (id: string) => {
@@ -314,7 +324,11 @@ export function TerminalGroup({
                     isDropTarget && 'ring-2 ring-primary ring-inset'
                   )}
                 >
-                  <List className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  {tab.sshHost ? (
+                    <Server className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  ) : (
+                    <List className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  )}
                   {editingId === tab.id ? (
                     <input
                       ref={inputRef}
@@ -363,7 +377,7 @@ export function TerminalGroup({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleNewTab();
+                handleNewTabRequest();
               }}
               className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               title={t('New Terminal')}
@@ -384,7 +398,7 @@ export function TerminalGroup({
         >
           <Terminal className="h-12 w-12 opacity-50" />
           <p className="text-sm">{t('No terminals open')}</p>
-          <Button variant="outline" size="sm" onClick={handleNewTab}>
+          <Button variant="outline" size="sm" onClick={handleNewTabRequest}>
             <Plus className="mr-2 h-4 w-4" />
             {t('New Terminal')}
           </Button>

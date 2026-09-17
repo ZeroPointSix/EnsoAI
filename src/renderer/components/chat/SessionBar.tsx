@@ -1,4 +1,4 @@
-import type { ClaudeProvider } from '@shared/types';
+import type { ClaudeProvider, RemoteAgentMuxBackend, RemoteAgentSessionState } from '@shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Ban,
@@ -37,6 +37,15 @@ export interface Session {
   agentCommand: string; // the CLI command to run (e.g., 'claude', 'codex')
   customPath?: string; // custom absolute path to the agent CLI (overrides agentCommand lookup)
   customArgs?: string; // additional arguments to pass to the agent
+  remoteHost?: string; // SSH Host alias used to run the agent remotely
+  remoteWorkspace?: string; // workspace path on the remote host
+  remoteBackend?: RemoteAgentMuxBackend;
+  remoteState?: RemoteAgentSessionState;
+  remoteExitCode?: number;
+  remoteOutputOffset?: number;
+  remoteDetached?: boolean;
+  remoteReconnectKey?: number;
+  remoteStopRequestedAt?: number;
   initialized: boolean; // true after first run, use --resume to restore
   activated?: boolean; // true after user presses Enter, only activated sessions are persisted
   repoPath: string; // repository path this session belongs to

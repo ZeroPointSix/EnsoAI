@@ -1,3 +1,4 @@
+import type { RemoteAgentConnectionMode, RemoteAgentLaunchOptions } from '@shared/types';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
@@ -7,6 +8,7 @@ import { Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
+import { shouldRenderPtyOutput } from '@/lib/remoteAgentSessionLedger';
 import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
 import '@xterm/xterm/css/xterm.css';
@@ -36,6 +38,9 @@ export interface UseXtermOptions {
   env?: Record<string, string>;
   isActive?: boolean;
   initialCommand?: string;
+  sshHost?: string;
+  remoteAgent?: RemoteAgentLaunchOptions;
+  remoteAgentMode?: RemoteAgentConnectionMode;
   onExit?: () => void;
   onData?: (data: string) => void;
   onCustomKey?: (
@@ -120,6 +125,9 @@ export function useXterm({
   env,
   isActive = true,
   initialCommand,
+  sshHost,
+  remoteAgent,
+  remoteAgentMode,
   onExit,
   onData,
   onCustomKey,
@@ -177,10 +185,14 @@ export function useXterm({
   // Memoize command key to avoid dependency array issues
   const commandKey = useMemo(
     () =>
-      command
-        ? `${command.shell}:${command.args.join(' ')}`
-        : `shellConfig:${shellConfig.shellType}`,
-    [command, shellConfig.shellType]
+      remoteAgent
+        ? `remote-agent:${remoteAgent.host}:${remoteAgent.sessionName}:${remoteAgentMode}`
+        : sshHost
+          ? `ssh:${sshHost}`
+          : command
+            ? `${command.shell}:${command.args.join(' ')}`
+            : `shellConfig:${shellConfig.shellType}`,
+    [command, remoteAgent, remoteAgentMode, shellConfig.shellType, sshHost]
   );
   // rAF write buffer for smooth rendering
   const writeBufferRef = useRef('');
@@ -589,8 +601,14 @@ export function useXterm({
       const ptyId = await window.electronAPI.terminal.create({
         cwd: cwd || window.electronAPI.env.HOME,
         // If command is provided (e.g., for agent), use shell/args directly
-        // Otherwise, use shellConfig from settings
-        ...(command ? { shell: command.shell, args: command.args } : { shellConfig }),
+        // Otherwise, use an SSH alias or shellConfig from settings.
+        ...(remoteAgent
+          ? { remoteAgent, remoteAgentMode }
+          : sshHost
+            ? { sshHost }
+            : command
+              ? { shell: command.shell, args: command.args }
+              : { shellConfig }),
         cols: terminal.cols,
         rows: terminal.rows,
         env,
@@ -629,7 +647,9 @@ export function useXterm({
                 const shouldLockViewport = offsetFromBottom > 0;
                 const savedOffsetFromBottom = shouldLockViewport ? offsetFromBottom : 0;
 
-                terminal.write(bufferedData);
+                if (shouldRenderPtyOutput(remoteAgent?.host)) {
+                  terminal.write(bufferedData);
+                }
 
                 // Restore viewport if it was moved by the write
                 if (shouldLockViewport) {
@@ -665,7 +685,9 @@ export function useXterm({
             // Flush any remaining buffered data
             if (writeBufferRef.current.length > 0) {
               const bufferedData = writeBufferRef.current;
-              terminal.write(bufferedData);
+              if (shouldRenderPtyOutput(remoteAgent?.host)) {
+                terminal.write(bufferedData);
+              }
               onDataRef.current?.(bufferedData);
               writeBufferRef.current = '';
             }
@@ -692,7 +714,16 @@ export function useXterm({
       terminal.writeln(`\x1b[31mFailed to start terminal.\x1b[0m`);
       terminal.writeln(`\x1b[33mError: ${error}\x1b[0m`);
     }
-  }, [cwd, command, shellConfig, commandKey, terminalRenderer]);
+  }, [
+    cwd,
+    command,
+    shellConfig,
+    commandKey,
+    terminalRenderer,
+    sshHost,
+    remoteAgent,
+    remoteAgentMode,
+  ]);
 
   useEffect(() => {
     const shouldActivate = isActive || initialCommandRef.current;
@@ -749,6 +780,7 @@ export function useXterm({
     };
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isLoading re-registers after terminal initialization.
   useEffect(() => {
     if (!previewReaderSessionId) return;
     return registerXtermPreviewReader(previewReaderSessionId, () => terminalRef.current);

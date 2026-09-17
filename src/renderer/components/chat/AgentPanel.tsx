@@ -1,4 +1,4 @@
-import type { AIProvider } from '@shared/types';
+import type { AIProvider, RemoteAgentSessionStatus } from '@shared/types';
 import { Plus, Settings, Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEMP_REPO_ID } from '@/App/constants';
@@ -17,11 +17,14 @@ import { useI18n } from '@/i18n';
 import { pauseFocusLock, restoreFocusIfLocked } from '@/lib/focusLock';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
+import { isRemoteAgentConfigured } from '@/lib/remoteAgentConfig';
+import { isRemoteAgentTerminalState } from '@/lib/remoteAgentSessionLedger';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { initAgentStatusListener } from '@/stores/agentStatus';
 import { useAgentTasksStore } from '@/stores/agentTasks';
 import { useCodeReviewContinueStore } from '@/stores/codeReviewContinue';
+import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
 import { BUILTIN_AGENT_IDS, useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
@@ -110,7 +113,14 @@ function createSession(
   customAgents: Array<{ id: string; name: string; command: string }>,
   agentSettings: Record<
     string,
-    { enabled: boolean; isDefault: boolean; customPath?: string; customArgs?: string }
+    {
+      enabled: boolean;
+      isDefault: boolean;
+      customPath?: string;
+      customArgs?: string;
+      remoteHost?: string;
+      remoteWorkspace?: string;
+    }
   >
 ): Session {
   // Handle Hapi and Happy agent IDs
@@ -135,6 +145,8 @@ function createSession(
   const agentConfig = agentSettings[baseId];
   const customPath = agentConfig?.customPath;
   const customArgs = agentConfig?.customArgs;
+  const remoteHost = agentConfig?.remoteHost;
+  const remoteWorkspace = agentConfig?.remoteWorkspace;
 
   const id = crypto.randomUUID();
   return {
@@ -145,6 +157,12 @@ function createSession(
     agentCommand: info.command,
     customPath,
     customArgs,
+    remoteHost,
+    remoteWorkspace,
+    remoteState: remoteHost ? 'starting' : undefined,
+    remoteOutputOffset: remoteHost ? 0 : undefined,
+    remoteDetached: false,
+    remoteReconnectKey: 0,
     initialized: false,
     repoPath,
     cwd,
@@ -474,6 +492,12 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     const newInstalled = new Set<string>();
 
     for (const agentId of enabledAgentIds) {
+      // The executable is resolved on the remote host, so local CLI detection is irrelevant.
+      if (isRemoteAgentConfigured(agentSettings[agentId])) {
+        newInstalled.add(agentId);
+        continue;
+      }
+
       // Default agent is always considered installed (no detection needed)
       // This ensures the default agent shows in menu even if user never ran detection
       if (agentSettings[agentId]?.isDefault) {
@@ -610,23 +634,62 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   // Register close handler for external close requests
   useEffect(() => {
     const handleCloseAll = (worktreePath: string) => {
-      // Close every session for the worktree, including uninitialized ones, to avoid orphaned state.
       const worktreeSessions = allSessions.filter((s) => pathsEqual(s.cwd, worktreePath));
       if (worktreeSessions.length === 0) return;
 
+      const remoteSessions = worktreeSessions.filter((session) => session.remoteHost);
+      const remoteIds = new Set(remoteSessions.map((session) => session.id));
       for (const session of worktreeSessions) {
-        removeSession(session.id);
+        if (session.remoteHost) {
+          const ptyId = useSessionPtyRegistry.getState().getPtyId(session.id);
+          if (ptyId) {
+            void window.electronAPI.remoteAgent.detach(ptyId);
+          }
+          updateSession(session.id, { remoteDetached: true, remoteState: 'disconnected' });
+        } else {
+          removeSession(session.id);
+        }
       }
 
-      // Remove group state for this worktree
-      removeGroupState(worktreePath);
-
-      // Set count to 0
-      setAgentCount(worktreePath, 0);
+      if (remoteSessions.length === 0) {
+        removeGroupState(worktreePath);
+      } else {
+        updateGroupState(worktreePath, (state) => {
+          const groups = state.groups.flatMap((group): AgentGroupType[] => {
+            const sessionIds = group.sessionIds.filter((id) => remoteIds.has(id));
+            if (sessionIds.length === 0) return [];
+            return [
+              {
+                ...group,
+                sessionIds,
+                activeSessionId: sessionIds.includes(group.activeSessionId ?? '')
+                  ? group.activeSessionId
+                  : sessionIds[0],
+              },
+            ];
+          });
+          return {
+            groups,
+            activeGroupId: groups.some((group) => group.id === state.activeGroupId)
+              ? state.activeGroupId
+              : (groups[0]?.id ?? null),
+            flexPercents: groups.map(() => 100 / groups.length),
+          };
+        });
+      }
+      setAgentCount(worktreePath, remoteSessions.length);
     };
 
     return registerAgentCloseHandler(handleCloseAll);
-  }, [registerAgentCloseHandler, setAgentCount, allSessions, removeSession, removeGroupState]);
+  }, [
+    registerAgentCloseHandler,
+    setAgentCount,
+    allSessions,
+    removeSession,
+    updateSession,
+    updateGroupState,
+    removeGroupState,
+  ]);
 
   // Handle new session in active group
   const handleNewSession = useCallback(
@@ -696,6 +759,15 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       const session = allSessions.find((s) => s.id === id);
       if (!session) return;
 
+      if (session.remoteHost) {
+        const ptyId = useSessionPtyRegistry.getState().getPtyId(id);
+        if (ptyId) {
+          void window.electronAPI.remoteAgent.detach(ptyId);
+        }
+        updateSession(id, { remoteDetached: true, remoteState: 'disconnected' });
+        return;
+      }
+
       // Remove the session from Zustand store
       removeSession(id);
 
@@ -757,7 +829,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         };
       });
     },
-    [allSessions, removeSession, clearTask, updateCurrentGroupState]
+    [allSessions, removeSession, clearTask, updateCurrentGroupState, updateSession]
   );
 
   // Handle session selection
@@ -1021,6 +1093,8 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       const agentConfig = agentSettings[baseId];
       const customPath = agentConfig?.customPath;
       const customArgs = agentConfig?.customArgs;
+      const remoteHost = agentConfig?.remoteHost;
+      const remoteWorkspace = agentConfig?.remoteWorkspace;
 
       const id = crypto.randomUUID();
       const newSession: Session = {
@@ -1031,6 +1105,8 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         agentCommand,
         customPath,
         customArgs,
+        remoteHost,
+        remoteWorkspace,
         initialized: false,
         repoPath,
         cwd,
@@ -1693,6 +1769,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 <div className="absolute inset-0 z-10 bg-background/10 pointer-events-none" />
               )}
               <AgentTerminal
+                key={`${sessionId}:${session.remoteReconnectKey ?? 0}`}
                 id={session.id}
                 cwd={session.cwd}
                 sessionId={session.sessionId || session.id}
@@ -1700,6 +1777,13 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 agentCommand={session.agentCommand || 'claude'}
                 customPath={session.customPath}
                 customArgs={session.customArgs}
+                remoteHost={session.remoteHost}
+                remoteWorkspace={session.remoteWorkspace}
+                remoteBackend={session.remoteBackend}
+                remoteOutputOffset={session.remoteOutputOffset}
+                remoteDetached={session.remoteDetached}
+                remoteState={session.remoteState}
+                remoteStopRequestedAt={session.remoteStopRequestedAt}
                 environment={session.environment || 'native'}
                 initialized={session.initialized}
                 activated={session.activated}
@@ -1710,6 +1794,38 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 onActivated={() => handleActivated(sessionId)}
                 onActivatedWithFirstLine={(line) => handleActivatedWithFirstLine(sessionId, line)}
                 onExit={() => handleCloseSession(sessionId, groupId || undefined)}
+                onRemoteStatus={(status: RemoteAgentSessionStatus, outputOffset) => {
+                  updateSession(sessionId, {
+                    remoteBackend: status.backend,
+                    remoteState: status.state,
+                    remoteExitCode: status.exitCode,
+                    ...(isRemoteAgentTerminalState(status.state) ? { remoteDetached: false } : {}),
+                    remoteStopRequestedAt:
+                      status.state === 'stopping'
+                        ? (session.remoteStopRequestedAt ?? Date.now())
+                        : undefined,
+                    ...(outputOffset !== undefined ? { remoteOutputOffset: outputOffset } : {}),
+                  });
+                }}
+                onRemoteDisconnected={() => {
+                  updateSession(sessionId, {
+                    remoteDetached: true,
+                    remoteState: 'disconnected',
+                  });
+                }}
+                onRemoteDetached={() => {
+                  updateSession(sessionId, {
+                    remoteDetached: true,
+                    remoteState: 'disconnected',
+                  });
+                }}
+                onRemoteReconnect={() => {
+                  updateSession(sessionId, {
+                    remoteDetached: false,
+                    remoteState: 'starting',
+                    remoteReconnectKey: (session.remoteReconnectKey ?? 0) + 1,
+                  });
+                }}
                 onTerminalTitleChange={(title) => {
                   if (session.userRenamed) return;
                   const syncName =

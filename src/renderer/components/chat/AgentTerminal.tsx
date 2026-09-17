@@ -1,4 +1,9 @@
-import { ArrowDown } from 'lucide-react';
+import type {
+  RemoteAgentMuxBackend,
+  RemoteAgentSessionState,
+  RemoteAgentSessionStatus,
+} from '@shared/types';
+import { ArrowDown, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   TerminalSearchBar,
@@ -8,6 +13,11 @@ import { useFileDrop } from '@/hooks/useFileDrop';
 import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
 import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
+import {
+  getRemoteAgentConnectionMode,
+  isRemoteAgentConnectionError,
+  isRemoteAgentTerminalState,
+} from '@/lib/remoteAgentSessionLedger';
 import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { useAgentRuntimeActivityStore } from '@/stores/agentRuntimeActivity';
@@ -26,6 +36,13 @@ interface AgentTerminalProps {
   agentCommand?: string;
   customPath?: string; // custom absolute path to the agent CLI
   customArgs?: string; // additional arguments to pass to the agent
+  remoteHost?: string;
+  remoteWorkspace?: string;
+  remoteBackend?: RemoteAgentMuxBackend;
+  remoteOutputOffset?: number;
+  remoteDetached?: boolean;
+  remoteState?: RemoteAgentSessionState;
+  remoteStopRequestedAt?: number;
   environment?: 'native' | 'hapi' | 'happy';
   initialized?: boolean;
   activated?: boolean;
@@ -44,6 +61,10 @@ interface AgentTerminalProps {
   /** Called when session is activated with the current line content (for session name fallback). */
   onActivatedWithFirstLine?: (line: string) => void;
   onExit?: () => void;
+  onRemoteStatus?: (status: RemoteAgentSessionStatus, outputOffset?: number) => void;
+  onRemoteDisconnected?: () => void;
+  onRemoteDetached?: () => void;
+  onRemoteReconnect?: () => void;
   onTerminalTitleChange?: (title: string) => void;
   onSplit?: () => void;
   onMerge?: () => void;
@@ -61,6 +82,7 @@ const MIN_OUTPUT_FOR_INDICATOR = 200; // Minimum chars to show "outputting" indi
 const ACTIVITY_POLL_INTERVAL_MS = 1000; // Poll process activity every 1000ms
 const IDLE_CONFIRMATION_COUNT = 2; // Require 2 consecutive idle polls (2 seconds) before marking as idle
 const RECENT_OUTPUT_TIMEOUT_MS = 3000; // If output received within this time, consider still active
+const REMOTE_STOP_GRACE_MS = 10000;
 
 export function AgentTerminal({
   id,
@@ -70,6 +92,13 @@ export function AgentTerminal({
   agentCommand = 'claude',
   customPath,
   customArgs,
+  remoteHost,
+  remoteWorkspace,
+  remoteBackend,
+  remoteOutputOffset = 0,
+  remoteDetached = false,
+  remoteState,
+  remoteStopRequestedAt,
   environment = 'native',
   initialized,
   activated,
@@ -83,6 +112,10 @@ export function AgentTerminal({
   onActivated,
   onActivatedWithFirstLine,
   onExit,
+  onRemoteStatus,
+  onRemoteDisconnected,
+  onRemoteDetached,
+  onRemoteReconnect,
   onTerminalTitleChange,
   onSplit,
   onMerge,
@@ -100,6 +133,13 @@ export function AgentTerminal({
     claudeCodeIntegration,
     glowEffectEnabled,
   } = useSettingsStore();
+
+  const onRemoteStatusRef = useRef(onRemoteStatus);
+  const onRemoteDisconnectedRef = useRef(onRemoteDisconnected);
+  const remoteOutputOffsetRef = useRef(remoteOutputOffset);
+  onRemoteStatusRef.current = onRemoteStatus;
+  onRemoteDisconnectedRef.current = onRemoteDisconnected;
+  remoteOutputOffsetRef.current = Math.max(remoteOutputOffsetRef.current, remoteOutputOffset);
 
   // Track if hapi is globally installed (cached in main process)
   const [hapiGlobalInstalled, setHapiGlobalInstalled] = useState<boolean | null>(null);
@@ -273,7 +313,7 @@ export function AgentTerminal({
         // Error checking activity, ignore
       }
     }, ACTIVITY_POLL_INTERVAL_MS);
-  }, [updateOutputState]);
+  }, [terminalSessionId, updateOutputState]);
 
   // Stop polling for process activity
   const stopActivityPolling = useCallback(() => {
@@ -300,7 +340,7 @@ export function AgentTerminal({
   }, []);
 
   // Build command with session args
-  const { command, env } = useMemo(() => {
+  const { command, env, remoteAgent } = useMemo(() => {
     // Wait for shell config to be resolved
     if (!resolvedShell) {
       return { command: undefined, env: undefined };
@@ -408,6 +448,22 @@ export function AgentTerminal({
     // Safe: all interpolated values (effectiveCommand, agentArgs, tmuxSessionName) are
     // derived from internal app config / controlled constants, not from arbitrary user input.
     const fullCommand = `${effectiveCommand} ${agentArgs.join(' ')}`.trim();
+
+    if (remoteHost && terminalSessionId) {
+      tmuxSessionNameRef.current = null;
+      return {
+        command: undefined,
+        env: envVars,
+        remoteAgent: {
+          host: remoteHost,
+          workspace: remoteWorkspace || '~',
+          sessionName: `enso-${terminalSessionId}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+          command: fullCommand,
+          backend: remoteBackend,
+        },
+      };
+    }
+
     const shellName = resolvedShell.shell.toLowerCase();
 
     // Determine if tmux wrapping should be applied
@@ -475,12 +531,32 @@ export function AgentTerminal({
     resolvedShell,
     claudeCodeIntegration.tmuxEnabled,
     terminalSessionId,
+    remoteHost,
+    remoteWorkspace,
+    remoteBackend,
   ]);
 
   // Handle exit with auto-close logic
   const handleExit = useCallback(() => {
     if (terminalSessionId) {
       clearSessionPtyId(terminalSessionId);
+    }
+    if (remoteAgent) {
+      void window.electronAPI.remoteAgent
+        .status(remoteAgent)
+        .then((result) => {
+          if (result.ok && isRemoteAgentTerminalState(result.value.state)) {
+            onRemoteStatusRef.current?.(result.value);
+            return;
+          }
+          onRemoteDisconnectedRef.current?.();
+        })
+        .catch(() => onRemoteDisconnectedRef.current?.());
+      return;
+    }
+    if (remoteHost) {
+      onRemoteDisconnectedRef.current?.();
+      return;
     }
     const runtime = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
     const isSessionNotFound = outputBufferRef.current.includes(
@@ -491,7 +567,7 @@ export function AgentTerminal({
       onExit?.();
     }
     // Quick exit without session error - keep tab open for debugging
-  }, [onExit, terminalSessionId, clearSessionPtyId]);
+  }, [onExit, remoteAgent, remoteHost, terminalSessionId, clearSessionPtyId]);
 
   const handlePtyInit = useCallback(
     (ptyId: string) => {
@@ -795,9 +871,19 @@ export function AgentTerminal({
     if (environment === 'hapi' && hapiGlobalInstalled === null) {
       return false;
     }
+    if (remoteDetached) {
+      return false;
+    }
     // Force activation when there's a pending command (auto-execute)
     return isActive || hasPendingCommand;
-  }, [environment, hapiGlobalInstalled, isActive, resolvedShell, hasPendingCommand]);
+  }, [
+    environment,
+    hapiGlobalInstalled,
+    isActive,
+    resolvedShell,
+    hasPendingCommand,
+    remoteDetached,
+  ]);
 
   const {
     containerRef,
@@ -814,6 +900,8 @@ export function AgentTerminal({
     cwd,
     command,
     env,
+    remoteAgent,
+    remoteAgentMode: remoteAgent ? getRemoteAgentConnectionMode(remoteBackend) : undefined,
     isActive: effectiveIsActive,
     onExit: handleExit,
     onData: handleData,
@@ -825,6 +913,51 @@ export function AgentTerminal({
     canMerge,
     previewReaderSessionId: terminalSessionId,
   });
+
+  useEffect(() => {
+    if (!remoteAgent || !terminal || remoteDetached) return;
+
+    let disposed = false;
+    let syncing = false;
+    const syncRemoteSession = async () => {
+      if (syncing) return;
+      syncing = true;
+      try {
+        const statusResult = await window.electronAPI.remoteAgent.status(remoteAgent);
+        if (disposed) return;
+        if (!statusResult.ok) {
+          if (isRemoteAgentConnectionError(statusResult.error.code)) {
+            onRemoteDisconnectedRef.current?.();
+          }
+          return;
+        }
+
+        const logsResult = await window.electronAPI.remoteAgent.logs(
+          remoteAgent,
+          remoteOutputOffsetRef.current
+        );
+        if (disposed) return;
+        if (logsResult.ok) {
+          if (logsResult.value.data) {
+            terminal.write(logsResult.value.data);
+          }
+          remoteOutputOffsetRef.current = logsResult.value.outputOffset;
+          onRemoteStatusRef.current?.(statusResult.value, logsResult.value.outputOffset);
+        } else {
+          onRemoteStatusRef.current?.(statusResult.value);
+        }
+      } finally {
+        syncing = false;
+      }
+    };
+
+    void syncRemoteSession();
+    const interval = setInterval(() => void syncRemoteSession(), 2000);
+    return () => {
+      disposed = true;
+      clearInterval(interval);
+    };
+  }, [remoteAgent, terminal, remoteDetached]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
 
@@ -900,6 +1033,18 @@ export function AgentTerminal({
         { id: 'clear', label: t('Clear terminal') },
         { id: 'refresh', label: t('Refresh terminal') },
         { id: 'separator-1', label: '', type: 'separator' as const },
+        ...(remoteAgent
+          ? [
+              { id: 'detachRemote', label: t('Detach remote Agent') },
+              { id: 'stopRemote', label: t('Stop remote Agent') },
+              ...(remoteState === 'stopping' &&
+              remoteStopRequestedAt !== undefined &&
+              Date.now() - remoteStopRequestedAt >= REMOTE_STOP_GRACE_MS
+                ? [{ id: 'forceStopRemote', label: t('Force stop remote Agent') }]
+                : []),
+              { id: 'separator-remote', label: '', type: 'separator' as const },
+            ]
+          : []),
         { id: 'copy', label: t('Copy'), disabled: !terminal?.hasSelection() },
         { id: 'paste', label: t('Paste') },
         { id: 'selectAll', label: t('Select all') },
@@ -945,6 +1090,27 @@ export function AgentTerminal({
         case 'selectAll':
           terminal?.selectAll();
           break;
+        case 'detachRemote':
+          if (ptyIdRef.current) {
+            await window.electronAPI.remoteAgent.detach(ptyIdRef.current);
+          }
+          onRemoteDetached?.();
+          break;
+        case 'stopRemote':
+          if (remoteAgent) {
+            const result = await window.electronAPI.remoteAgent.stop(remoteAgent);
+            if (result.ok) onRemoteStatus?.(result.value);
+          }
+          break;
+        case 'forceStopRemote':
+          if (
+            remoteAgent &&
+            window.confirm(t('Force stop this remote Agent? Unsaved remote state may be lost.'))
+          ) {
+            const result = await window.electronAPI.remoteAgent.forceStop(remoteAgent);
+            if (result.ok) onRemoteStatus?.(result.value);
+          }
+          break;
         case 'copyTmuxRestore':
           if (tmuxSessionNameRef.current) {
             const restoreCmd = `tmux -L enso attach-session -t ${tmuxSessionNameRef.current}`;
@@ -953,7 +1119,21 @@ export function AgentTerminal({
           break;
       }
     },
-    [terminal, clear, refreshRenderer, t, onSplit, canMerge, onMerge, onFocus]
+    [
+      terminal,
+      clear,
+      refreshRenderer,
+      t,
+      onSplit,
+      canMerge,
+      onMerge,
+      onFocus,
+      remoteAgent,
+      remoteState,
+      remoteStopRequestedAt,
+      onRemoteDetached,
+      onRemoteStatus,
+    ]
   );
 
   useEffect(() => {
@@ -1059,6 +1239,18 @@ export function AgentTerminal({
       onClick={handleClick}
     >
       <div ref={containerRef} className="h-full w-full" />
+      {remoteDetached && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80">
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded border bg-background px-3 py-2 text-sm hover:bg-accent"
+            onClick={onRemoteReconnect}
+          >
+            <RefreshCw className="h-4 w-4" />
+            {t('Reconnect remote Agent')}
+          </button>
+        </div>
+      )}
       <TerminalSearchBar
         ref={searchBarRef}
         isOpen={isSearchOpen}

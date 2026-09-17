@@ -3,10 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
 import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
-import { useSettingsStore } from '@/stores/settings';
-import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
+import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
 import { useSessionPtyRegistry } from '@/stores/sessionPtyRegistry';
+import { useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 import { TerminalSearchBar, type TerminalSearchBarRef } from './TerminalSearchBar';
@@ -18,6 +18,7 @@ interface ShellTerminalProps {
   isActive?: boolean;
   canMerge?: boolean;
   initialCommand?: string;
+  sshHost?: string;
   onExit?: () => void;
   onTitleChange?: (title: string) => void;
   onInit?: (ptyId: string) => void;
@@ -31,6 +32,7 @@ export function ShellTerminal({
   isActive = false,
   canMerge = false,
   initialCommand,
+  sshHost,
   onExit,
   onTitleChange,
   onInit,
@@ -99,6 +101,7 @@ export function ShellTerminal({
     cwd,
     isActive,
     initialCommand,
+    sshHost,
     onExit: handleExit,
     onData: handleData,
     onTitleChange,

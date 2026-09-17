@@ -1,3 +1,4 @@
+import type { SshHost, SshHostDiscoveryResult } from '@shared/types';
 import { Plus, Terminal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEMP_REPO_ID } from '@/App/constants';
@@ -575,50 +576,116 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
     [updateCurrentState]
   );
 
-  // Create initial group with a terminal if none exists
-  const handleNewTerminal = useCallback(() => {
-    if (!cwd) return;
+  const handleAddTerminal = useCallback(
+    (requestedGroupId?: string, sshHost?: SshHost) => {
+      if (!cwd) return;
 
-    updateCurrentState((state) => {
-      if (state.groups.length > 0) {
-        // Add tab to active group
-        const targetGroupId = state.activeGroupId || state.groups[0].id;
+      updateCurrentState((state) => {
         const allTabs = state.groups.flatMap((g) => g.tabs);
+        const targetGroupId =
+          requestedGroupId && state.groups.some((group) => group.id === requestedGroupId)
+            ? requestedGroupId
+            : state.activeGroupId || state.groups[0]?.id;
         const newTab: TerminalTab = {
           id: crypto.randomUUID(),
-          name: getNextTabName(allTabs, cwd),
+          name: sshHost?.alias ?? getNextTabName(allTabs, cwd),
           cwd,
+          sshHost: sshHost?.alias,
+          userEdited: Boolean(sshHost),
+        };
+
+        if (targetGroupId) {
+          return {
+            ...state,
+            groups: state.groups.map((group) =>
+              group.id === targetGroupId
+                ? { ...group, tabs: [...group.tabs, newTab], activeTabId: newTab.id }
+                : group
+            ),
+            activeGroupId: targetGroupId,
+          };
+        }
+
+        const newGroup: TerminalGroupType = {
+          id: crypto.randomUUID(),
+          tabs: [newTab],
+          activeTabId: newTab.id,
         };
 
         return {
-          ...state,
-          groups: state.groups.map((g) =>
-            g.id === targetGroupId ? { ...g, tabs: [...g.tabs, newTab], activeTabId: newTab.id } : g
-          ),
+          groups: [newGroup],
+          activeGroupId: newGroup.id,
+          flexPercents: [100],
+        };
+      });
+    },
+    [cwd, updateCurrentState]
+  );
+
+  const handleNewTerminal = useCallback(() => {
+    handleAddTerminal();
+  }, [handleAddTerminal]);
+
+  const handleTerminalMenu = useCallback(
+    async (groupId?: string) => {
+      if (window.electronAPI.env.platform !== 'win32') {
+        handleAddTerminal(groupId);
+        return;
+      }
+
+      let discovery: SshHostDiscoveryResult;
+      try {
+        discovery = await window.electronAPI.ssh.listHosts();
+      } catch {
+        discovery = {
+          supported: true,
+          hosts: [],
+          configPath: '',
+          errorCode: 'config-unreadable',
         };
       }
 
-      // Create first group
-      const newGroup: TerminalGroupType = {
-        id: crypto.randomUUID(),
-        tabs: [
-          {
-            id: crypto.randomUUID(),
-            name: 'Untitled-1',
-            cwd,
-          },
-        ],
-        activeTabId: null,
-      };
-      newGroup.activeTabId = newGroup.tabs[0].id;
+      let emptyLabel = t('No SSH hosts found');
+      if (discovery.errorCode === 'config-not-found') {
+        emptyLabel = t('SSH config not found');
+      } else if (discovery.errorCode === 'config-unreadable') {
+        emptyLabel = t('Could not read SSH config');
+      }
 
-      return {
-        groups: [newGroup],
-        activeGroupId: newGroup.id,
-        flexPercents: [100],
-      };
-    });
-  }, [cwd, updateCurrentState]);
+      const items: Array<{
+        label: string;
+        id: string;
+        type?: 'normal' | 'separator';
+        disabled?: boolean;
+      }> = [
+        { id: 'local', label: t('Local Terminal') },
+        { id: 'separator', label: '', type: 'separator' },
+        { id: 'ssh-heading', label: t('SSH Hosts'), disabled: true },
+        ...(discovery.hosts.length > 0
+          ? discovery.hosts.map((host, index) => {
+              const endpoint = host.hostName
+                ? `${host.user ? `${host.user}@` : ''}${host.hostName}${host.port ? `:${host.port}` : ''}`
+                : '';
+              return {
+                id: `ssh:${index}`,
+                label: endpoint ? `${host.alias} - ${endpoint}` : host.alias,
+              };
+            })
+          : [{ id: 'ssh-empty', label: emptyLabel, disabled: true }]),
+      ];
+
+      const selectedId = await window.electronAPI.contextMenu.show(items);
+      if (selectedId === 'local') {
+        handleAddTerminal(groupId);
+        return;
+      }
+      if (selectedId?.startsWith('ssh:')) {
+        const host = discovery.hosts[Number.parseInt(selectedId.slice(4), 10)];
+        if (host) handleAddTerminal(groupId, host);
+      }
+    },
+    [handleAddTerminal, t]
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -838,7 +905,7 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
               <EmptyTitle>{t('No terminals open')}</EmptyTitle>
               <EmptyDescription>{t('Create a terminal to start working')}</EmptyDescription>
             </EmptyHeader>
-            <Button variant="outline" size="sm" onClick={handleNewTerminal}>
+            <Button variant="outline" size="sm" onClick={() => handleTerminalMenu()}>
               <Plus className="mr-2 h-4 w-4" />
               {t('New Terminal')}
             </Button>
@@ -874,6 +941,7 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
                     onTabsChange={handleTabsChange}
                     onGroupClick={() => handleGroupClick(group.id)}
                     onGroupEmpty={handleGroupEmpty}
+                    onNewTabRequest={handleTerminalMenu}
                     onTabMoveToGroup={handleTabMoveToGroup}
                   />
                 </div>
@@ -942,6 +1010,7 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
                       isActive={isTerminalActive}
                       canMerge={state.groups.length > 1}
                       initialCommand={info.tab.initialCommand}
+                      sshHost={info.tab.sshHost}
                       onExit={() => handleTerminalClose(tabId)}
                       onTitleChange={(title) => handleTitleChange(tabId, title)}
                       onSplit={() => handleSplit(info.group.id)}

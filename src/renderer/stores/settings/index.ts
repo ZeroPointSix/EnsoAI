@@ -326,6 +326,8 @@ export const useSettingsStore = create<SettingsState>()(
               ...current[agentId],
               customPath: config.customPath || undefined,
               customArgs: config.customArgs || undefined,
+              remoteHost: config.remoteHost || undefined,
+              remoteWorkspace: config.remoteWorkspace || undefined,
             },
           },
         });

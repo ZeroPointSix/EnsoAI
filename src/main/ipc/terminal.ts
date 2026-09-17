@@ -4,6 +4,8 @@ import {
   type TerminalResizeOptions,
 } from '@shared/types';
 import { ipcMain, type WebContents } from 'electron';
+import { remoteAgentSessionService } from '../services/ssh/RemoteAgentSessionService';
+import { discoverSshHosts, isConfiguredSshHost } from '../services/ssh/SshConfigService';
 import { PtyManager } from '../services/terminal/PtyManager';
 
 export const ptyManager = new PtyManager();
@@ -40,6 +42,24 @@ export function registerTerminalHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.TERMINAL_CREATE,
     async (event, options: TerminalCreateOptions = {}) => {
+      const requestedSshHost = options.remoteAgent?.host ?? options.sshHost;
+      if (requestedSshHost) {
+        const discovery = await discoverSshHosts();
+        if (!isConfiguredSshHost(discovery, requestedSshHost)) {
+          throw new Error('SSH host is not present in the local OpenSSH config');
+        }
+      }
+      if (options.remoteAgent) {
+        const remoteStatus =
+          options.remoteAgentMode === 'attach'
+            ? await remoteAgentSessionService.status(options.remoteAgent)
+            : await remoteAgentSessionService.launch(options.remoteAgent);
+        options = {
+          ...options,
+          remoteAgent: { ...options.remoteAgent, backend: remoteStatus.backend },
+        };
+      }
+
       ensureTerminalCleanup(event.sender);
       const ownerId = event.sender.id;
 

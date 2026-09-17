@@ -4,6 +4,13 @@ import { normalizePath, pathsEqual } from '@/App/storage';
 import type { Session } from '@/components/chat/SessionBar';
 import type { AgentGroupState } from '@/components/chat/types';
 import { createInitialGroupState } from '@/components/chat/types';
+import {
+  appendRawPreviewTail,
+  inferPreviewInterruptSignal,
+  logPreviewSignalAnalysis,
+  type PreviewInterruptReason,
+} from '@/lib/canvasAgentState/analyzeTerminalPreviewSignals';
+import { syncPreviewSignalToActivity } from '@/lib/canvasAgentState/syncPreviewSignalToActivity';
 import { isHighSignalCanvasPreview, isLowSignalCanvasPreview } from '@/lib/canvasPreviewQuality';
 import {
   mergeAuthoritativePreviewSnapshot,
@@ -11,18 +18,9 @@ import {
   mergePreviewSnapshot,
   mergeXtermCanvasPreview,
 } from '@/lib/previewSnapshotMerge';
-import {
-  appendRawPreviewTail,
-  type PreviewInterruptReason,
-  inferPreviewInterruptSignal,
-  logPreviewSignalAnalysis,
-} from '@/lib/canvasAgentState/analyzeTerminalPreviewSignals';
-import { syncPreviewSignalToActivity } from '@/lib/canvasAgentState/syncPreviewSignalToActivity';
+import { shouldPersistAgentSession } from '@/lib/remoteAgentSessionLedger';
 import { appendTerminalPreviewChunk, getDisplayPreviewText } from '@/lib/terminalPreview';
-import {
-  removeCachedSessionPreview,
-  setCachedSessionPreview,
-} from '@/stores/sessionPreviewCache';
+import { removeCachedSessionPreview, setCachedSessionPreview } from '@/stores/sessionPreviewCache';
 import {
   hasTerminalPreviewReader,
   snapshotTerminalPreview,
@@ -95,11 +93,6 @@ export interface AggregatedOutputState {
   total: number;
   outputting: number;
   unread: number;
-}
-
-// Check if an agent command supports session persistence
-function isResumableAgent(agentCommand: string): boolean {
-  return agentCommand?.startsWith('claude') ?? false;
 }
 
 /**
@@ -179,12 +172,9 @@ function loadFromStorage(): { sessions: Session[]; activeIds: Record<string, str
 }
 
 function saveToStorage(sessions: Session[], activeIds: Record<string, string | null>): void {
-  // Only persist sessions that are:
-  // 1. Using agents that support resumption (e.g., claude)
-  // 2. Activated (user has pressed Enter at least once)
-  const persistableSessions = sessions.filter(
-    (s) => isResumableAgent(s.agentCommand) && s.activated
-  );
+  // Remote sessions persist immediately because their process outlives this app.
+  // Local sessions retain the existing activation and native-resume requirements.
+  const persistableSessions = sessions.filter(shouldPersistAgentSession);
   const persistableIds = new Set(persistableSessions.map((s) => s.id));
   // Only keep activeIds that reference persistable sessions
   const persistableActiveIds: Record<string, string | null> = {};
@@ -627,8 +617,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
           bytes: data.length,
         });
         syncPreviewSignalToActivity(sessionId, signal, prevSignalReason);
-        const previewSignalReason =
-          signal.reason === 'none' ? undefined : signal.reason;
+        const previewSignalReason = signal.reason === 'none' ? undefined : signal.reason;
 
         if (
           previewText === current?.previewText &&
