@@ -68,6 +68,13 @@ describe('RemoteAgentSessionService', () => {
     const psmuxLaunch = buildLaunchCommand(options, 'psmux');
     expect(psmuxLaunch).toContain('if (Test-Path');
     expect(psmuxLaunch).toContain('$LASTEXITCODE -ne 0');
+    expect(psmuxLaunch).toContain('new-session -d');
+    expect(psmuxLaunch).toContain('pipe-pane -o');
+    expect(psmuxLaunch).toContain('respawn-pane -k');
+    expect(psmuxLaunch.indexOf('pipe-pane -o')).toBeLessThan(
+      psmuxLaunch.indexOf('respawn-pane -k')
+    );
+    expect(psmuxLaunch).not.toContain('Tee-Object');
   });
 
   it('returns only bytes after output_offset and advances the stable offset', async () => {
@@ -163,6 +170,37 @@ describe('RemoteAgentSessionService', () => {
     expect(executor).toHaveBeenCalledTimes(2);
   });
 
+  it('rejects psmux versions without the required pipe-pane and Ctrl-C fixes', async () => {
+    const executor = vi.fn(async (_file: string, args: string[]) => {
+      if (args.at(-1) === 'tmux -V') {
+        throw new RemoteAgentSessionError('ssh-failed', 'not found');
+      }
+      return { stdout: 'psmux 3.3.2', stderr: '' };
+    });
+    const service = new RemoteAgentSessionService('win32', executor, async () => discovery);
+
+    await expect(service.capability(options)).rejects.toMatchObject({
+      code: 'mux-unavailable',
+      message: expect.stringContaining('3.3.8'),
+      detail: 'Detected psmux 3.3.2',
+    });
+  });
+
+  it('accepts a psmux version with the required lifecycle fixes', async () => {
+    const executor = vi.fn(async (_file: string, args: string[]) => {
+      if (args.at(-1) === 'tmux -V') {
+        throw new RemoteAgentSessionError('ssh-failed', 'not found');
+      }
+      return { stdout: 'psmux 3.3.8', stderr: '' };
+    });
+    const service = new RemoteAgentSessionService('win32', executor, async () => discovery);
+
+    await expect(service.capability(options)).resolves.toEqual({
+      backend: 'psmux',
+      version: 'psmux 3.3.8',
+    });
+  });
+
   it('preserves SSH transport errors instead of reporting a missing multiplexer', async () => {
     const executor = vi.fn(async () => {
       throw new RemoteAgentSessionError('ssh-failed', 'SSH command failed', 'Connection timed out');
@@ -207,7 +245,7 @@ describe('RemoteAgentSessionService', () => {
 
   it('builds attach-safe launch, offset and PowerShell psmux commands', () => {
     expect(buildLaunchCommand(options, 'tmux')).toContain('new-session -d');
-    expect(buildLaunchCommand(options, 'psmux')).toContain('Tee-Object');
+    expect(buildLaunchCommand(options, 'psmux')).toContain("$pipeCommand = 'cat >> ' + $logPath");
     const tmuxLogs = buildLogsCommand(options.sessionName, 'tmux', 42);
     const psmuxLogs = buildLogsCommand(options.sessionName, 'psmux', 42);
     expect(tmuxLogs).toContain('skip=42');

@@ -16,6 +16,20 @@ const LOG_OFFSET_MARKER = '__ENSO_LOG_OFFSET__';
 const LOG_DATA_MARKER = '__ENSO_LOG_DATA__';
 const SESSION_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 export const REMOTE_LOG_CHUNK_BYTES = 256 * 1024;
+export const MINIMUM_PSMUX_VERSION = '3.3.8';
+
+export function isSupportedPsmuxVersion(output: string): boolean {
+  const match = output.match(/\b(\d+)\.(\d+)\.(\d+)\b/);
+  if (!match) return false;
+
+  const current = match.slice(1).map(Number);
+  const minimum = MINIMUM_PSMUX_VERSION.split('.').map(Number);
+  for (let index = 0; index < minimum.length; index += 1) {
+    if (current[index] > minimum[index]) return true;
+    if (current[index] < minimum[index]) return false;
+  }
+  return true;
+}
 
 interface ExecuteResult {
   stdout: string;
@@ -170,7 +184,7 @@ export function buildLaunchCommand(
     `Set-Location -LiteralPath ${quotePowerShell(options.workspace)}`,
     `Set-Content -LiteralPath ${stateFile} -Value working -NoNewline`,
     `$script = [ScriptBlock]::Create(${quotePowerShell(options.command)})`,
-    `& $script 2>&1 | Tee-Object -FilePath ${logFile} -Append`,
+    `& $script`,
     '$code = $LASTEXITCODE',
     `$previousState = if (Test-Path ${stateFile}) { Get-Content ${stateFile} -Raw } else { '' }`,
     `Set-Content -LiteralPath ${exitFile} -Value $code -NoNewline`,
@@ -184,9 +198,15 @@ export function buildLaunchCommand(
     `if ($LASTEXITCODE -eq 0) { Write-Output '${STATUS_MARKER}working||psmux'; exit 0 }`,
     `if (Test-Path ${stateFile}) { $state = Get-Content ${stateFile} -Raw; $exitCode = if (Test-Path ${exitFile}) { Get-Content ${exitFile} -Raw } else { '' }; if (@('starting','working','waiting_input','stopping') -contains $state) { $state = 'disconnected' }; Write-Output ("${STATUS_MARKER}{0}|{1}|psmux" -f $state,$exitCode); exit 0 }`,
     `Set-Content -LiteralPath ${stateFile} -Value starting -NoNewline`,
-    `Set-Content -LiteralPath ${logFile} -Value '' -NoNewline`,
-    `& psmux -L enso new-session -d -s ${quotePowerShell(sessionName)} powershell -NoProfile -Command ${quotePowerShell(wrapper)}`,
+    `$logPath = [IO.Path]::GetFullPath(${logFile})`,
+    '[IO.File]::WriteAllBytes($logPath, [byte[]]@())',
+    `& psmux -L enso new-session -d -s ${quotePowerShell(sessionName)} powershell.exe -NoLogo -NoProfile -Command ${quotePowerShell('Start-Sleep -Seconds 2147483647')}`,
     `if ($LASTEXITCODE -ne 0) { Set-Content -LiteralPath ${stateFile} -Value failed -NoNewline; exit $LASTEXITCODE }`,
+    `$pipeCommand = 'cat >> ' + $logPath`,
+    `& psmux -L enso pipe-pane -o -t ${quotePowerShell(sessionName)} $pipeCommand`,
+    `if ($LASTEXITCODE -ne 0) { $launchCode = $LASTEXITCODE; & psmux -L enso kill-session -t ${quotePowerShell(sessionName)} 2>$null; Set-Content -LiteralPath ${stateFile} -Value failed -NoNewline; exit $launchCode }`,
+    `& psmux -L enso respawn-pane -k -t ${quotePowerShell(sessionName)} -- powershell.exe -NoLogo -NoProfile -Command ${quotePowerShell(wrapper)}`,
+    `if ($LASTEXITCODE -ne 0) { $launchCode = $LASTEXITCODE; & psmux -L enso kill-session -t ${quotePowerShell(sessionName)} 2>$null; Set-Content -LiteralPath ${stateFile} -Value failed -NoNewline; exit $launchCode }`,
     `Write-Output '${STATUS_MARKER}starting||psmux'`,
   ].join('; ');
 }
@@ -399,7 +419,15 @@ export class RemoteAgentSessionService {
     for (const backend of ['tmux', 'psmux'] as const) {
       try {
         const result = await this.run(host, `${backend} -V`);
-        const capability = { backend, version: result.stdout.trim() || undefined };
+        const version = result.stdout.trim() || result.stderr.trim() || undefined;
+        if (backend === 'psmux' && !isSupportedPsmuxVersion(version ?? '')) {
+          throw new RemoteAgentSessionError(
+            'mux-unavailable',
+            `psmux ${MINIMUM_PSMUX_VERSION} or newer is required for raw journaling and graceful stop`,
+            version ? `Detected ${version}` : 'psmux did not report a parseable version'
+          );
+        }
+        const capability = { backend, version };
         this.backendCache.set(host.toLocaleLowerCase(), capability);
         return capability;
       } catch (error) {
