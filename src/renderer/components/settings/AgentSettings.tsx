@@ -14,6 +14,12 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import {
+  canUseAgentLocallyOrRemotely,
+  isRemoteAgentConfigured,
+  normalizeRemoteAgentConfig,
+  type RemoteAgentConfig,
+} from '@/lib/remoteAgentConfig';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { BUILTIN_AGENT_INFO, BUILTIN_AGENTS } from './constants';
@@ -29,18 +35,17 @@ const itemTransition = { duration: 0.2, ease: 'easeInOut' as const };
 interface RemoteAgentFormProps {
   remoteHost?: string;
   remoteWorkspace?: string;
-  onRemoteConfigChange?: (config: { remoteHost?: string; remoteWorkspace?: string }) => void;
 }
 
 type AgentFormProps = (
   | {
       agent: CustomAgent;
-      onSubmit: (agent: CustomAgent) => void;
+      onSubmit: (agent: CustomAgent, remoteConfig: RemoteAgentConfig) => void;
       onCancel: () => void;
     }
   | {
       agent?: undefined;
-      onSubmit: (agent: Omit<CustomAgent, 'id'>) => void;
+      onSubmit: (agent: Omit<CustomAgent, 'id'>, remoteConfig: RemoteAgentConfig) => void;
       onCancel: () => void;
     }
 ) &
@@ -193,7 +198,6 @@ function AgentForm({
   remoteHost: initialRemoteHost,
   remoteWorkspace: initialRemoteWorkspace,
   onSubmit,
-  onRemoteConfigChange,
   onCancel,
 }: AgentFormProps) {
   const { t } = useI18n();
@@ -205,7 +209,7 @@ function AgentForm({
   const [sshHosts, setSshHosts] = React.useState<Array<{ alias: string; label: string }>>([]);
 
   React.useEffect(() => {
-    if (!agent || window.electronAPI.env.platform !== 'win32') return;
+    if (window.electronAPI.env.platform !== 'win32') return;
     void window.electronAPI.ssh.listHosts().then((result) => {
       setSshHosts(
         result.hosts.map((host) => {
@@ -221,7 +225,7 @@ function AgentForm({
         })
       );
     });
-  }, [agent]);
+  }, []);
 
   const isValid = name.trim() && command.trim();
 
@@ -235,20 +239,24 @@ function AgentForm({
       description: description.trim() || undefined,
     };
 
+    const remoteConfig = normalizeRemoteAgentConfig(remoteHost, remoteWorkspace);
+
     if (agent) {
-      (onSubmit as (agent: CustomAgent) => void)({ ...agent, ...data });
-      onRemoteConfigChange?.({
-        remoteHost: remoteHost || undefined,
-        remoteWorkspace: remoteHost ? remoteWorkspace.trim() || '~' : undefined,
-      });
+      (onSubmit as (agent: CustomAgent, remoteConfig: RemoteAgentConfig) => void)(
+        { ...agent, ...data },
+        remoteConfig
+      );
     } else {
-      (onSubmit as (agent: Omit<CustomAgent, 'id'>) => void)(data);
+      (onSubmit as (agent: Omit<CustomAgent, 'id'>, remoteConfig: RemoteAgentConfig) => void)(
+        data,
+        remoteConfig
+      );
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="mt-3 space-y-3">
-      {agent && window.electronAPI.env.platform === 'win32' && (
+      {window.electronAPI.env.platform === 'win32' && (
         <>
           <div className="space-y-1">
             <label htmlFor="custom-agent-remote-host" className="text-sm font-medium">
@@ -371,7 +379,11 @@ export function AgentSettings() {
           detectedAt: Date.now(),
         });
         // Auto-disable if not installed
-        if (!result.installed && agentSettings[agentId]?.enabled) {
+        if (
+          !result.installed &&
+          agentSettings[agentId]?.enabled &&
+          !isRemoteAgentConfigured(agentSettings[agentId])
+        ) {
           setAgentEnabled(agentId, false);
         }
       } finally {
@@ -388,7 +400,7 @@ export function AgentSettings() {
   // Refresh only enabled agents (auto-disable if not installed)
   const refreshEnabledAgents = React.useCallback(async () => {
     const enabledAgentIds = Object.entries(agentSettings)
-      .filter(([, config]) => config.enabled)
+      .filter(([, config]) => config.enabled && !isRemoteAgentConfigured(config))
       .map(([id]) => id);
 
     if (enabledAgentIds.length === 0) return;
@@ -421,8 +433,11 @@ export function AgentSettings() {
   }, [agentSettings, customAgents, setAgentDetectionStatus, setAgentEnabled]);
 
   React.useEffect(() => {
-    void Promise.allSettled(BUILTIN_AGENTS.map((agentId) => detectSingleAgent(agentId)));
-  }, [detectSingleAgent]);
+    const localAgentIds = BUILTIN_AGENTS.filter(
+      (agentId) => !isRemoteAgentConfigured(agentSettings[agentId])
+    );
+    void Promise.allSettled(localAgentIds.map((agentId) => detectSingleAgent(agentId)));
+  }, [agentSettings, detectSingleAgent]);
 
   const handleEnabledChange = (agentId: string, enabled: boolean) => {
     setAgentEnabled(agentId, enabled);
@@ -433,7 +448,12 @@ export function AgentSettings() {
         const allAgentIds = [...BUILTIN_AGENTS, ...customAgents.map((a) => a.id)];
         const firstEnabled = allAgentIds.find(
           (id) =>
-            id !== agentId && agentSettings[id]?.enabled && agentDetectionStatus[id]?.installed
+            id !== agentId &&
+            agentSettings[id]?.enabled &&
+            canUseAgentLocallyOrRemotely(
+              agentSettings[id],
+              agentDetectionStatus[id]?.installed ?? false
+            )
         );
         if (firstEnabled) {
           setAgentDefault(firstEnabled);
@@ -446,19 +466,27 @@ export function AgentSettings() {
     // For hapi/happy agents, check the base agent's detection status
     const baseAgentId = agentId.replace(/-(hapi|happy)$/, '');
     const detectionId = baseAgentId !== agentId ? baseAgentId : agentId;
-    if (agentSettings[agentId]?.enabled && agentDetectionStatus[detectionId]?.installed) {
+    if (
+      agentSettings[agentId]?.enabled &&
+      canUseAgentLocallyOrRemotely(
+        agentSettings[agentId],
+        agentDetectionStatus[detectionId]?.installed ?? false
+      )
+    ) {
       setAgentDefault(agentId);
     }
   };
 
-  const handleAddAgent = (agent: Omit<CustomAgent, 'id'>) => {
+  const handleAddAgent = (agent: Omit<CustomAgent, 'id'>, remoteConfig: RemoteAgentConfig) => {
     const id = `custom-${Date.now()}`;
     addCustomAgent({ ...agent, id });
+    setAgentCustomConfig(id, remoteConfig);
     setIsAddingAgent(false);
   };
 
-  const handleEditAgent = (agent: CustomAgent) => {
+  const handleEditAgent = (agent: CustomAgent, remoteConfig: RemoteAgentConfig) => {
     updateCustomAgent(agent.id, agent);
+    setAgentCustomConfig(agent.id, remoteConfig);
     setEditingAgent(null);
   };
 
@@ -566,7 +594,7 @@ export function AgentSettings() {
                 const isLoading = loadingAgents.has(agentId);
                 const isInstalled = detectionInfo?.installed ?? false;
                 const config = agentSettings[agentId];
-                const canEnable = isDetected && isInstalled;
+                const canEnable = canUseAgentLocallyOrRemotely(config, isDetected && isInstalled);
                 const canSetDefault = canEnable && config?.enabled;
 
                 return (
@@ -583,7 +611,10 @@ export function AgentSettings() {
                     <div
                       className={cn(
                         'flex items-center justify-between rounded-lg border px-3 py-2',
-                        isDetected && !isInstalled && 'opacity-50'
+                        isDetected &&
+                          !isInstalled &&
+                          !isRemoteAgentConfigured(config) &&
+                          'opacity-50'
                       )}
                     >
                       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -593,7 +624,7 @@ export function AgentSettings() {
                             v{detectionInfo.version}
                           </span>
                         )}
-                        {isDetected && !isInstalled && (
+                        {isDetected && !isInstalled && !isRemoteAgentConfigured(config) && (
                           <span className="whitespace-nowrap rounded bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
                             {t('Not installed')}
                           </span>
@@ -671,7 +702,8 @@ export function AgentSettings() {
               .map(({ id: agentId, info, detectionInfo, isDetected }) => {
                 const isLoading = loadingAgents.has(agentId);
                 const isInstalled = detectionInfo?.installed ?? false;
-                const canEnable = isDetected && isInstalled;
+                const config = agentSettings[agentId];
+                const canEnable = canUseAgentLocallyOrRemotely(config, isDetected && isInstalled);
 
                 return (
                   <motion.div
@@ -687,7 +719,10 @@ export function AgentSettings() {
                     <div
                       className={cn(
                         'flex items-center justify-between rounded-lg border px-3 py-2',
-                        isDetected && !isInstalled && 'opacity-50'
+                        isDetected &&
+                          !isInstalled &&
+                          !isRemoteAgentConfigured(config) &&
+                          'opacity-50'
                       )}
                     >
                       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -697,12 +732,12 @@ export function AgentSettings() {
                             v{detectionInfo.version}
                           </span>
                         )}
-                        {isDetected && !isInstalled && (
+                        {isDetected && !isInstalled && !isRemoteAgentConfigured(config) && (
                           <span className="whitespace-nowrap rounded bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
                             {t('Not installed')}
                           </span>
                         )}
-                        {!isDetected && !isLoading && (
+                        {!isDetected && !isLoading && !isRemoteAgentConfigured(config) && (
                           <span className="whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                             {t('Not detected')}
                           </span>
@@ -710,7 +745,7 @@ export function AgentSettings() {
                       </div>
 
                       <div className="flex items-center gap-4 shrink-0">
-                        {isDetected && (
+                        {canEnable && (
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs text-muted-foreground">{t('Enable')}</span>
                             <Switch
@@ -888,7 +923,7 @@ export function AgentSettings() {
               const isDetected = !!detectionInfo;
               const isInstalled = detectionInfo?.installed ?? false;
               const config = agentSettings[agent.id];
-              const canEnable = isDetected && isInstalled;
+              const canEnable = canUseAgentLocallyOrRemotely(config, isDetected && isInstalled);
               const canSetDefault = canEnable && config?.enabled;
 
               return (
@@ -896,7 +931,7 @@ export function AgentSettings() {
                   key={agent.id}
                   className={cn(
                     'rounded-lg border px-3 py-2',
-                    isDetected && !isInstalled && 'opacity-50'
+                    isDetected && !isInstalled && !isRemoteAgentConfigured(config) && 'opacity-50'
                   )}
                 >
                   <div className="flex items-center justify-between">
@@ -910,19 +945,19 @@ export function AgentSettings() {
                           v{detectionInfo.version}
                         </span>
                       )}
-                      {isDetected && !isInstalled && (
+                      {isDetected && !isInstalled && !isRemoteAgentConfigured(config) && (
                         <span className="whitespace-nowrap rounded bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
                           {t('Not installed')}
                         </span>
                       )}
-                      {!isDetected && !isLoading && (
+                      {!isDetected && !isLoading && !isRemoteAgentConfigured(config) && (
                         <span className="whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                           {t('Not detected')}
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
-                      {isDetected && (
+                      {canEnable && (
                         <>
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs text-muted-foreground">{t('Enable')}</span>
@@ -1010,9 +1045,6 @@ export function AgentSettings() {
                 remoteHost={agentSettings[editingAgent.id]?.remoteHost}
                 remoteWorkspace={agentSettings[editingAgent.id]?.remoteWorkspace}
                 onSubmit={handleEditAgent}
-                onRemoteConfigChange={(config) => {
-                  setAgentCustomConfig(editingAgent.id, config);
-                }}
                 onCancel={() => setEditingAgent(null)}
               />
             )}

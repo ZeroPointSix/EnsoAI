@@ -17,6 +17,7 @@ import { useI18n } from '@/i18n';
 import { pauseFocusLock, restoreFocusIfLocked } from '@/lib/focusLock';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
+import { isRemoteAgentConfigured } from '@/lib/remoteAgentConfig';
 import { isRemoteAgentTerminalState } from '@/lib/remoteAgentSessionLedger';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
@@ -491,6 +492,12 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     const newInstalled = new Set<string>();
 
     for (const agentId of enabledAgentIds) {
+      // The executable is resolved on the remote host, so local CLI detection is irrelevant.
+      if (isRemoteAgentConfigured(agentSettings[agentId])) {
+        newInstalled.add(agentId);
+        continue;
+      }
+
       // Default agent is always considered installed (no detection needed)
       // This ensures the default agent shows in menu even if user never ran detection
       if (agentSettings[agentId]?.isDefault) {
