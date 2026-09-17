@@ -1774,6 +1774,8 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 remoteBackend={session.remoteBackend}
                 remoteOutputOffset={session.remoteOutputOffset}
                 remoteDetached={session.remoteDetached}
+                remoteState={session.remoteState}
+                remoteStopRequestedAt={session.remoteStopRequestedAt}
                 environment={session.environment || 'native'}
                 initialized={session.initialized}
                 activated={session.activated}
@@ -1789,11 +1791,18 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                     remoteBackend: status.backend,
                     remoteState: status.state,
                     remoteExitCode: status.exitCode,
+                    remoteStopRequestedAt:
+                      status.state === 'stopping'
+                        ? (session.remoteStopRequestedAt ?? Date.now())
+                        : undefined,
                     ...(outputOffset !== undefined ? { remoteOutputOffset: outputOffset } : {}),
                   });
                 }}
                 onRemoteDisconnected={() => {
-                  updateSession(sessionId, { remoteState: 'disconnected' });
+                  updateSession(sessionId, {
+                    remoteDetached: true,
+                    remoteState: 'disconnected',
+                  });
                 }}
                 onRemoteDetached={() => {
                   updateSession(sessionId, {

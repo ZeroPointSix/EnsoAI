@@ -45,6 +45,7 @@ export interface Session {
   remoteOutputOffset?: number;
   remoteDetached?: boolean;
   remoteReconnectKey?: number;
+  remoteStopRequestedAt?: number;
   initialized: boolean; // true after first run, use --resume to restore
   activated?: boolean; // true after user presses Enter, only activated sessions are persisted
   repoPath: string; // repository path this session belongs to

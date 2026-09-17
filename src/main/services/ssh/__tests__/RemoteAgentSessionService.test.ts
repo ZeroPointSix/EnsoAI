@@ -58,10 +58,14 @@ describe('RemoteAgentSessionService', () => {
     expect(calls[1][3]).toContain('.ensoai/sessions/enso-session_123');
     expect(calls[1][3]).toContain('pipe-pane');
     expect(calls[1][3]).toContain('new-session -d');
+    expect(calls[1][3]).toContain('respawn-pane -k');
+    expect(calls[1][3].indexOf('pipe-pane')).toBeLessThan(calls[1][3].indexOf('respawn-pane -k'));
     expect(calls[1][3]).toContain('if [ -f "$HOME/.ensoai/sessions/enso-session_123/state" ]');
     expect(calls[1][3]).toContain('workspace="$HOME/$' + '{workspace#~/}"');
     expect(calls[1][3]).toContain('-c "$workspace"');
-    expect(buildLaunchCommand(options, 'psmux')).toContain('if (Test-Path');
+    const psmuxLaunch = buildLaunchCommand(options, 'psmux');
+    expect(psmuxLaunch).toContain('if (Test-Path');
+    expect(psmuxLaunch).toContain('$LASTEXITCODE -ne 0');
   });
 
   it('returns only bytes after output_offset and advances the stable offset', async () => {

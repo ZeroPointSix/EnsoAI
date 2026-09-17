@@ -145,8 +145,9 @@ export function buildLaunchCommand(
       `if [ -f ${stateFile} ]; then state=$(cat ${stateFile} 2>/dev/null || printf disconnected); exit_code=$(cat ${exitFile} 2>/dev/null || true); case "$state" in starting|working|waiting_input|stopping) state=disconnected ;; esac; printf '${STATUS_MARKER}%s|%s|tmux\\n' "$state" "$exit_code"; exit 0; fi`,
       `printf starting > ${stateFile}`,
       `: > ${logFile}`,
-      `env -u TMUX tmux -L enso -f /dev/null new-session -d -s ${quotePosix(sessionName)} -c "$workspace" sh -lc ${quotePosix(wrapper)}`,
-      `tmux -L enso pipe-pane -o -t ${quotePosix(sessionName)} ${quotePosix(`cat >> ${logFile}`)}`,
+      `if ! env -u TMUX tmux -L enso -f /dev/null new-session -d -s ${quotePosix(sessionName)} -c "$workspace" sh -lc ${quotePosix('exec sleep 2147483647')}; then printf failed > ${stateFile}; exit 1; fi`,
+      `if ! tmux -L enso pipe-pane -o -t ${quotePosix(sessionName)} ${quotePosix(`cat >> ${logFile}`)}; then tmux -L enso kill-session -t ${quotePosix(sessionName)} 2>/dev/null || true; printf failed > ${stateFile}; exit 1; fi`,
+      `if ! tmux -L enso respawn-pane -k -t ${quotePosix(sessionName)} sh -lc ${quotePosix(wrapper)}; then tmux -L enso kill-session -t ${quotePosix(sessionName)} 2>/dev/null || true; printf failed > ${stateFile}; exit 1; fi`,
       `printf '${STATUS_MARKER}starting||tmux\\n'`,
     ].join('; ');
   }
@@ -175,6 +176,7 @@ export function buildLaunchCommand(
     `Set-Content -LiteralPath ${stateFile} -Value starting -NoNewline`,
     `Set-Content -LiteralPath ${logFile} -Value '' -NoNewline`,
     `& psmux -L enso new-session -d -s ${quotePowerShell(sessionName)} powershell -NoProfile -Command ${quotePowerShell(wrapper)}`,
+    `if ($LASTEXITCODE -ne 0) { Set-Content -LiteralPath ${stateFile} -Value failed -NoNewline; exit $LASTEXITCODE }`,
     `Write-Output '${STATUS_MARKER}starting||psmux'`,
   ].join('; ');
 }

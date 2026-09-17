@@ -1,4 +1,8 @@
-import type { RemoteAgentMuxBackend, RemoteAgentSessionStatus } from '@shared/types';
+import type {
+  RemoteAgentMuxBackend,
+  RemoteAgentSessionState,
+  RemoteAgentSessionStatus,
+} from '@shared/types';
 import { ArrowDown, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -36,6 +40,8 @@ interface AgentTerminalProps {
   remoteBackend?: RemoteAgentMuxBackend;
   remoteOutputOffset?: number;
   remoteDetached?: boolean;
+  remoteState?: RemoteAgentSessionState;
+  remoteStopRequestedAt?: number;
   environment?: 'native' | 'hapi' | 'happy';
   initialized?: boolean;
   activated?: boolean;
@@ -75,6 +81,7 @@ const MIN_OUTPUT_FOR_INDICATOR = 200; // Minimum chars to show "outputting" indi
 const ACTIVITY_POLL_INTERVAL_MS = 1000; // Poll process activity every 1000ms
 const IDLE_CONFIRMATION_COUNT = 2; // Require 2 consecutive idle polls (2 seconds) before marking as idle
 const RECENT_OUTPUT_TIMEOUT_MS = 3000; // If output received within this time, consider still active
+const REMOTE_STOP_GRACE_MS = 10000;
 
 export function AgentTerminal({
   id,
@@ -89,6 +96,8 @@ export function AgentTerminal({
   remoteBackend,
   remoteOutputOffset = 0,
   remoteDetached = false,
+  remoteState,
+  remoteStopRequestedAt,
   environment = 'native',
   initialized,
   activated,
@@ -123,6 +132,13 @@ export function AgentTerminal({
     claudeCodeIntegration,
     glowEffectEnabled,
   } = useSettingsStore();
+
+  const onRemoteStatusRef = useRef(onRemoteStatus);
+  const onRemoteDisconnectedRef = useRef(onRemoteDisconnected);
+  const remoteOutputOffsetRef = useRef(remoteOutputOffset);
+  onRemoteStatusRef.current = onRemoteStatus;
+  onRemoteDisconnectedRef.current = onRemoteDisconnected;
+  remoteOutputOffsetRef.current = Math.max(remoteOutputOffsetRef.current, remoteOutputOffset);
 
   // Track if hapi is globally installed (cached in main process)
   const [hapiGlobalInstalled, setHapiGlobalInstalled] = useState<boolean | null>(null);
@@ -888,27 +904,36 @@ export function AgentTerminal({
     if (!remoteAgent || !terminal || remoteDetached) return;
 
     let disposed = false;
-    let offset = remoteOutputOffset;
+    let syncing = false;
     const syncRemoteSession = async () => {
-      const statusResult = await window.electronAPI.remoteAgent.status(remoteAgent);
-      if (disposed) return;
-      if (!statusResult.ok) {
-        if (isRemoteAgentConnectionError(statusResult.error.code)) {
-          onRemoteDisconnected?.();
+      if (syncing) return;
+      syncing = true;
+      try {
+        const statusResult = await window.electronAPI.remoteAgent.status(remoteAgent);
+        if (disposed) return;
+        if (!statusResult.ok) {
+          if (isRemoteAgentConnectionError(statusResult.error.code)) {
+            onRemoteDisconnectedRef.current?.();
+          }
+          return;
         }
-        return;
-      }
 
-      const logsResult = await window.electronAPI.remoteAgent.logs(remoteAgent, offset);
-      if (disposed) return;
-      if (logsResult.ok) {
-        if (logsResult.value.data) {
-          terminal.write(logsResult.value.data);
+        const logsResult = await window.electronAPI.remoteAgent.logs(
+          remoteAgent,
+          remoteOutputOffsetRef.current
+        );
+        if (disposed) return;
+        if (logsResult.ok) {
+          if (logsResult.value.data) {
+            terminal.write(logsResult.value.data);
+          }
+          remoteOutputOffsetRef.current = logsResult.value.outputOffset;
+          onRemoteStatusRef.current?.(statusResult.value, logsResult.value.outputOffset);
+        } else {
+          onRemoteStatusRef.current?.(statusResult.value);
         }
-        offset = logsResult.value.outputOffset;
-        onRemoteStatus?.(statusResult.value, offset);
-      } else {
-        onRemoteStatus?.(statusResult.value);
+      } finally {
+        syncing = false;
       }
     };
 
@@ -918,14 +943,7 @@ export function AgentTerminal({
       disposed = true;
       clearInterval(interval);
     };
-  }, [
-    remoteAgent,
-    terminal,
-    remoteDetached,
-    remoteOutputOffset,
-    onRemoteStatus,
-    onRemoteDisconnected,
-  ]);
+  }, [remoteAgent, terminal, remoteDetached]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
 
@@ -1005,7 +1023,11 @@ export function AgentTerminal({
           ? [
               { id: 'detachRemote', label: t('Detach remote Agent') },
               { id: 'stopRemote', label: t('Stop remote Agent') },
-              { id: 'forceStopRemote', label: t('Force stop remote Agent') },
+              ...(remoteState === 'stopping' &&
+              remoteStopRequestedAt !== undefined &&
+              Date.now() - remoteStopRequestedAt >= REMOTE_STOP_GRACE_MS
+                ? [{ id: 'forceStopRemote', label: t('Force stop remote Agent') }]
+                : []),
               { id: 'separator-remote', label: '', type: 'separator' as const },
             ]
           : []),
@@ -1093,6 +1115,8 @@ export function AgentTerminal({
       onMerge,
       onFocus,
       remoteAgent,
+      remoteState,
+      remoteStopRequestedAt,
       onRemoteDetached,
       onRemoteStatus,
     ]
