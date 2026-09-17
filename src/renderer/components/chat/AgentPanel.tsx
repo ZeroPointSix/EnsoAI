@@ -17,6 +17,7 @@ import { useI18n } from '@/i18n';
 import { pauseFocusLock, restoreFocusIfLocked } from '@/lib/focusLock';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
+import { isRemoteAgentTerminalState } from '@/lib/remoteAgentSessionLedger';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { initAgentStatusListener } from '@/stores/agentStatus';
@@ -1791,6 +1792,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                     remoteBackend: status.backend,
                     remoteState: status.state,
                     remoteExitCode: status.exitCode,
+                    ...(isRemoteAgentTerminalState(status.state) ? { remoteDetached: false } : {}),
                     remoteStopRequestedAt:
                       status.state === 'stopping'
                         ? (session.remoteStopRequestedAt ?? Date.now())

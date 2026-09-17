@@ -2,6 +2,7 @@ import type {
   RemoteAgentConnectionMode,
   RemoteAgentErrorCode,
   RemoteAgentMuxBackend,
+  RemoteAgentSessionState,
 } from '@shared/types';
 
 export interface PersistableAgentSession {
@@ -23,6 +24,10 @@ export function getRemoteAgentConnectionMode(
   backend?: RemoteAgentMuxBackend
 ): RemoteAgentConnectionMode {
   return backend ? 'attach' : 'launch';
+}
+
+export function isRemoteAgentTerminalState(state: RemoteAgentSessionState): boolean {
+  return state === 'completed' || state === 'failed' || state === 'stopped';
 }
 
 export function isRemoteAgentConnectionError(code: RemoteAgentErrorCode): boolean {

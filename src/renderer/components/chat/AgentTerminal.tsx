@@ -16,6 +16,7 @@ import { useI18n } from '@/i18n';
 import {
   getRemoteAgentConnectionMode,
   isRemoteAgentConnectionError,
+  isRemoteAgentTerminalState,
 } from '@/lib/remoteAgentSessionLedger';
 import { sessionCanvasLog, shortSessionId } from '@/lib/sessionCanvasLog';
 import { pushSessionCanvasSnapshotToPanel } from '@/lib/sessionCanvasSync';
@@ -540,8 +541,21 @@ export function AgentTerminal({
     if (terminalSessionId) {
       clearSessionPtyId(terminalSessionId);
     }
+    if (remoteAgent) {
+      void window.electronAPI.remoteAgent
+        .status(remoteAgent)
+        .then((result) => {
+          if (result.ok && isRemoteAgentTerminalState(result.value.state)) {
+            onRemoteStatusRef.current?.(result.value);
+            return;
+          }
+          onRemoteDisconnectedRef.current?.();
+        })
+        .catch(() => onRemoteDisconnectedRef.current?.());
+      return;
+    }
     if (remoteHost) {
-      onRemoteDisconnected?.();
+      onRemoteDisconnectedRef.current?.();
       return;
     }
     const runtime = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
@@ -553,7 +567,7 @@ export function AgentTerminal({
       onExit?.();
     }
     // Quick exit without session error - keep tab open for debugging
-  }, [onExit, onRemoteDisconnected, remoteHost, terminalSessionId, clearSessionPtyId]);
+  }, [onExit, remoteAgent, remoteHost, terminalSessionId, clearSessionPtyId]);
 
   const handlePtyInit = useCallback(
     (ptyId: string) => {

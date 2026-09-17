@@ -15,6 +15,7 @@ const STATUS_MARKER = '__ENSO_STATUS__';
 const LOG_OFFSET_MARKER = '__ENSO_LOG_OFFSET__';
 const LOG_DATA_MARKER = '__ENSO_LOG_DATA__';
 const SESSION_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
+export const REMOTE_LOG_CHUNK_BYTES = 256 * 1024;
 
 interface ExecuteResult {
   stdout: string;
@@ -84,6 +85,12 @@ export function quotePosix(value: string): string {
 
 export function quotePowerShell(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
+}
+
+export function wrapRemoteAgentCommand(command: string, backend: RemoteAgentMuxBackend): string {
+  if (backend === 'tmux') return command;
+  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
+  return `powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ${encodedCommand}`;
 }
 
 export function validateRemoteAgentOptions(options: RemoteAgentLaunchOptions): void {
@@ -226,7 +233,9 @@ export function buildLogsCommand(
       `log=${logFile}`,
       'size=$(wc -c < "$log" 2>/dev/null || printf 0)',
       `count=$((size - ${outputOffset}))`,
-      `printf '${LOG_OFFSET_MARKER}%s\\n' "$size"`,
+      `if [ "$count" -gt ${REMOTE_LOG_CHUNK_BYTES} ]; then count=${REMOTE_LOG_CHUNK_BYTES}; fi`,
+      `end=$((${outputOffset} + count))`,
+      `printf '${LOG_OFFSET_MARKER}%s\\n' "$end"`,
       `printf '${LOG_DATA_MARKER}'`,
       `if [ "$count" -gt 0 ]; then dd if="$log" bs=1 skip=${outputOffset} count="$count" 2>/dev/null | base64 | tr -d '\\r\\n'; fi`,
       "printf '\\n'",
@@ -235,10 +244,13 @@ export function buildLogsCommand(
   const logFile = `(Join-Path ${powerShellSessionDir(sessionName)} 'output.log')`;
   return [
     `$path = ${logFile}`,
-    '$bytes = if (Test-Path $path) { [IO.File]::ReadAllBytes($path) } else { [byte[]]@() }',
-    `Write-Output ("${LOG_OFFSET_MARKER}{0}" -f $bytes.Length)`,
-    `$slice = if ($bytes.Length -gt ${outputOffset}) { $bytes[${outputOffset}..($bytes.Length - 1)] } else { [byte[]]@() }`,
-    `Write-Output ("${LOG_DATA_MARKER}{0}" -f [Convert]::ToBase64String($slice))`,
+    '$bytes = [byte[]]@()',
+    '$size = if (Test-Path $path) { (Get-Item -LiteralPath $path).Length } else { 0 }',
+    `$count = [int][Math]::Min([long]${REMOTE_LOG_CHUNK_BYTES}, [Math]::Max([long]0, [long]$size - [long]${outputOffset}))`,
+    `if ($count -gt 0) { $stream = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite); try { [void]$stream.Seek(${outputOffset}, [IO.SeekOrigin]::Begin); $bytes = [byte[]]::new($count); $read = $stream.Read($bytes, 0, $count); if ($read -eq 0) { $bytes = [byte[]]@() } elseif ($read -lt $count) { $bytes = $bytes[0..($read - 1)] } } finally { $stream.Dispose() } }`,
+    `$end = ${outputOffset} + $bytes.Length`,
+    `Write-Output ("${LOG_OFFSET_MARKER}{0}" -f $end)`,
+    `Write-Output ("${LOG_DATA_MARKER}{0}" -f [Convert]::ToBase64String($bytes))`,
   ].join('; ');
 }
 
@@ -256,14 +268,14 @@ export function buildStopCommand(
     const stateFile = `${dir.slice(0, -1)}/state"`;
     const exitFile = `${dir.slice(0, -1)}/exit-code"`;
     return force
-      ? `${mux} -L enso kill-session -t ${quotePosix(sessionName)}; printf stopped > ${stateFile}; printf 137 > ${exitFile}`
+      ? `${mux} -L enso kill-session -t ${quotePosix(sessionName)} || exit $?; printf stopped > ${stateFile}; printf 137 > ${exitFile}`
       : `printf stopping > ${stateFile}; ${mux} -L enso send-keys -t ${quotePosix(sessionName)} C-c`;
   }
   const dir = powerShellSessionDir(sessionName);
   const stateFile = `(Join-Path ${dir} 'state')`;
   const exitFile = `(Join-Path ${dir} 'exit-code')`;
   return force
-    ? `& psmux -L enso kill-session -t ${quotePowerShell(sessionName)}; Set-Content ${stateFile} stopped -NoNewline; Set-Content ${exitFile} 137 -NoNewline`
+    ? `& psmux -L enso kill-session -t ${quotePowerShell(sessionName)}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Set-Content -LiteralPath ${stateFile} -Value stopped -NoNewline; Set-Content -LiteralPath ${exitFile} -Value 137 -NoNewline`
     : `Set-Content ${stateFile} stopping -NoNewline; & psmux -L enso send-keys -t ${quotePowerShell(sessionName)} C-c`;
 }
 
@@ -412,7 +424,10 @@ export class RemoteAgentSessionService {
     const capability = options.backend
       ? { backend: options.backend }
       : await this.capability(options);
-    const result = await this.run(options.host, buildLaunchCommand(options, capability.backend));
+    const result = await this.run(
+      options.host,
+      wrapRemoteAgentCommand(buildLaunchCommand(options, capability.backend), capability.backend)
+    );
     return { ...parseStatus(result.stdout, capability.backend), sessionId: options.sessionName };
   }
 
@@ -423,7 +438,10 @@ export class RemoteAgentSessionService {
       : await this.capability(options);
     const result = await this.run(
       options.host,
-      buildStatusCommand(options.sessionName, capability.backend)
+      wrapRemoteAgentCommand(
+        buildStatusCommand(options.sessionName, capability.backend),
+        capability.backend
+      )
     );
     return { ...parseStatus(result.stdout, capability.backend), sessionId: options.sessionName };
   }
@@ -435,7 +453,10 @@ export class RemoteAgentSessionService {
       : await this.capability(options);
     const result = await this.run(
       options.host,
-      buildLogsCommand(options.sessionName, capability.backend, outputOffset)
+      wrapRemoteAgentCommand(
+        buildLogsCommand(options.sessionName, capability.backend, outputOffset),
+        capability.backend
+      )
     );
     const offsetLine = result.stdout
       .split(/\r?\n/)
@@ -476,7 +497,13 @@ export class RemoteAgentSessionService {
     const capability = options.backend
       ? { backend: options.backend }
       : await this.capability(options);
-    await this.run(options.host, buildStopCommand(options.sessionName, capability.backend, force));
+    await this.run(
+      options.host,
+      wrapRemoteAgentCommand(
+        buildStopCommand(options.sessionName, capability.backend, force),
+        capability.backend
+      )
+    );
     return await this.status({ ...options, backend: capability.backend });
   }
 }

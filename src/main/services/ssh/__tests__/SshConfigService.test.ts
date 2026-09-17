@@ -230,6 +230,26 @@ describe('getSshAgentLaunch', () => {
     expect(launch.args[3]).not.toContain('claude');
   });
 
+  it('passes the safe psmux session token without POSIX quotes under cmd.exe', () => {
+    const launch = getSshAgentLaunch(
+      {
+        host: 'production',
+        workspace: 'C:\\workspace',
+        sessionName: 'enso-session_123',
+        command: 'codex',
+        backend: 'psmux',
+      },
+      'win32'
+    );
+
+    expect(launch.args).toEqual([
+      '-tt',
+      '--',
+      'production',
+      'psmux -L enso attach-session -t enso-session_123',
+    ]);
+  });
+
   it('rejects unsafe or incomplete remote launch options', () => {
     const valid = {
       host: 'production',

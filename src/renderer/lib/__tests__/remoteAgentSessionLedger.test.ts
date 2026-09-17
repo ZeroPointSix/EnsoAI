@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getRemoteAgentConnectionMode,
   isRemoteAgentConnectionError,
+  isRemoteAgentTerminalState,
   shouldPersistAgentSession,
   shouldRenderPtyOutput,
 } from '../remoteAgentSessionLedger';
@@ -35,6 +36,17 @@ describe('shouldPersistAgentSession', () => {
     expect(getRemoteAgentConnectionMode()).toBe('launch');
     expect(getRemoteAgentConnectionMode('tmux')).toBe('attach');
     expect(getRemoteAgentConnectionMode('psmux')).toBe('attach');
+  });
+
+  it('distinguishes authoritative terminal states from transport loss', () => {
+    expect(isRemoteAgentTerminalState('completed')).toBe(true);
+    expect(isRemoteAgentTerminalState('failed')).toBe(true);
+    expect(isRemoteAgentTerminalState('stopped')).toBe(true);
+    expect(isRemoteAgentTerminalState('starting')).toBe(false);
+    expect(isRemoteAgentTerminalState('working')).toBe(false);
+    expect(isRemoteAgentTerminalState('waiting_input')).toBe(false);
+    expect(isRemoteAgentTerminalState('stopping')).toBe(false);
+    expect(isRemoteAgentTerminalState('disconnected')).toBe(false);
   });
 
   it('maps structured SSH failures to the disconnected UI state', () => {

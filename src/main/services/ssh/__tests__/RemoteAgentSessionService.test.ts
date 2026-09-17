@@ -6,8 +6,10 @@ import {
   buildStatusCommand,
   buildStopCommand,
   classifySshError,
+  REMOTE_LOG_CHUNK_BYTES,
   RemoteAgentSessionError,
   RemoteAgentSessionService,
+  wrapRemoteAgentCommand,
 } from '../RemoteAgentSessionService';
 
 const options: RemoteAgentLaunchOptions = {
@@ -82,8 +84,11 @@ describe('RemoteAgentSessionService', () => {
       data: 'world',
       outputOffset: 11,
     });
-    expect(executor.mock.calls.at(-1)?.[1].at(-1)).toContain('skip=6');
-    expect(executor.mock.calls.at(-1)?.[1].at(-1)).toContain('count="$count"');
+    const command = executor.mock.calls.at(-1)?.[1].at(-1);
+    expect(command).toContain('skip=6');
+    expect(command).toContain('count="$count"');
+    expect(command).toContain(`if [ "$count" -gt ${REMOTE_LOG_CHUNK_BYTES} ]`);
+    expect(command).toContain('end=$((6 + count))');
   });
 
   it('does not advance output_offset across a partial UTF-8 character', async () => {
@@ -130,8 +135,13 @@ describe('RemoteAgentSessionService', () => {
     expect(buildStopCommand(options.sessionName, 'tmux', false)).toContain('send-keys');
     expect(buildStopCommand(options.sessionName, 'tmux', false)).toContain('stopping');
     expect(buildStopCommand(options.sessionName, 'tmux', false)).not.toContain('kill-session');
-    expect(buildStopCommand(options.sessionName, 'tmux', true)).toContain('kill-session');
-    expect(buildStopCommand(options.sessionName, 'tmux', true)).toContain('137');
+    const tmuxForceStop = buildStopCommand(options.sessionName, 'tmux', true);
+    const psmuxForceStop = buildStopCommand(options.sessionName, 'psmux', true);
+    expect(tmuxForceStop).toContain('kill-session');
+    expect(tmuxForceStop).toContain('|| exit $?');
+    expect(tmuxForceStop).toContain('137');
+    expect(psmuxForceStop).toContain('$LASTEXITCODE -ne 0');
+    expect(psmuxForceStop).toContain('137');
     expect(buildLaunchCommand(options, 'tmux')).toContain('previous_state');
     expect(buildLaunchCommand(options, 'tmux')).toContain('printf stopped');
     const tmuxStatus = buildStatusCommand(options.sessionName, 'tmux');
@@ -171,10 +181,37 @@ describe('RemoteAgentSessionService', () => {
     );
   });
 
+  it('runs psmux lifecycle scripts through an explicit PowerShell entry point', async () => {
+    const executor = vi.fn(async (_file: string, _args: string[]) => ({
+      stdout: '__ENSO_STATUS__working||psmux\\n',
+      stderr: '',
+    }));
+    const service = new RemoteAgentSessionService('win32', executor, async () => discovery);
+
+    await expect(service.status({ ...options, backend: 'psmux' })).resolves.toMatchObject({
+      state: 'working',
+      backend: 'psmux',
+    });
+    const remoteCommand = executor.mock.calls.at(-1)?.[1].at(-1) ?? '';
+    expect(remoteCommand).toMatch(
+      /^powershell\.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand /
+    );
+    const encodedCommand = remoteCommand.split('-EncodedCommand ')[1] ?? '';
+    expect(Buffer.from(encodedCommand, 'base64').toString('utf16le')).toBe(
+      buildStatusCommand(options.sessionName, 'psmux')
+    );
+    expect(wrapRemoteAgentCommand('printf ok', 'tmux')).toBe('printf ok');
+  });
+
   it('builds attach-safe launch, offset and PowerShell psmux commands', () => {
     expect(buildLaunchCommand(options, 'tmux')).toContain('new-session -d');
     expect(buildLaunchCommand(options, 'psmux')).toContain('Tee-Object');
-    expect(buildLogsCommand(options.sessionName, 'tmux', 42)).toContain('skip=42');
-    expect(buildLogsCommand(options.sessionName, 'psmux', 42)).toContain('$bytes[42..');
+    const tmuxLogs = buildLogsCommand(options.sessionName, 'tmux', 42);
+    const psmuxLogs = buildLogsCommand(options.sessionName, 'psmux', 42);
+    expect(tmuxLogs).toContain('skip=42');
+    expect(tmuxLogs).toContain(`count=${REMOTE_LOG_CHUNK_BYTES}`);
+    expect(psmuxLogs).toContain(`$count = [int][Math]::Min([long]${REMOTE_LOG_CHUNK_BYTES}`);
+    expect(psmuxLogs).toContain('$stream.Read($bytes, 0, $count)');
+    expect(psmuxLogs).not.toContain('ReadAllBytes');
   });
 });

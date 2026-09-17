@@ -381,7 +381,7 @@ export function getSshAgentLaunch(
   const remoteCommand = [
     backend === 'tmux' ? 'env -u TMUX tmux -L enso' : 'psmux -L enso',
     'attach-session',
-    `-t ${quotePosixShell(sessionName)}`,
+    `-t ${backend === 'tmux' ? quotePosixShell(sessionName) : sessionName}`,
   ].join(' ');
 
   return {
