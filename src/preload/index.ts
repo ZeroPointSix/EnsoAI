@@ -36,6 +36,7 @@ import type {
   RecentEditorProject,
   ShellConfig,
   ShellInfo,
+  SshHostConfig,
   TempWorkspaceCheckResult,
   TempWorkspaceCreateResult,
   TempWorkspaceRemoveResult,
@@ -50,8 +51,8 @@ import type {
   WorktreeRemoveOptions,
 } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
-import type { SessionCanvasSnapshot } from '@shared/types/sessionCanvas';
 import type { AgentStopNotificationData } from '@shared/types/agent';
+import type { SessionCanvasSnapshot } from '@shared/types/sessionCanvas';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
 import pkg from '../../package.json';
@@ -386,6 +387,8 @@ const electronAPI = {
 
   // Terminal
   terminal: {
+    listSshHosts: (): Promise<SshHostConfig[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_LIST_SSH_HOSTS),
     create: (options?: TerminalCreateOptions): Promise<string> =>
       ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_CREATE, options),
     write: (id: string, data: string): Promise<void> =>
@@ -393,8 +396,7 @@ const electronAPI = {
     resize: (id: string, size: TerminalResizeOptions): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_RESIZE, id, size),
     destroy: (id: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_DESTROY, id),
-    exists: (id: string): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_EXISTS, id),
+    exists: (id: string): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_EXISTS, id),
     getActivity: (id: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_GET_ACTIVITY, id),
     onData: (callback: (event: { id: string; data: string }) => void): (() => void) => {
@@ -727,8 +729,7 @@ const electronAPI = {
 
   // Session Canvas (standalone window)
   sessionCanvasPanel: {
-    toggle: (): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_PANEL_TOGGLE),
+    toggle: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_PANEL_TOGGLE),
     focusSession: (params: {
       kind: 'agent' | 'terminal';
       sessionId: string;
@@ -805,7 +806,8 @@ const electronAPI = {
       requestId: string;
       sessionId: string;
       reason: string;
-    }): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_RELAY_ARM_CPU_WAKE, params),
+    }): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_CANVAS_RELAY_ARM_CPU_WAKE, params),
     onApplyArmCpuWake: (
       callback: (params: { requestId: string; sessionId: string; reason: string }) => void
     ): (() => void) => {

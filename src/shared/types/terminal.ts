@@ -4,6 +4,14 @@ export interface TerminalSession {
   cwd: string;
 }
 
+export interface SshHostConfig {
+  alias: string;
+  hostname?: string;
+  user?: string;
+  port?: number;
+  configPath: string;
+}
+
 export interface TerminalCreateOptions {
   cwd?: string;
   shell?: string;
@@ -14,6 +22,8 @@ export interface TerminalCreateOptions {
   shellConfig?: import('./shell').ShellConfig;
   /** Command to execute after shell is ready */
   initialCommand?: string;
+  /** Host alias from the local OpenSSH config. */
+  sshHost?: string;
 }
 
 export interface TerminalResizeOptions {

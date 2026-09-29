@@ -5,6 +5,7 @@ import {
 } from '@shared/types';
 import { ipcMain, type WebContents } from 'electron';
 import { PtyManager } from '../services/terminal/PtyManager';
+import { listConfiguredSshHosts } from '../services/terminal/SshConfig';
 
 export const ptyManager = new PtyManager();
 const terminalCleanupOwners = new Set<number>();
@@ -37,9 +38,20 @@ export async function destroyAllTerminalsAndWait(): Promise<void> {
 }
 
 export function registerTerminalHandlers(): void {
+  ipcMain.handle(IPC_CHANNELS.TERMINAL_LIST_SSH_HOSTS, async () => {
+    return await listConfiguredSshHosts();
+  });
+
   ipcMain.handle(
     IPC_CHANNELS.TERMINAL_CREATE,
     async (event, options: TerminalCreateOptions = {}) => {
+      if (options.sshHost) {
+        const hosts = await listConfiguredSshHosts();
+        if (!hosts.some((host) => host.alias === options.sshHost)) {
+          throw new Error('SSH host is not present in the local OpenSSH config');
+        }
+      }
+
       ensureTerminalCleanup(event.sender);
       const ownerId = event.sender.id;
 
